@@ -1,0 +1,50 @@
+name: Emergency Restore Site
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Restore Nginx and SSL
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        password: ${{ secrets.VPS_PASSWORD }}
+        script: |
+          echo "Restoring Nginx Config"
+          cat <<'EOF' > /tmp/scientific-bench.conf
+          server {
+              listen 80;
+              server_name muslimyouth.ps www.muslimyouth.ps;
+              location / {
+                  proxy_pass http://localhost:3001;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+              location /api {
+                  proxy_pass http://localhost:3001/api;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+          }
+          EOF
+          sudo mv /tmp/scientific-bench.conf /etc/nginx/sites-available/scientific-bench
+          sudo ln -sf /etc/nginx/sites-available/scientific-bench /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo systemctl reload nginx
+          echo "Running Certbot for SSL"
+          sudo certbot --nginx -d muslimyouth.ps,www.muslimyouth.ps --non-interactive --agree-tos -m mohammadaydi93@gmail.com --redirect
+          sudo systemctl reload nginx
+          echo "Done Restoring Site. Checking Containers:"
+          docker ps
