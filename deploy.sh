@@ -8,6 +8,13 @@ cd $APP_DIR
 echo ">>> Unzipping updated application (Patch)..."
 unzip -o deploy_production_latest.zip || true
 
+echo ">>> Stopping old container if running..."
+docker stop mastaba-v4-container 2>/dev/null || true
+docker rm mastaba-v4-container 2>/dev/null || true
+
+echo ">>> Removing old Docker image..."
+docker rmi mastaba-v4-image:latest 2>/dev/null || true
+
 echo ">>> Building and starting Docker container..."
 docker compose up -d --build
 
