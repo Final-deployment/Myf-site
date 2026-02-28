@@ -48,6 +48,39 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   const [nextCourse, setNextCourse] = useState<Course | null>(null);
   const [allCourses, setAllCourses] = useState<Course[]>([]);
 
+  const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, mins: number } | null>(null);
+
+  useEffect(() => {
+    if ((course as any).deadline && user?.role !== 'admin' && user?.role !== 'supervisor') {
+      const timer = setInterval(() => {
+        const diff = new Date((course as any).deadline).getTime() - Date.now();
+        if (diff <= 0) {
+          setTimeLeft({ days: 0, hours: 0, mins: 0 });
+          clearInterval(timer);
+        } else {
+          setTimeLeft({
+            days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+            mins: Math.floor((diff / 1000 / 60) % 60)
+          });
+        }
+      }, 60000); // Check every minute
+
+      // Initial calculation
+      const diff = new Date((course as any).deadline).getTime() - Date.now();
+      if (diff > 0) {
+        setTimeLeft({
+          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+          mins: Math.floor((diff / 1000 / 60) % 60)
+        });
+      } else {
+        setTimeLeft({ days: 0, hours: 0, mins: 0 });
+      }
+      return () => clearInterval(timer);
+    }
+  }, [course, user]);
+
   // Track the furthest episode reached to keep it unlocked even when navigating back
   const [maxReachedIndex, setMaxReachedIndex] = useState(() => {
     const firstUncompleted = (course.episodes || []).findIndex(ep => !ep.completed);
@@ -422,6 +455,21 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                 </button>
               </div>
 
+              {/* Time Left Countdown */}
+              {timeLeft && (
+                <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
+                  <span className="text-amber-400 font-bold text-xs flex items-center gap-2">
+                    <svg className="w-4 h-4 animate-[spin_3s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    الوقت المتبقي لإنهاء المساق:
+                  </span>
+                  <div className="flex gap-1.5" dir="ltr">
+                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.days}d</span>
+                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.hours}h</span>
+                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.mins}m</span>
+                  </div>
+                </div>
+              )}
+
               {/* Next Course Button - Only if completed and passed quiz */}
               {isCompleted && nextCourse && !nextCourse.isLocked && (
                 <button
@@ -778,6 +826,31 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
               className="px-6 py-2 bg-white text-red-600 font-bold rounded-xl hover:bg-red-50 transition-colors"
             >
               فهمت ذلك
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lock out overlay if deadline passed */}
+      {((course as any).isLockedByDeadline || (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor')) && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-fade-in">
+          <div className="bg-red-900/30 border border-red-500/50 p-8 rounded-3xl max-w-md text-center space-y-4 shadow-2xl">
+            <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+              <Lock className="w-10 h-10 text-white" />
+            </div>
+            <h3 className="text-3xl font-bold text-white mb-2">انتهى الوقت!</h3>
+            <p className="text-red-200 text-lg">
+              لقد انتهت الفترة الزمنية المتاحة لدراسة هذا المساق. لا يمكنك استكمال المشاهدة أو تقديم الامتحانات.
+            </p>
+            <p className="text-gray-400 text-sm mt-4">
+              يرجى التواصل مع المشرف الخاص بك بطلب تمديد الفترة أو فتح المساق لك من جديد.
+            </p>
+            <button
+              onClick={onBack}
+              className="mt-8 px-8 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all shadow-lg w-full flex items-center justify-center gap-2"
+            >
+              <ArrowRight className="w-5 h-5" />
+              العودة
             </button>
           </div>
         </div>

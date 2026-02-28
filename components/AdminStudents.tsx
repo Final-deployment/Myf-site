@@ -817,70 +817,72 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
 
             {/* Students Table */}
             <section className="glass-panel rounded-2xl overflow-hidden" aria-label="قائمة الطلاب">
-                <table className="w-full" role="grid">
-                    <thead>
-                        <tr className="border-b border-white/10 bg-white/5">
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium">الطالب</th>
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium font-serif">تاريخ الانضمام</th>
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium">المستوى</th>
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium">الدورات والتقدم</th>
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium">المشرف</th>
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium">الحالة</th>
-                            <th className="py-4 px-6 text-right text-gray-400 font-medium">الإجراءات</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {paginatedItems.length > 0 ? (
-                            paginatedItems.map((item) => {
-                                const student = item as User;
-                                return (
-                                    <StudentRow
-                                        key={student.id}
-                                        student={student}
-                                        supervisors={supervisors}
-                                        onDelete={handleDeleteStudent}
-                                        onEdit={openEditModal}
-                                        onView={openDetailsModal}
-                                        onPromote={(s) => { setSelectedStudent(s); setIsPromoteModalOpen(true); }}
-                                        onTransfer={(s) => { setSelectedStudent(s); setIsTransferModalOpen(true); }}
-                                        onDemote={handleDemote}
-                                    />
-                                );
-                            })
-                        ) : (
-                            <tr>
-                                <td colSpan={7} className="py-8 text-center text-gray-400">
-                                    لا يوجد طلاب مطابقين للبحث
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </section>
+                <div className="glass-panel rounded-2xl overflow-hidden border border-white/5 flex flex-col h-[calc(100vh-280px)]">
+                    <div className="overflow-x-auto custom-scrollbar flex-1">
+                        <table className="w-full text-right" aria-label="جدول الطلاب">
+                            <thead className="bg-white/5 text-gray-400 text-sm font-medium sticky top-0 z-10 backdrop-blur-md">
+                                <tr>
+                                    <th className="py-4 px-6">الطالب</th>
+                                    <th className="py-4 px-6">تاريخ الانضمام</th>
+                                    <th className="py-4 px-6">المستوى</th>
+                                    <th className="py-4 px-6">التقدم</th>
+                                    <th className="py-4 px-6">المشرف</th>
+                                    <th className="py-4 px-6">الحالة</th>
+                                    <th className="py-4 px-6">إجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {paginatedItems.map((item) => {
+                                    const student = item as User;
+                                    return (
+                                        <StudentRow
+                                            key={student.id}
+                                            student={student}
+                                            supervisors={supervisors}
+                                            onDelete={handleDeleteStudent}
+                                            onEdit={openEditModal}
+                                            onView={openDetailsModal}
+                                            onPromote={() => { setSelectedStudent(student); setIsPromoteModalOpen(true); }}
+                                            onTransfer={() => { setSelectedStudent(student); setIsTransferModalOpen(true); }}
+                                            onDemote={handleDemote}
+                                        />
+                                    );
+                                })}
+                                {paginatedItems.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="py-12 text-center text-gray-500">
+                                            لا يوجد طلاب مطابقين للبحث
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
 
-            {/* Pagination */}
-            <nav className="flex justify-between items-center" aria-label="التنقل بين الصفحات">
-                <p className="text-gray-400" aria-live="polite">عرض {filteredStudents.length} طالب</p>
-                <div className="flex gap-2">
-                    <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label="الصفحة السابقة"
-                    >
-                        السابق
-                    </button>
-                    <span className="px-4 py-2 text-white">{currentPage} / {totalPages}</span>
-                    <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label="الصفحة التالية"
-                    >
-                        التالي
-                    </button>
+                    {/* Pagination Footer */}
+                    <div className="p-4 border-t border-white/5 bg-white/5 backdrop-blur-sm flex items-center justify-between">
+                        <p className="text-sm text-gray-400">
+                            عرض {paginatedItems.length} من أصل {filteredStudents.length} طالب
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={prevPage}
+                                disabled={currentPage === 1}
+                                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                السابق
+                            </button>
+                            <button
+                                onClick={nextPage}
+                                disabled={currentPage === totalPages}
+                                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                التالي
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            </nav>
+            </section>
 
             {isAddModalOpen && (
                 <AddStudentModal

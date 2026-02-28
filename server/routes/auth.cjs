@@ -92,6 +92,27 @@ router.post('/register', async (req, res) => {
             VALUES (@id, @email, @password, @name, @nameEn, @role, @points, @level, @joinDate, @verificationCode, @verificationExpiry, @emailVerified, @whatsapp, @country, @age, @gender, @educationLevel, @supervisor_id)
         `).run(newUser);
 
+        // Auto-enroll new students in the foundational course
+        if (role === 'student') {
+            try {
+                const foundationalCourseId = 'course_madkhal';
+                const fCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+                if (fCourse) {
+                    const date = new Date();
+                    date.setDate(date.getDate() + (fCourse.days_available || 30));
+                    const deadline = date.toISOString();
+                    db.prepare(`
+                        INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
+                        VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
+                    `).run(id, foundationalCourseId, deadline);
+                    db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
+                    console.log(`[AUTH] Auto-enrolled new student ${id} in ${foundationalCourseId}`);
+                }
+            } catch (enrollErr) {
+                console.error('[AUTH] Failed to auto-enroll new student:', enrollErr.message);
+            }
+        }
+
         // Send verification email (non-blocking to prevent SMTP timeout from failing registration)
         sendVerificationEmail(email, name, otp).catch(emailErr => {
             console.error('[Registration] Email sending failed:', emailErr.message);
@@ -134,6 +155,39 @@ router.post('/resend-otp', async (req, res) => {
 
         await sendVerificationEmail(email, user.name, otp);
         res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Import middleware
+const { authenticateToken } = require('../middleware.cjs');
+
+// Change Password
+router.post('/change-password', authenticateToken, (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Please provide both current and new password' });
+    }
+
+    try {
+        // Get user current password
+        const user = db.prepare('SELECT password FROM users WHERE id = ?').get(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // Verify current password
+        const passwordMatch = bcrypt.compareSync(currentPassword, user.password);
+        if (!passwordMatch) {
+            return res.status(403).json({ error: 'Incorrect current password' });
+        }
+
+        // Hash new password and update
+        const hashedPassword = bcrypt.hashSync(newPassword, 10);
+        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, userId);
+
+        res.json({ success: true, message: 'Password updated successfully' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

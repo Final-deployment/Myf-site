@@ -163,8 +163,9 @@ const Settings: React.FC = memo(() => {
    // Sync state with user data when it becomes available
    useEffect(() => {
       if (user) {
-         setFirstName(user.name?.split(' ')[0] || '');
-         setLastName(user.name?.split(' ')[1] || '');
+         const nameParts = user.name?.split(' ') || [];
+         setFirstName(nameParts[0] || '');
+         setLastName(nameParts.slice(1).join(' ') || '');
          setEmail(user.email || '');
       }
    }, [user]);
@@ -223,9 +224,57 @@ const Settings: React.FC = memo(() => {
       setActiveSection(sectionId);
    }, []);
 
+   // Password Change State
+   const [showPasswordModal, setShowPasswordModal] = useState(false);
+   const [currentPassword, setCurrentPassword] = useState('');
+   const [newPassword, setNewPassword] = useState('');
+   const [confirmPassword, setConfirmPassword] = useState('');
+   const [passwordLoading, setPasswordLoading] = useState(false);
+
+   const handleChangePassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (newPassword !== confirmPassword) {
+         toast.error('كلمات المرور غير متطابقة');
+         return;
+      }
+      if (newPassword.length < 8) {
+         toast.error('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+         return;
+      }
+
+      setPasswordLoading(true);
+      try {
+         const token = localStorage.getItem('authToken');
+         const response = await fetch('/api/change-password', {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+         });
+
+         const data = await response.json();
+
+         if (response.ok) {
+            toast.success('تم تغيير كلمة المرور بنجاح');
+            setShowPasswordModal(false);
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+         } else {
+            toast.error(data.error || 'حدث خطأ أثناء تغيير كلمة المرور');
+         }
+      } catch (error) {
+         toast.error('حدث خطأ في الاتصال');
+      } finally {
+         setPasswordLoading(false);
+      }
+   };
+
    return (
       <div
-         className="animate-fade-in max-w-4xl mx-auto pb-10"
+         className="animate-fade-in max-w-4xl mx-auto pb-10 relative"
          role="main"
          aria-label={t('settings.title')}
       >
@@ -408,7 +457,7 @@ const Settings: React.FC = memo(() => {
                         <PreferenceRow
                            icon={Lock} iconBgColor="bg-red-500/10" iconColor="text-red-400"
                            title="تغيير كلمة المرور" subtitle="تغيير كلمة المرور الخاصة بحسابك"
-                           onClick={() => toast.info('ستصلك رسالة لإعادة تعيين كلمة المرور')}
+                           onClick={() => setShowPasswordModal(true)}
                            rightElement={<span className="text-xs text-emerald-400">تعديل</span>}
                         />
                         <PreferenceRow
@@ -432,6 +481,69 @@ const Settings: React.FC = memo(() => {
                )}
             </div>
          </div>
+
+         {/* Password Modal */}
+         {showPasswordModal && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in">
+               <div className="glass-panel p-8 rounded-2xl w-full max-w-md relative">
+                  <h3 className="text-xl font-bold text-white mb-6">تغيير كلمة المرور</h3>
+
+                  <form onSubmit={handleChangePassword} className="space-y-4">
+                     <div>
+                        <label className="block text-sm text-gray-400 mb-1">كلمة المرور الحالية</label>
+                        <input
+                           type="password"
+                           value={currentPassword}
+                           onChange={(e) => setCurrentPassword(e.target.value)}
+                           className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500"
+                           required
+                        />
+                     </div>
+
+                     <div>
+                        <label className="block text-sm text-gray-400 mb-1">كلمة المرور الجديدة</label>
+                        <input
+                           type="password"
+                           value={newPassword}
+                           onChange={(e) => setNewPassword(e.target.value)}
+                           className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500"
+                           required
+                           minLength={8}
+                        />
+                     </div>
+
+                     <div>
+                        <label className="block text-sm text-gray-400 mb-1">تأكيد كلمة المرور الجديدة</label>
+                        <input
+                           type="password"
+                           value={confirmPassword}
+                           onChange={(e) => setConfirmPassword(e.target.value)}
+                           className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500"
+                           required
+                           minLength={8}
+                        />
+                     </div>
+
+                     <div className="flex gap-3 mt-6">
+                        <button
+                           type="button"
+                           onClick={() => setShowPasswordModal(false)}
+                           className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-colors"
+                        >
+                           إلغاء
+                        </button>
+                        <button
+                           type="submit"
+                           disabled={passwordLoading}
+                           className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors disabled:opacity-50"
+                        >
+                           {passwordLoading ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+                        </button>
+                     </div>
+                  </form>
+               </div>
+            </div>
+         )}
       </div>
    );
 });

@@ -7,9 +7,6 @@ export const en = {
         description: 'A comprehensive knowledge platform for Muslim youth, offering a unique space for Islamic audio and video courses to deepen knowledge and build awareness.',
         registerInterest: 'Register Your Interest',
         memberLogin: 'Member Login',
-        loginAsStudent: 'Login as Student',
-        loginAsAdmin: 'Login as Admin',
-        loginAsSupervisor: 'Login as Supervisor',
     },
 
     // Header

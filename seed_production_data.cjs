@@ -7,6 +7,10 @@ async function seed() {
     console.log('--- STARTING PRODUCTION DATA SEEDING ---');
 
     try {
+        console.log('--- ENVIRONMENT CHECK ---');
+        console.log('R2_ACCOUNT_ID:', process.env.R2_ACCOUNT_ID ? 'SET' : 'MISSING');
+        console.log('R2_BUCKET_NAME:', process.env.R2_BUCKET_NAME || 'myf-videos');
+
         // 1. Ensure Foundational Folder
         const initialFolderId = 'foundation_shariah';
         const folderExists = db.prepare('SELECT id FROM course_folders WHERE id = ?').get(initialFolderId);
@@ -88,7 +92,8 @@ async function seed() {
         }
 
         // 4. Seed Books (Mapping)
-        console.log('Seeding course books...');
+        console.log('Cleaning and seeding course books...');
+        db.prepare('DELETE FROM books').run();
         const booksToSeed = [
             { id: 'book_waseela', title: 'ملخص فقه الطهارة', path: 'fiqh_waseela.pdf', courseId: 'course_fiqh1-waseelit' },
             { id: 'book_raheeq', title: 'الرحيق المختوم', path: 'raheeq_makhtum.pdf', courseId: 'course_seerah' },
@@ -112,7 +117,8 @@ async function seed() {
         }
 
         // 5. Seed Library Resources
-        console.log('Seeding library resources...');
+        console.log('Cleaning and seeding library resources...');
+        db.prepare('DELETE FROM library_resources').run();
         const libraryToSeed = [
             { id: 'lib_1', title: 'ملخص فقه الطهارة', type: 'pdf', url: 'https://pub-7ec5f52937cb4e729e07ecf35b1cf007.r2.dev/Books/fiqh_waseela.pdf', category: 'الفقه' },
             { id: 'lib_2', title: 'الرحيق المختوم', type: 'pdf', url: 'https://pub-7ec5f52937cb4e729e07ecf35b1cf007.r2.dev/Books/raheeq_makhtum.pdf', category: 'السيرة' },

@@ -7,9 +7,6 @@ export const ar = {
         description: 'منصة معرفية شاملة للشباب المسلم، تُعد لكم مساحة فريدة للدورات الإسلامية الصوتية والمرئية، لترسيخ العلم وبناء الوعي.',
         registerInterest: 'سجل اهتمامك',
         memberLogin: 'دخول الأعضاء',
-        loginAsStudent: 'دخول كطالب',
-        loginAsAdmin: 'دخول كأدمن',
-        loginAsSupervisor: 'دخول كمشرف',
     },
 
     // Header

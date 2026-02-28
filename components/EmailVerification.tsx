@@ -170,7 +170,7 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
                 )}
 
                 {/* OTP Input */}
-                <div className="flex justify-center gap-2 mb-6" dir="ltr">
+                <div className="flex justify-center gap-2 mb-4" dir="ltr">
                     {otp.map((digit, index) => (
                         <input
                             key={index}
@@ -188,7 +188,23 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
                     ))}
                 </div>
 
-                {/* Loading Indicator */}
+                {/* Verify Button */}
+                <button
+                    onClick={() => handleVerify(otp.join(''))}
+                    disabled={isLoading || otp.some(d => !d)}
+                    className="w-full py-3 mb-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>{language === 'ar' ? 'جاري التحقق...' : 'Verifying...'}</span>
+                        </>
+                    ) : (
+                        <span>{language === 'ar' ? 'تحقق' : 'Verify'}</span>
+                    )}
+                </button>
+
+                {/* Loading Indicator - only show when button not visible */}
                 {isLoading && (
                     <div className="flex items-center justify-center gap-2 text-emerald-400 mb-4">
                         <Loader2 className="w-5 h-5 animate-spin" />

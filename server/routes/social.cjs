@@ -14,11 +14,17 @@ router.get('/messages', async (req, res) => {
         // ALSO: Filter out complaints if the user is a student (one-way only)
         // AND: Allow admins to see ALL complaints regardless of recipient
         // Students see: non-complaints OR messages they sent (so they see their own complaints)
+        const isAdmin = req.user.role === 'admin';
+        const adminComplaintAccess = isAdmin ? 'OR isComplaint = 1' : '';
         const roleFilter = req.user.role === 'student'
             ? 'AND (isComplaint = 0 OR isComplaint IS NULL OR senderId = ?)'
             : '';
 
-        const params = [userId, userId, new Date().toISOString()];
+        const params = [userId, userId];
+        if (isAdmin) {
+            // No extra param for adminComplaintAccess since it's hardcoded '1'
+        }
+        params.push(new Date().toISOString());
         if (req.user.role === 'student') params.push(userId);
 
         const messages = db.prepare(`
@@ -165,30 +171,57 @@ router.post('/messages', (req, res) => {
     const senderRole = req.user.role;
 
     try {
+        let finalReceiverId = receiverId;
+        let receiver = null;
+
         // --- Role-Based Messaging Validation ---
 
         // Fetch receiver details to check their role
-        const receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(receiverId);
-        if (!receiver) return res.status(404).json({ error: 'Receiver not found' });
+        receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(finalReceiverId);
+
+        // EXTRA COMPLAINT PROTECTION (v5):
+        // If this is a complaint and the recipient is NOT an admin (or doesn't exist), 
+        // find admin_main first, otherwise fall back to any admin.
+        if (isComplaint === 1 || isComplaint === true) {
+            if (!receiver || receiver.role !== 'admin') {
+                // First, try to find admin_main specifically
+                let altAdmin = db.prepare("SELECT id FROM users WHERE id = 'admin_main' AND role = 'admin'").get();
+                if (!altAdmin) {
+                    // Fallback to any admin
+                    altAdmin = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
+                }
+                if (altAdmin) {
+                    console.log(`[COMPLAINT_ROUTING_v5] Redirecting complaint from ${finalReceiverId} to ${altAdmin.id}`);
+                    finalReceiverId = altAdmin.id;
+                    // Re-fetch receiver info for the new finalReceiverId
+                    receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(finalReceiverId);
+                } else if (!receiver) {
+                    return res.status(403).json({ error: 'الشكاوى ترسل للمدير فقط، ولم يتم العثور على مدير في النظام' });
+                }
+            }
+        }
+
+        // Standard validation for non-complaints or if no admin fallback was found
+        if (!receiver) return res.status(404).json({ error: 'المستلم غير موجود' });
 
         // Rule 1: Student validation
         if (senderRole === 'student') {
             if (isComplaint) {
-                // Complaints must go to an Admin
+                // Complaints must go to an Admin (should be true by now due to fallback above)
                 if (receiver.role !== 'admin') {
                     return res.status(403).json({ error: 'الشكاوى ترسل للمدير فقط' });
                 }
             } else {
                 // Regular messages must go to their assigned supervisor
                 const student = db.prepare('SELECT supervisor_id FROM users WHERE id = ?').get(senderId);
-                if (!student || student.supervisor_id !== receiverId) {
+                if (!student || student.supervisor_id !== finalReceiverId) {
                     return res.status(403).json({ error: 'يمكنك مراسلة مشرفك المباشر فقط' });
                 }
             }
         }
 
         // Rule 2: Supervisor validation
-        if (senderRole === 'supervisor') {
+        else if (senderRole === 'supervisor') {
             const isTargetAdmin = receiver.role === 'admin';
             const isTargetMyStudent = receiver.role === 'student' && receiver.supervisor_id === senderId;
 
@@ -198,10 +231,9 @@ router.post('/messages', (req, res) => {
         }
 
         // Rule 3: Admin validation
-        if (senderRole === 'admin') {
+        else if (senderRole === 'admin') {
             // Admin can message Supervisors OR Students (as replies/support)
-            // No strict restriction, but we log it
-            console.log(`[ADMIN_MSG] Admin ${senderId} messaging ${receiver.role} ${receiverId}`);
+            console.log(`[ADMIN_MSG] Admin ${senderId} messaging ${receiver.role} ${finalReceiverId}`);
         }
 
         const id = 'msg_' + Date.now();
@@ -220,7 +252,7 @@ router.post('/messages', (req, res) => {
         `).run({
             id,
             senderId,
-            receiverId,
+            receiverId: finalReceiverId,
             content: content || '',
             read: 0,
             timestamp,
@@ -228,9 +260,9 @@ router.post('/messages', (req, res) => {
             attachmentType: attachmentType || null,
             attachmentName: attachmentName || null,
             expiryDate,
-            isComplaint: isComplaint ? 1 : 0
+            isComplaint: (isComplaint === 1 || isComplaint === true) ? 1 : 0
         });
-        res.status(201).json({ id, senderId, receiverId, content, read: 0, timestamp, attachmentUrl, attachmentType, attachmentName, expiryDate, isComplaint });
+        res.status(201).json({ id, senderId, receiverId: finalReceiverId, content, read: 0, timestamp, attachmentUrl, attachmentType, attachmentName, expiryDate, isComplaint });
     } catch (e) {
         console.error('[MESSAGING_SEND_ERROR]:', e.message);
         res.status(500).json({ error: e.message });

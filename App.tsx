@@ -157,14 +157,25 @@ const AppContent: React.FC = () => {
     }
   }, [isAuthenticated, user?.role, location.pathname, navigate]);
 
-  // Check for pending verification on mount
+  // Check for pending verification or email from URL on mount
   useEffect(() => {
+    // 1. Check URL query params first
+    const searchParams = new URLSearchParams(location.search);
+    const emailParam = searchParams.get('email');
+
+    if (emailParam && !isAuthenticated && location.pathname === '/verify') {
+      console.log('[App] Verification email from URL:', emailParam);
+      setPendingEmail(emailParam);
+      return;
+    }
+
+    // 2. Fallback to localStorage
     const pendingVerificationEmail = localStorage.getItem('pendingVerificationEmail');
     if (pendingVerificationEmail && !isAuthenticated && location.pathname !== '/verify') {
       setPendingEmail(pendingVerificationEmail);
       navigate('/verify');
     }
-  }, [isAuthenticated, location.pathname, navigate]);
+  }, [isAuthenticated, location.pathname, location.search, navigate]);
 
   // Poll for unread messages
   useEffect(() => {
@@ -232,33 +243,6 @@ const AppContent: React.FC = () => {
             <LandingPage
               onLoginClick={() => navigate('/login')}
               onSignupClick={() => navigate('/signup')}
-              onQuickLogin={async (role) => {
-                let email = '';
-                let password = '';
-
-                if (role === 'admin') {
-                  email = 'admin@myf-online.com';
-                  password = 'mastaba_admin_2024';
-                } else if (role === 'supervisor') {
-                  email = 'supervisor@myf-online.com';
-                  password = 'mastaba_supervisor_2024';
-                } else {
-                  email = 'ahmed@example.com';
-                  password = '123456';
-                }
-
-                try {
-                  const success = await login(email, password);
-                  if (success) {
-                    if (role === 'admin') navigate('/admin');
-                    else if (role === 'supervisor') navigate('/supervisor');
-                    else navigate('/dashboard');
-                  }
-                  else toast.error('فشل تسجيل الدخول السريع.');
-                } catch (e) {
-                  toast.error('فشل تسجيل الدخول السريع.');
-                }
-              }}
             />
           </PublicRoute>
         } />
@@ -442,7 +426,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
         <div
           id="main-content"
-          className="flex-1 overflow-y-auto overflow-x-hidden p-8 pt-0 pb-24 xl:pb-0 custom-scrollbar relative z-10"
+          className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 pt-0 pb-24 xl:pb-0 custom-scrollbar relative z-10"
           role="main"
           aria-label="المحتوى الرئيسي"
         >

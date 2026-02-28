@@ -197,6 +197,17 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
    /** Calculate actual progress from enrolled courses */
    const enrolledCourses = useMemo(() => courses.filter(c => (c as any).isEnrolled), [courses]);
 
+   const approachingDeadlines = useMemo(() => {
+      if (!Array.isArray(enrolledCourses)) return [];
+      return enrolledCourses.filter(c => {
+         if (!(c as any).deadline || (c as any).isLockedByDeadline) return false;
+         const diff = new Date((c as any).deadline).getTime() - Date.now();
+         const daysRemaining = diff / (1000 * 3600 * 24);
+         // Show warning if 3 days or less remaining and course is not 100% complete
+         return daysRemaining > 0 && daysRemaining <= 3 && (c.progress || 0) < 100;
+      });
+   }, [enrolledCourses]);
+
    const courseProgress = useMemo(() => {
       if (!Array.isArray(enrolledCourses) || enrolledCourses.length === 0) return 0;
       const totalProgress = enrolledCourses.reduce((sum, c) => {
@@ -229,7 +240,37 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
    return (
       <div className="space-y-6 animate-fade-in pb-20 lg:pb-10 relative" role="main" aria-label={t('dashboard.title') || 'Dashboard'}>
 
-
+         {/* Warning Banners for Approaching Deadlines */}
+         {approachingDeadlines.length > 0 && (
+            <div className="space-y-3 mb-6">
+               {approachingDeadlines.map(course => {
+                  const daysRemaining = Math.max(1, Math.ceil((new Date((course as any).deadline).getTime() - Date.now()) / (1000 * 3600 * 24)));
+                  return (
+                     <div key={`warning-${course.id}`} className="bg-red-500/10 border border-red-500/30 p-4 rounded-xl flex items-center justify-between shadow-xl shadow-red-500/5 animate-[pulse_3s_ease-in-out_infinite]">
+                        <div className="flex items-start md:items-center gap-4 flex-col md:flex-row">
+                           <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center border border-red-500/30 shrink-0">
+                              <Clock className="w-6 h-6 text-red-400" />
+                           </div>
+                           <div>
+                              <h4 className="text-red-400 font-bold text-lg flex items-center gap-2">
+                                 تنبيه هام: اقتراب موعد إغلاق مساق!
+                              </h4>
+                              <p className="text-red-200 text-sm mt-1">
+                                 المساق <span className="font-bold text-white">"{language === 'ar' ? course.title : course.titleEn}"</span> سيُغلق خلال <span className="font-bold text-white bg-red-500/30 px-2 py-0.5 rounded">{daysRemaining}</span> أيام. بادر بالانتهاء منه وتقديم الامتحانات.
+                              </p>
+                           </div>
+                        </div>
+                        <button
+                           onClick={() => onPlayCourse(course)}
+                           className="md:mt-0 mt-4 px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 min-w-[140px]"
+                        >
+                           انتقال للمساق <ArrowRight className="w-4 h-4 rtl:-rotate-180" />
+                        </button>
+                     </div>
+                  );
+               })}
+            </div>
+         )}
 
          {/* Main Content Split */}
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

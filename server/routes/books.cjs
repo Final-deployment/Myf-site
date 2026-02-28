@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
 router.get('/course/:courseId', async (req, res) => {
     try {
         const book = db.prepare('SELECT * FROM books WHERE courseId = ?').get(req.params.courseId);
-        if (!book) return res.status(404).json({ error: 'Book not found for this course' });
+        if (!book) return res.json(null);
 
         // Sign URL
         if (book.path) {

@@ -3,11 +3,12 @@
  */
 import type { Course } from '../../types';
 import { getAuthToken } from './auth';
+import { getApiUrl } from './config';
 
 export const coursesApi = {
     getCourses: async (): Promise<Course[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/courses', {
+        const response = await fetch(getApiUrl('/courses'), {
             headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
         if (!response.ok) return [];
@@ -16,7 +17,7 @@ export const coursesApi = {
 
     updateCourseProgress: async (courseId: string, progress: number): Promise<void> => {
         const token = getAuthToken();
-        await fetch('/api/courses/episode-progress', {
+        await fetch(getApiUrl('/courses/episode-progress'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -28,7 +29,7 @@ export const coursesApi = {
 
     updateEpisodeProgress: async (courseId: string, episodeId: string, completed: boolean, lastPosition?: number, watchedDuration?: number): Promise<void> => {
         const token = getAuthToken();
-        await fetch('/api/courses/episode-progress', {
+        await fetch(getApiUrl('/courses/episode-progress'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -40,7 +41,7 @@ export const coursesApi = {
 
     addCourse: async (course: Course): Promise<Course> => {
         const token = getAuthToken();
-        const response = await fetch('/api/courses', {
+        const response = await fetch(getApiUrl('/courses'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -58,7 +59,7 @@ export const coursesApi = {
 
     updateCourse: async (id: string, updates: Partial<Course>): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/courses/${id}`, {
+        const response = await fetch(getApiUrl(`/courses/${id}`), {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -71,7 +72,7 @@ export const coursesApi = {
 
     deleteCourse: async (id: string): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/courses/${id}`, {
+        const response = await fetch(getApiUrl(`/courses/${id}`), {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -82,7 +83,7 @@ export const coursesApi = {
 
     enroll: async (courseId: string): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch('/api/courses/enroll', {
+        const response = await fetch(getApiUrl('/courses/enroll'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

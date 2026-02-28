@@ -208,13 +208,99 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
             {/* Courses View (Inside Folder) */}
             {selectedFolderId && (
                 <div className="space-y-8 animate-slide-up">
+                    {/* --- Study Schedule & Constraints Information --- */}
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md">
+                        <div className="flex items-center gap-3 mb-4">
+                            <Book className="w-6 h-6 text-emerald-400" />
+                            <h3 className="text-xl font-bold text-white">الخطة الدراسية والجدول الزمني</h3>
+                        </div>
+
+                        <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                            <h4 className="font-bold text-amber-400 mb-2 flex items-center gap-2">
+                                <Lock className="w-4 h-4" /> تقييدات فنية هامة:
+                            </h4>
+                            <ul className="list-disc leading-relaxed list-inside text-sm text-amber-200/80 space-y-1">
+                                <li><strong>التسلسل الإلزامي:</strong> لا يمكنك الانتقال إلى المحاضرة التالية قبل إتمام المحاضرة الحالية بالكامل.</li>
+                                <li><strong>فتح المواد:</strong> تفتح المواد تدريجياً، ولا يمكنك فتح مادة جديدة قبل اجتياز امتحان المادة التي تسبقها بنجاح.</li>
+                                <li><strong>الإغلاق التلقائي (وقت الدراسة المتاح):</strong> لكل مادة فترة زمنية محددة بالأيام تبدأ من لحظة التحاقك بها. إذا لم يتم تقديم الامتحان واجتيازه خلال هذه الفترة، سيتم <strong>إغلاق المساق</strong> ولن تتمكن من الدخول إليه، وعليك مراجعة المشرف لفتحه مجدداً.</li>
+                            </ul>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-right">
+                                <thead className="bg-white/5 text-gray-400">
+                                    <tr>
+                                        <th className="px-4 py-3 rounded-tr-lg font-bold">المادة</th>
+                                        <th className="px-4 py-3 font-bold text-center">عدد المحاضرات</th>
+                                        <th className="px-4 py-3 font-bold text-center">ساعات المادة</th>
+                                        <th className="px-4 py-3 font-bold text-center">وقت الدراسة المتاح</th>
+                                        <th className="px-4 py-3 rounded-tl-lg font-bold text-center">الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleCourses.map((course, idx) => {
+                                        const isEnrolled = (course as any).isEnrolled;
+                                        return (
+                                            <tr key={course.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                <td className="px-4 py-3 font-bold text-white flex items-center gap-2">
+                                                    <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                                                    {course.title}
+                                                </td>
+                                                <td className="px-4 py-3 text-center text-gray-300 font-medium">{course.lessonsCount}</td>
+                                                <td className="px-4 py-3 text-center text-emerald-400 font-medium" dir="ltr">{course.duration}</td>
+                                                <td className="px-4 py-3 text-center text-amber-400 font-bold">{(course as any).daysAvailable || 30} يوم</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {isEnrolled ? (
+                                                        <span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md text-xs font-bold inline-block">نشط ({course.progress || 0}%)</span>
+                                                    ) : (course as any).isLocked ? (
+                                                        <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded-md text-xs font-bold flex items-center justify-center gap-1 w-max mx-auto"><Lock className="w-3 h-3" /> مغلق</span>
+                                                    ) : (
+                                                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md text-xs font-bold inline-block">متاح للتسجيل</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot className="bg-white/5 border-t border-white/20">
+                                    <tr>
+                                        <td className="px-4 py-4 font-bold text-white rounded-br-lg">المجموع الكلي:</td>
+                                        <td className="px-4 py-4 text-center text-emerald-300 font-bold">
+                                            {visibleCourses.reduce((sum, c) => sum + (c.lessonsCount || 0), 0)} محاضرة
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-emerald-400 font-bold" dir="ltr">
+                                            {(() => {
+                                                const totalMins = visibleCourses.reduce((sum, c) => {
+                                                    const matchH = c.duration?.match(/(\d+)h/);
+                                                    const matchM = c.duration?.match(/(\d+)m/);
+                                                    const h = matchH ? parseInt(matchH[1]) : 0;
+                                                    const m = matchM ? parseInt(matchM[1]) : 0;
+                                                    return sum + (h * 60) + m;
+                                                }, 0);
+                                                const finalH = Math.floor(totalMins / 60);
+                                                const finalM = totalMins % 60;
+                                                return finalH > 0 ? `${finalH}h ${finalM}m` : `${finalM}m`;
+                                            })()}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-amber-400 font-bold">
+                                            {visibleCourses.reduce((sum, c) => sum + ((c as any).daysAvailable || 30), 0)} يوم
+                                        </td>
+                                        <td className="px-4 py-4 rounded-bl-lg"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                    {/* --- End Schedule --- */}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {visibleCourses.map(course => {
                             const isEnrolled = (course as any).isEnrolled;
+                            const effectivelyLocked = course.isLocked && !(['admin', 'supervisor'].includes((course as any).__userRole || ''));
                             return (
                                 <div
                                     key={course.id}
-                                    className={`glass-panel p-0 rounded-2xl overflow-hidden transition-all duration-500 border border-white/5 ${isEnrolled ? 'border-emerald-500/30 bg-emerald-500/5' : 'hover:border-white/20'}`}
+                                    className={`glass-panel p-0 rounded-2xl overflow-hidden transition-all duration-500 border border-white/5 ${course.isLocked ? 'border-red-500/20 opacity-80' : isEnrolled ? 'border-emerald-500/30 bg-emerald-500/5' : 'hover:border-white/20'}`}
                                 >
                                     <div
                                         className={`h-48 relative group ${course.isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -235,11 +321,15 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all" />
 
                                         {course.isLocked ? (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
                                                 <div className="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-md border border-white/20">
                                                     <Lock className="w-6 h-6 text-white/50" />
                                                 </div>
-                                                <span className="bg-black/80 px-3 py-1 rounded-full text-[10px] font-bold text-gray-400">اجتز المساق السابق للفتح</span>
+                                                <span className="bg-black/80 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-300 border border-white/5">
+                                                    {(course as any).lockedByPrerequisiteName
+                                                        ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+                                                        : "اجتز المساق السابق للفتح"}
+                                                </span>
                                             </div>
                                         ) : isEnrolled && (
                                             <>
@@ -262,7 +352,22 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         <h3 className="font-bold text-lg text-white mb-1 leading-tight">{course.title}</h3>
                                         <p className="text-xs text-gray-400 mb-4">{course.instructor}</p>
 
-                                        {isEnrolled ? (
+                                        {course.isLocked ? (
+                                            <div className="space-y-2">
+                                                <button
+                                                    disabled
+                                                    className="w-full py-4 bg-red-500/10 text-red-400 rounded-xl font-bold text-sm border border-red-500/20 cursor-not-allowed flex items-center justify-center gap-2"
+                                                >
+                                                    <Lock className="w-4 h-4" />
+                                                    مغلق
+                                                </button>
+                                                <p className="text-[10px] text-gray-500 text-center leading-relaxed">
+                                                    {(course as any).lockedByPrerequisiteName
+                                                        ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+                                                        : "اجتز المساق السابق للفتح"}
+                                                </p>
+                                            </div>
+                                        ) : isEnrolled ? (
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold bg-emerald-500/10 py-1.5 px-3 rounded-md">
                                                     <span>{course.duration}</span>
@@ -288,14 +393,6 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                                     </a>
                                                 )}
                                             </div>
-                                        ) : course.isLocked ? (
-                                            <button
-                                                disabled
-                                                className="w-full py-4 bg-white/5 text-gray-500 rounded-xl font-bold text-sm border border-white/5 cursor-not-allowed flex items-center justify-center gap-2"
-                                            >
-                                                <Lock className="w-4 h-4" />
-                                                مغلق
-                                            </button>
                                         ) : enrollingId === course.id ? (
                                             <button
                                                 disabled

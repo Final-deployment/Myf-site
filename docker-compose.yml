@@ -1,8 +1,8 @@
 services:
   app:
     build: .
-    image: mastaba-v3-image
-    container_name: mastaba-v3-container
+    image: mastaba-v4-image
+    container_name: mastaba-v4-container
     restart: always
     ports:
       - "3001:5000"
@@ -10,7 +10,3 @@ services:
       - ./data:/app/data
     env_file:
       - .env
-    environment:
-      - PORT=5000
-      - NODE_ENV=production
-      - SECRET_KEY=change_this_in_production_to_a_secure_key

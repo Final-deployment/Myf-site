@@ -3,6 +3,7 @@
  */
 import type { SystemActivityLog, Certificate } from '../../types';
 import { getAuthToken } from './auth';
+import { getApiUrl } from './config';
 
 export interface R2Item {
     id: string;
@@ -16,7 +17,7 @@ export interface R2Item {
 export const adminApi = {
     getLogs: async (): Promise<SystemActivityLog[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/system-activity-logs', {
+        const response = await fetch(getApiUrl('/system-activity-logs'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         return response.ok ? await response.json() : [];
@@ -24,7 +25,7 @@ export const adminApi = {
 
     logAction: async (userId: string, userName: string, action: string, details: string): Promise<void> => {
         const token = getAuthToken();
-        await fetch('/api/system-activity-logs', {
+        await fetch(getApiUrl('/system-activity-logs'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -36,7 +37,7 @@ export const adminApi = {
 
     getCertificates: async (): Promise<Certificate[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/certificates', {
+        const response = await fetch(getApiUrl('/certificates'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         return response.ok ? await response.json() : [];
@@ -44,7 +45,7 @@ export const adminApi = {
 
     getAllCertificates: async (): Promise<Certificate[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/certificates/all', {
+        const response = await fetch(getApiUrl('/certificates/all'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         return response.ok ? await response.json() : [];
@@ -52,7 +53,7 @@ export const adminApi = {
 
     issueCertificate: async (data: any): Promise<Certificate> => {
         const token = getAuthToken();
-        const response = await fetch('/api/certificates/issue', {
+        const response = await fetch(getApiUrl('/certificates/issue'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -66,7 +67,7 @@ export const adminApi = {
 
     generateCertificate: async (courseId: string): Promise<Certificate> => {
         const token = getAuthToken();
-        const response = await fetch('/api/certificates', {
+        const response = await fetch(getApiUrl('/certificates'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -80,7 +81,7 @@ export const adminApi = {
 
     generateMasterCertificate: async (): Promise<Certificate> => {
         const token = getAuthToken();
-        const response = await fetch('/api/certificates/master', {
+        const response = await fetch(getApiUrl('/certificates/master'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -94,7 +95,7 @@ export const adminApi = {
     r2: {
         listFiles: async (prefix: string = ''): Promise<{ files: R2Item[]; folders: R2Item[]; prefix: string }> => {
             const token = getAuthToken();
-            const response = await fetch(`/api/r2/files?prefix=${encodeURIComponent(prefix)}`, {
+            const response = await fetch(getApiUrl(`/r2/files?prefix=${encodeURIComponent(prefix)}`), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('Failed to fetch R2 files');
@@ -103,7 +104,7 @@ export const adminApi = {
 
         getUploadUrl: async (fileName: string, fileType: string, folderPath?: string): Promise<{ uploadUrl: string, key: string, publicUrl: string }> => {
             const token = getAuthToken();
-            const response = await fetch('/api/r2/upload-url', {
+            const response = await fetch(getApiUrl('/r2/upload-url'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -117,7 +118,7 @@ export const adminApi = {
 
         deleteFile: async (key: string): Promise<void> => {
             const token = getAuthToken();
-            const response = await fetch('/api/r2/file', {
+            const response = await fetch(getApiUrl('/r2/file'), {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -130,7 +131,7 @@ export const adminApi = {
 
         renameFile: async (oldKey: string, newKey: string): Promise<void> => {
             const token = getAuthToken();
-            const response = await fetch('/api/r2/rename', {
+            const response = await fetch(getApiUrl('/r2/rename'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -143,7 +144,7 @@ export const adminApi = {
 
         createFolder: async (folderPath: string): Promise<void> => {
             const token = getAuthToken();
-            const response = await fetch('/api/r2/folder', {
+            const response = await fetch(getApiUrl('/r2/folder'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -157,7 +158,7 @@ export const adminApi = {
 
     downloadBackup: async (): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch('/api/admin/backup/download', {
+        const response = await fetch(getApiUrl('/admin/backup/download'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to download backup');
@@ -174,7 +175,7 @@ export const adminApi = {
 
     uploadCloudBackup: async (): Promise<{ url: string; key: string; size: number }> => {
         const token = getAuthToken();
-        const response = await fetch('/api/admin/backup/cloud', {
+        const response = await fetch(getApiUrl('/admin/backup/cloud'), {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -190,7 +191,7 @@ export const adminApi = {
 
     getBackupSettings: async (): Promise<any> => {
         const token = getAuthToken();
-        const response = await fetch('/api/admin/settings/backup', {
+        const response = await fetch(getApiUrl('/admin/settings/backup'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to fetch backup settings');
@@ -199,7 +200,7 @@ export const adminApi = {
 
     updateBackupSettings: async (settings: any): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch('/api/admin/settings/backup', {
+        const response = await fetch(getApiUrl('/admin/settings/backup'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

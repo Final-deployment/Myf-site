@@ -41,6 +41,9 @@ const allowedOrigins = [
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:5176',
+    'https://localhost',           // Capacitor Android (androidScheme: 'https')
+    'capacitor://localhost',       // Capacitor iOS
+    'http://localhost',            // Capacitor fallback
     'https://mastaba.myf-online.com',
     'https://myf-online.com',
     'https://www.myf-online.com',

@@ -2,6 +2,7 @@
  * Authentication Service
  */
 import type { User } from '../../types';
+import { getApiUrl } from './config';
 
 const STORAGE_PREFIX = 'mastaba_';
 
@@ -32,7 +33,7 @@ export const getAuthToken = (): string | undefined => {
 export const authApi = {
     login: async (email: string, password: string): Promise<User | null> => {
         try {
-            const response = await fetch('/api/login', {
+            const response = await fetch(getApiUrl('/login'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -77,7 +78,7 @@ export const authApi = {
 
     register: async (userData: any): Promise<{ user: User | null; error: any | null }> => {
         try {
-            const response = await fetch('/api/register', {
+            const response = await fetch(getApiUrl('/register'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(userData)
@@ -95,7 +96,7 @@ export const authApi = {
 
     verifyOtp: async (email: string, token: string): Promise<{ success: boolean; user: User | null; error: any | null }> => {
         try {
-            const response = await fetch('/api/verify-email', {
+            const response = await fetch(getApiUrl('/verify-email'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, otp: token })
@@ -119,7 +120,7 @@ export const authApi = {
 
     resendOtp: async (email: string): Promise<{ error: any | null }> => {
         try {
-            const response = await fetch('/api/resend-otp', {
+            const response = await fetch(getApiUrl('/resend-otp'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })

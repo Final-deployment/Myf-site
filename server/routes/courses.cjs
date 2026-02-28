@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
         const courses = db.prepare(`
             SELECT c.*, b.path as book_path 
             FROM courses c 
-            LEFT JOIN books b ON c.id = b.courseId 
+            LEFT JOIN (SELECT courseId, MIN(path) as path FROM books GROUP BY courseId) b ON c.id = b.courseId 
             ORDER BY c.order_index ASC, c.created_at DESC
         `).all();
 
@@ -68,6 +68,7 @@ router.get('/', async (req, res) => {
             // Get progress if userId is known
             let progress = 0;
             let isLocked = false;
+            let prerequisiteName = null;
 
             // Per-folder locking logic: isolated to within the same folder
             const currentFolderId = String(c.folder_id || '').toLowerCase().trim();
@@ -78,26 +79,45 @@ router.get('/', async (req, res) => {
             // Robust index check: find position within current folder program
             const indexInFolder = folderCourses.findIndex(course => String(course.id) === String(c.id));
 
-            if (req.user?.role === 'admin') {
+            if (!req.user || req.user.role === 'admin') {
                 isLocked = false;
             } else if (indexInFolder === 0 || indexInFolder === -1) {
                 isLocked = false; // First course in each folder is always unlocked
             } else {
-                // Subsequent courses are locked if the previous one isn't "passed"
+                // Subsequent courses are locked if the PREVIOUS one in the order isn't "passed"
                 const prevCourse = folderCourses[indexInFolder - 1];
-                const passed = userId ? passedCourseIds.has(String(prevCourse.id)) : false;
-                isLocked = !passed;
+                const passedPrev = passedCourseIds.has(String(prevCourse.id));
+                isLocked = !passedPrev;
+                if (isLocked) {
+                    prerequisiteName = prevCourse.title; // Proper local scope
+                }
             }
 
             // Emergency override: if it's the ONLY course in its folder, it's never locked
             if (folderCourses.length <= 1) {
                 isLocked = false;
+                prerequisiteName = null;
             }
 
             // Progress check
+            let deadline = null;
+            let isLockedByDeadline = false;
             if (userId) {
-                const enrollment = db.prepare('SELECT progress FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, c.id);
-                if (enrollment) progress = enrollment.progress;
+                const enrollment = db.prepare('SELECT progress, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, c.id);
+                if (enrollment) {
+                    progress = enrollment.progress;
+                    deadline = enrollment.deadline;
+                    isLockedByDeadline = !!enrollment.is_locked;
+
+                    if (!isLockedByDeadline && deadline && new Date() > new Date(deadline)) {
+                        db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, c.id);
+                        isLockedByDeadline = true;
+                    }
+
+                    if (isLockedByDeadline && req.user?.role !== 'admin' && req.user?.role !== 'supervisor') {
+                        isLocked = true;
+                    }
+                }
             }
 
             return {
@@ -121,9 +141,13 @@ router.get('/', async (req, res) => {
                 quizFrequency: c.quiz_frequency,
                 folderId: c.folder_id,
                 orderIndex: c.order_index,
+                daysAvailable: c.days_available,
                 bookPath: bookUrl,
                 progress: progress,
+                deadline: deadline,
+                isLockedByDeadline: isLockedByDeadline,
                 isLocked: isLocked,
+                lockedByPrerequisiteName: prerequisiteName,
                 isEnrolled: userId ? !!db.prepare('SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, c.id) : false,
                 episodes: episodes.map(ep => {
                     let epProgress = { completed: false, lastPosition: 0, watchedDuration: 0 };
@@ -169,9 +193,10 @@ router.post('/enroll', authenticateToken, (req, res) => {
     }
 
     try {
+        const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
+        if (!course) return res.status(404).json({ error: 'Course not found' });
+
         if (req.user.role !== 'admin') {
-            const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
-            if (!course) return res.status(404).json({ error: 'Course not found' });
 
             const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
             const folderCourses = db.prepare('SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC').all(currentFolderId);
@@ -186,7 +211,7 @@ router.post('/enroll', authenticateToken, (req, res) => {
                 `).get(userId, prevCourse.id);
 
                 if (!passed) {
-                    return res.status(403).json({ error: 'هذا المساق مغلق حتى تجتاز المساق السابق في هذا القسم' });
+                    return res.status(403).json({ error: `هذا المساق مغلق. يجب اجتياز مساق "${prevCourse.title}" أولاً` });
                 }
             }
         }
@@ -197,11 +222,18 @@ router.post('/enroll', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'Already enrolled in this course' });
         }
 
+        let deadline = null;
+        if (course.days_available) {
+            const date = new Date();
+            date.setDate(date.getDate() + course.days_available);
+            deadline = date.toISOString();
+        }
+
         // Insert enrollment
         db.prepare(`
-            INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed)
-            VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0)
-        `).run(userId, courseId);
+            INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
+            VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
+        `).run(userId, courseId, deadline);
 
         // Update students_count in courses table
         db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(courseId);
@@ -236,6 +268,19 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
                 if (!passed) {
                     return res.status(403).json({ error: 'Course is locked' });
                 }
+            }
+        }
+
+        // SECURITY: Check enrollment deadline
+        const enrollment = db.prepare('SELECT deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
+        if (enrollment) {
+            let locked = enrollment.is_locked;
+            if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline)) {
+                db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(req.user.id, courseId);
+                locked = 1;
+            }
+            if (locked) {
+                return res.status(403).json({ error: 'انتهت الفترة المتاحة لدراسة المساق، يرجى مراجعة المشرف', isLockedOut: true });
             }
         }
     }

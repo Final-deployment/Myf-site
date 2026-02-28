@@ -2,6 +2,7 @@
  * Supervisor Management API Service
  */
 import { getAuthToken } from './auth';
+import { getApiUrl } from './config';
 
 async function apiFetch(url: string, options: any = {}) {
     const token = getAuthToken();
@@ -10,7 +11,7 @@ async function apiFetch(url: string, options: any = {}) {
         'Authorization': `Bearer ${token}`,
         ...options.headers
     };
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(getApiUrl(url), { ...options, headers });
     if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || 'API request failed');
@@ -28,5 +29,9 @@ export const supervisorApi = {
         apiFetch('/api/supervisors/assign', { method: 'POST', body: JSON.stringify({ studentId, supervisorId }) }),
     demote: (supervisorId: string, targetSupervisorId: string | null = null) =>
         apiFetch('/api/supervisors/demote', { method: 'POST', body: JSON.stringify({ supervisorId, targetSupervisorId }) }),
-    getMyStudents: () => apiFetch('/api/supervisors/my-students')
+    getMyStudents: () => apiFetch('/api/supervisors/my-students'),
+    getStudentsProgress: (supervisorId?: string) =>
+        apiFetch(`/api/supervisors/students-progress${supervisorId ? `?supervisorId=${supervisorId}` : ''}`),
+    unlockCourse: (userId: string, courseId: string, extraDays: number = 7) =>
+        apiFetch(`/api/supervisors/students/${userId}/courses/${courseId}/unlock`, { method: 'POST', body: JSON.stringify({ extraDays }) })
 };

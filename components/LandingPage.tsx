@@ -6,10 +6,9 @@ import { Sun, Moon } from 'lucide-react';
 interface LandingPageProps {
   onLoginClick: () => void;
   onSignupClick: () => void;
-  onQuickLogin?: (role: 'student' | 'admin' | 'supervisor') => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick, onQuickLogin }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }) => {
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
 
@@ -114,31 +113,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick, 
             </button>
           </div>
         </div>
-        {onQuickLogin && (
-          <div className="mt-8 mb-8 flex flex-col md:flex-row items-center justify-center gap-3 w-full max-w-lg px-4 flex-shrink-0">
-            <button
-              onClick={() => onQuickLogin('student')}
-              className="w-full md:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-sm font-bold transition-colors flex items-center justify-center gap-2 border border-emerald-400/30 shadow-lg"
-            >
-              <i className="fas fa-user-graduate"></i>
-              <span>{t('landing.loginAsStudent')}</span>
-            </button>
-            <button
-              onClick={() => onQuickLogin('admin')}
-              className="w-full md:w-auto px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-full text-sm font-bold transition-colors flex items-center justify-center gap-2 border border-violet-400/30 shadow-lg"
-            >
-              <i className="fas fa-user-shield"></i>
-              <span>{t('landing.loginAsAdmin')}</span>
-            </button>
-            <button
-              onClick={() => onQuickLogin('supervisor')}
-              className="w-full md:w-auto px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-sm font-bold transition-colors flex items-center justify-center gap-2 border border-amber-400/30 shadow-lg"
-            >
-              <i className="fas fa-user-check"></i>
-              <span>{t('landing.loginAsSupervisor')}</span>
-            </button>
-          </div>
-        )}
+
         {/* Small hint text below card */}
       </main>
       {/* END: Main Content */}

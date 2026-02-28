@@ -35,6 +35,19 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
         }
     };
 
+    const handleUnlockCourse = async (courseId: string) => {
+        if (!studentId) return;
+        try {
+            const res = await api.supervisors.unlockCourse(studentId, courseId, 7);
+            if (res.success) {
+                alert('تم فتح المساق وتمديد الفترة الزمنية لمدة 7 أيام بنجاح');
+                loadDetails();
+            }
+        } catch (e: any) {
+            alert(e.message || 'فشل في فتح المساق');
+        }
+    };
+
     if (!isOpen || !studentId) return null;
 
     return (
@@ -152,23 +165,52 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                             </h4>
                             <div className="space-y-3">
                                 {details?.enrollments?.length > 0 ? (
-                                    details.enrollments.map((course: any, idx: number) => (
-                                        <div key={idx} className="bg-white/5 p-4 rounded-xl flex items-center justify-between">
-                                            <div>
-                                                <p className="text-white font-medium">{course.courseTitle}</p>
-                                                <p className="text-xs text-gray-400">آخر دخول: {new Date(course.lastAccess).toLocaleDateString('ar-EG')}</p>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-32 h-2 bg-white/10 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-emerald-500 rounded-full"
-                                                        style={{ width: `${course.progress}%` }}
-                                                    />
+                                    details.enrollments.map((course: any, idx: number) => {
+                                        const isLocked = !!course.is_locked;
+                                        const deadline = course.deadline ? new Date(course.deadline) : null;
+                                        const isExpired = deadline ? deadline.getTime() < Date.now() : false;
+                                        const diffDays = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24)) : null;
+
+                                        return (
+                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border ${isLocked ? 'border-red-500/50' : 'border-transparent'}`}>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className={`font-medium ${isLocked ? 'text-red-400' : 'text-white'}`}>{course.courseTitle}</p>
+                                                        {isLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">مغلق (لانتهاء الوقت)</span>}
+                                                    </div>
+                                                    <div className="flex items-center gap-4 mt-1">
+                                                        <p className="text-xs text-gray-400">آخر دخول: {course.last_accessed || course.enrolled_at ? new Date(course.last_accessed || course.enrolled_at).toLocaleDateString('ar-EG') : 'لم يدخل بعد'}</p>
+                                                        {deadline && (
+                                                            <p className={`text-xs font-bold ${isExpired || isLocked ? 'text-red-400' : diffDays && diffDays <= 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                                                المهلة: {deadline.toLocaleDateString('ar-EG')}
+                                                                {!isExpired && diffDays !== null && ` (متبقي ${diffDays} يوم)`}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <span className="text-sm font-bold text-emerald-400">{course.progress}%</span>
+
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-3 min-w-[120px]">
+                                                        <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${isLocked ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                                                style={{ width: `${course.progress}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className={`text-sm font-bold ${isLocked ? 'text-red-400' : 'text-emerald-400'}`}>{course.progress}%</span>
+                                                    </div>
+                                                    {isLocked && user?.role === 'supervisor' && (
+                                                        <button
+                                                            onClick={() => handleUnlockCourse(course.course_id)}
+                                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
+                                                        >
+                                                            تمديد (7 أيام)
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <p className="text-gray-500 text-center py-4 bg-white/5 rounded-xl border border-dashed border-white/10">لا توجد دورات مسجلة</p>
                                 )}

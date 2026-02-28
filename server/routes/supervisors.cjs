@@ -143,4 +143,91 @@ router.get('/my-students', (req, res) => {
     }
 });
 
+// Get detailed progress for supervisor's students
+router.get('/students-progress', (req, res) => {
+    try {
+        const supervisorId = req.user.role === 'admin' ? null : req.user.id;
+
+        let studentsQuery = `
+            SELECT u.id, u.name, u.email 
+            FROM users u
+        `;
+        const params = [];
+
+        if (supervisorId) {
+            studentsQuery += ` WHERE u.supervisor_id = ?`;
+            params.push(supervisorId);
+        } else if (req.query.supervisorId) {
+            studentsQuery += ` WHERE u.supervisor_id = ?`;
+            params.push(req.query.supervisorId);
+        }
+
+        const students = db.prepare(studentsQuery).all(...params);
+
+        const progressData = students.map(student => {
+            const enrollments = db.prepare(`
+                SELECT e.course_id, c.title, e.progress, e.deadline, e.is_locked, c.days_available
+                FROM enrollments e
+                JOIN courses c ON e.course_id = c.id
+                WHERE e.user_id = ?
+            `).all(student.id);
+
+            return {
+                ...student,
+                courses: enrollments.map(en => {
+                    let daysRemaining = 0;
+                    if (en.deadline) {
+                        const diff = new Date(en.deadline).getTime() - Date.now();
+                        daysRemaining = Math.max(0, Math.ceil(diff / (1000 * 3600 * 24)));
+                    }
+                    return {
+                        courseId: en.course_id,
+                        title: en.title,
+                        progress: en.progress,
+                        deadline: en.deadline,
+                        isLocked: !!en.is_locked,
+                        daysAvailable: en.days_available,
+                        daysRemaining
+                    };
+                })
+            };
+        });
+
+        res.json(progressData);
+    } catch (e) {
+        console.error('[STUDENTS_PROGRESS_ERROR]:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Unlock course
+router.post('/students/:userId/courses/:courseId/unlock', (req, res) => {
+    const { userId, courseId } = req.params;
+    const { extraDays } = req.body;
+
+    try {
+        if (req.user.role !== 'admin') {
+            const student = db.prepare('SELECT supervisor_id FROM users WHERE id = ?').get(userId);
+            if (!student || student.supervisor_id !== req.user.id) {
+                return res.status(403).json({ error: 'Not authorized to unlock for this student' });
+            }
+        }
+
+        const days = parseInt(extraDays) || 7; // Default 7 extra days
+        const newDeadline = new Date();
+        newDeadline.setDate(newDeadline.getDate() + days);
+
+        db.prepare(`
+            UPDATE enrollments 
+            SET is_locked = 0, deadline = ? 
+            WHERE user_id = ? AND course_id = ?
+        `).run(newDeadline.toISOString(), userId, courseId);
+
+        res.json({ success: true, newDeadline: newDeadline.toISOString() });
+    } catch (e) {
+        console.error('[COURSE_UNLOCK_ERROR]:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;

@@ -73,6 +73,7 @@ function initDatabase() {
             passing_score INTEGER DEFAULT 80,
             quiz_frequency INTEGER DEFAULT 0,
             order_index INTEGER DEFAULT 0,
+            days_available INTEGER DEFAULT 30,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `);
@@ -91,6 +92,7 @@ function initDatabase() {
   // Migration for courses table
   try { db.prepare('ALTER TABLE courses ADD COLUMN folder_id TEXT').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE courses ADD COLUMN order_index INTEGER DEFAULT 0').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE courses ADD COLUMN days_available INTEGER DEFAULT 30').run(); } catch (e) { }
 
   // --- Episodes Table ---
   db.exec(`
@@ -117,11 +119,17 @@ function initDatabase() {
             completed INTEGER DEFAULT 0,
             last_accessed TEXT,
             is_favorite INTEGER DEFAULT 0,
+            deadline TEXT,
+            is_locked INTEGER DEFAULT 0,
             PRIMARY KEY (user_id, course_id),
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
         )
     `);
+
+  // Migration for enrollments
+  try { db.prepare('ALTER TABLE enrollments ADD COLUMN deadline TEXT').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE enrollments ADD COLUMN is_locked INTEGER DEFAULT 0').run(); } catch (e) { }
 
   // --- Episode Progress Table ---
   db.exec(`
@@ -314,21 +322,16 @@ function initDatabase() {
 
   const defaultUsers = [
     {
-      id: "1", email: "ahmed@example.com", passwordPlain: "123456",
-      role: "student", name: "أحمد محمد"
+      id: "admin_mohammad", email: "mohammadaydi93@gmail.com", passwordPlain: "12345678",
+      role: "admin", name: "محمد العايدي"
     },
     {
-      id: "2", email: "admin@example.com", passwordPlain: "admin123",
-      role: "admin", name: "مدير النظام"
+      id: "admin_ikhlas", email: "ikhlasali19972018@gmail.com", passwordPlain: "12345678",
+      role: "admin", name: "اخلاص ابو حسين"
     },
     {
-      id: "manual_recipient", email: "manual@example.com", passwordPlain: "manual123",
-      role: "student", name: "مستلم شهادة يدوي"
-    },
-    // Adding Naser (Admin)
-    {
-      id: "u_naser_admin", email: "naser@myf-online.com", passwordPlain: "naser2024",
-      role: "admin", name: "المشرف العام"
+      id: "admin_manager", email: "manager@mastaba.com", passwordPlain: "12345678",
+      role: "admin", name: "مدير تجريبي"
     }
   ];
 
@@ -374,19 +377,51 @@ function initDatabase() {
   // This is added to meet the user's request to "out the current students from all courses"
   // and ensure they follow the new sequence. Since this is a specialized request,
   // we execute it AND THEN add a flag to ensure it doesn't run every time.
-  const resetFile = path.join(dataDir, '.sequential_reset_done');
-  if (!fs.existsSync(resetFile)) {
-    console.log('ENFORCING SEQUENTIAL RESET: Clearing all enrollments and progress...');
-    try {
-      db.prepare('DELETE FROM enrollments').run();
-      db.prepare('DELETE FROM episode_progress').run();
-      db.prepare('DELETE FROM quiz_results').run();
-      db.prepare('UPDATE courses SET students_count = 0').run();
-      fs.writeFileSync(resetFile, 'Reset completed on ' + new Date().toISOString());
-      console.log('SEQUENTIAL RESET COMPLETED.');
-    } catch (e) {
-      console.error('Error during sequential reset:', e);
+  // --- Ensure students are enrolled in foundational course ---
+  const foundationalCourseId = 'course_madkhal';
+  const foundationalCourse = db.prepare('SELECT id, days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+
+  if (foundationalCourse) {
+    console.log('ENFORCING FOUNDATIONAL ENROLLMENT: Ensuring all students can access the first course...');
+
+    // 1. Update days_available to 30 for foundational courses if they are too low
+    db.prepare("UPDATE courses SET days_available = MAX(days_available, 30) WHERE folder_id = 'foundation_shariah' OR id = ?").run(foundationalCourseId);
+
+    // 2. Enroll all existing students who aren't enrolled
+    const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
+    const enrollStmt = db.prepare(`
+      INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
+      VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
+    `);
+
+    const deadlineDate = new Date();
+    deadlineDate.setDate(deadlineDate.getDate() + 30);
+    const deadline = deadlineDate.toISOString();
+
+    let enrollmentCount = 0;
+    for (const student of students) {
+      const result = enrollStmt.run(student.id, foundationalCourseId, deadline);
+      if (result.changes > 0) enrollmentCount++;
     }
+
+    if (enrollmentCount > 0) {
+      console.log(`Auto-enrolled ${enrollmentCount} students in ${foundationalCourseId}.`);
+      db.prepare('UPDATE courses SET students_count = (SELECT COUNT(*) FROM enrollments WHERE course_id = ?) WHERE id = ?').run(foundationalCourseId, foundationalCourseId);
+    }
+
+    // 3. FORCE UPDATE: Ensure ALL existing students have at least 30 days from NOW if their deadline is shorter
+    // This handles the case where students were previously enrolled with a very short deadline
+    const now = new Date();
+    const future30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Using simple string comparison for ISO dates in SQLite
+    db.prepare(`
+      UPDATE enrollments 
+      SET deadline = ?, is_locked = 0 
+      WHERE course_id = ? AND (deadline < ? OR deadline IS NULL)
+    `).run(future30, foundationalCourseId, future30);
+
+    console.log(`Enforced 30-day deadline for ${foundationalCourseId} for all students.`);
   }
 
   console.log('SQLite database initialized successfully.');

@@ -3,6 +3,7 @@
  */
 import type { User } from '../../types';
 import { getAuthToken } from './auth';
+import { getApiUrl } from './config';
 
 const STORAGE_PREFIX = 'mastaba_';
 
@@ -28,7 +29,7 @@ export interface CreateUserInput {
 export const usersApi = {
     getUsers: async (): Promise<User[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/users', {
+        const response = await fetch(getApiUrl('/users'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) return [];
@@ -37,7 +38,7 @@ export const usersApi = {
 
     updateUser: async (id: string, updates: Partial<User>): Promise<User | null> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/users/${id}`, {
+        const response = await fetch(getApiUrl(`/users/${id}`), {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -60,7 +61,7 @@ export const usersApi = {
     // Create User (Admin)
     createUser: async (userData: CreateUserInput): Promise<User | null> => {
         const token = getAuthToken();
-        const response = await fetch('/api/users', {
+        const response = await fetch(getApiUrl('/users'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -78,7 +79,7 @@ export const usersApi = {
 
     deleteUser: async (id: string): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/users/${id}`, {
+        const response = await fetch(getApiUrl(`/users/${id}`), {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -87,7 +88,7 @@ export const usersApi = {
 
     getStudents: async (): Promise<User[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/users/students', {
+        const response = await fetch(getApiUrl('/users/students'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) return [];
@@ -96,7 +97,7 @@ export const usersApi = {
 
     getFavorites: async (userId: string): Promise<any[]> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/users/${userId}/favorites`, {
+        const response = await fetch(getApiUrl(`/users/${userId}/favorites`), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) return [];
@@ -105,7 +106,7 @@ export const usersApi = {
 
     toggleFavorite: async (userId: string, targetId: string | number, type: string): Promise<{ action: string; success: boolean } | null> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/users/${userId}/favorites/toggle`, {
+        const response = await fetch(getApiUrl(`/users/${userId}/favorites/toggle`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -119,7 +120,7 @@ export const usersApi = {
 
     getUserDetails: async (id: string): Promise<any> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/users/${id}/details?_t=${Date.now()}`, {
+        const response = await fetch(getApiUrl(`/users/${id}/details?_t=${Date.now()}`), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to fetch user details');

@@ -116,6 +116,22 @@ router.post('/results', authenticateToken, (req, res) => {
     }
 
     try {
+        // SECURITY: Check enrollment deadline
+        const quiz = db.prepare('SELECT courseId FROM quizzes WHERE id = ?').get(quizId);
+        if (quiz && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+            const enrollment = db.prepare('SELECT deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, quiz.courseId);
+            if (enrollment) {
+                let locked = enrollment.is_locked;
+                if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline)) {
+                    db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
+                    locked = 1;
+                }
+                if (locked) {
+                    return res.status(403).json({ error: 'انتهت الفترة المتاحة لدراسة المساق، يرجى مراجعة المشرف للتقديم.', isLockedOut: true });
+                }
+            }
+        }
+
         db.prepare(`
             INSERT INTO quiz_results (id, userId, quizId, score, total, percentage, completedAt)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -129,7 +145,27 @@ router.post('/results', authenticateToken, (req, res) => {
 });
 
 // ============================================================================
-// Get user's quiz results (Authenticated Users - own results only)
+// Get current user's quiz results (Authenticated Users)
+// ============================================================================
+router.get('/results', authenticateToken, (req, res) => {
+    try {
+        const results = db.prepare(`
+            SELECT qr.*, q.title as quizTitle 
+            FROM quiz_results qr 
+            JOIN quizzes q ON qr.quizId = q.id 
+            WHERE qr.userId = ?
+            ORDER BY qr.completedAt DESC
+        `).all(req.user.id);
+
+        res.json(results);
+    } catch (e) {
+        console.error('[QUIZ_RESULTS_GET_OWN_ERROR]:', e.message);
+        res.status(500).json({ error: 'Failed to fetch your quiz results' });
+    }
+});
+
+// ============================================================================
+// Get specific user's quiz results (Admin Only or Self)
 // ============================================================================
 router.get('/results/:userId', authenticateToken, (req, res) => {
     const { userId } = req.params;

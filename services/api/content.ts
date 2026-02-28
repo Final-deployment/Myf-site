@@ -3,26 +3,27 @@
  */
 import type { Announcement, LibraryResource } from '../../types';
 import { getAuthToken } from './auth';
+import { getApiUrl } from './config';
 
 export const contentApi = {
     getLibraryResources: async (): Promise<LibraryResource[]> => {
-        const response = await fetch('/api/books');
+        const response = await fetch(getApiUrl('/books'));
         return response.ok ? await response.json() : [];
     },
 
     getBooks: async (): Promise<any[]> => {
-        const response = await fetch('/api/books');
+        const response = await fetch(getApiUrl('/books'));
         return response.ok ? await response.json() : [];
     },
 
     getBookByCourseId: async (courseId: string): Promise<any> => {
-        const response = await fetch(`/api/books/course/${courseId}`);
+        const response = await fetch(getApiUrl(`/books/course/${courseId}`));
         return response.ok ? await response.json() : null;
     },
 
     getAnnouncements: async (): Promise<Announcement[]> => {
         const token = getAuthToken();
-        const response = await fetch('/api/announcements', {
+        const response = await fetch(getApiUrl('/content/announcements'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) return [];
@@ -31,7 +32,7 @@ export const contentApi = {
 
     addAnnouncement: async (data: Partial<Announcement>): Promise<Announcement> => {
         const token = getAuthToken();
-        const response = await fetch('/api/announcements', {
+        const response = await fetch(getApiUrl('/content/announcements'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -48,7 +49,7 @@ export const contentApi = {
 
     updateAnnouncement: async (id: string, data: Partial<Announcement>): Promise<Announcement> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/announcements/${id}`, {
+        const response = await fetch(getApiUrl(`/content/announcements/${id}`), {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -65,7 +66,7 @@ export const contentApi = {
 
     deleteAnnouncement: async (id: string): Promise<void> => {
         const token = getAuthToken();
-        const response = await fetch(`/api/announcements/${id}`, {
+        const response = await fetch(getApiUrl(`/content/announcements/${id}`), {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
