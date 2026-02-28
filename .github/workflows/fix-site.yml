@@ -9,20 +9,23 @@ jobs:
   restore:
     runs-on: ubuntu-latest
     steps:
-    - name: Restore Nginx and SSL
+    - name: Restore Nginx, SSL, and Docker
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
         password: ${{ secrets.VPS_PASSWORD }}
         script: |
-          echo "Restoring Nginx Config"
+          echo "Starting mastaba-v4-container if it exists..."
+          docker start mastaba-v4-container || echo "v4 container not found or already running"
+          
+          echo "Restoring Nginx Config for Port 3005"
           cat <<'EOF' > /tmp/scientific-bench.conf
           server {
               listen 80;
               server_name muslimyouth.ps www.muslimyouth.ps;
               location / {
-                  proxy_pass http://localhost:3001;
+                  proxy_pass http://localhost:3005;
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection 'upgrade';
@@ -30,7 +33,7 @@ jobs:
                   proxy_cache_bypass $http_upgrade;
               }
               location /api {
-                  proxy_pass http://localhost:3001/api;
+                  proxy_pass http://localhost:3005/api;
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection 'upgrade';
@@ -42,9 +45,13 @@ jobs:
           sudo mv /tmp/scientific-bench.conf /etc/nginx/sites-available/scientific-bench
           sudo ln -sf /etc/nginx/sites-available/scientific-bench /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
+          sudo nginx -t
           sudo systemctl reload nginx
-          echo "Running Certbot for SSL"
-          sudo certbot --nginx -d muslimyouth.ps,www.muslimyouth.ps --non-interactive --agree-tos -m mohammadaydi93@gmail.com --redirect
+          
+          echo "Running Certbot for SSL on muslimyouth.ps"
+          sudo certbot --nginx -d muslimyouth.ps -d www.muslimyouth.ps --non-interactive --agree-tos -m mohammadaydi93@gmail.com --redirect || echo "Certbot failed, but continuing..."
           sudo systemctl reload nginx
+          
           echo "Done Restoring Site. Checking Containers:"
           docker ps
+
