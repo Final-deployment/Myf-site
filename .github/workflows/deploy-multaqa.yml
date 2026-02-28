@@ -3,6 +3,8 @@ name: Deploy Multaqa
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '.github/workflows/fix-site.yml'
   workflow_dispatch:
 
 jobs:
@@ -34,9 +36,7 @@ jobs:
           package-lock.json \
           db.json \
           docker-compose.yml \
-          Dockerfile \
-          nginx_app.conf \
-          deploy.sh
+          Dockerfile
 
     - name: Copy deployment package to VPS
       uses: appleboy/scp-action@v0.1.7
@@ -53,7 +53,19 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
         password: ${{ secrets.VPS_PASSWORD }}
+        command_timeout: 5m
         script: |
-          cd /var/www/apps/scientific-bench
-          chmod +x deploy.sh
-          ./deploy.sh
+          APP_DIR="/var/www/apps/scientific-bench"
+          cd $APP_DIR
+
+          echo ">>> Unzipping updated application..."
+          unzip -o deploy_production_latest.zip || true
+
+          echo ">>> Building and starting Docker container..."
+          docker compose up -d --build
+
+          echo ">>> Cleaning up..."
+          rm -f deploy_production_latest.zip
+
+          echo ">>> Deployment Complete!"
+          docker ps
