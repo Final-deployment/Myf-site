@@ -247,7 +247,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                                     {course.title}
                                                 </td>
                                                 <td className="px-4 py-3 text-center text-gray-300 font-medium">{course.lessonsCount}</td>
-                                                <td className="px-4 py-3 text-center text-emerald-400 font-medium" dir="ltr">{course.duration}</td>
+                                                <td className="px-4 py-3 text-center text-emerald-400 font-medium">{course.duration}</td>
                                                 <td className="px-4 py-3 text-center text-amber-400 font-bold">{(course as any).daysAvailable || 30} يوم</td>
                                                 <td className="px-4 py-3 text-center">
                                                     {isEnrolled ? (
@@ -268,18 +268,19 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         <td className="px-4 py-4 text-center text-emerald-300 font-bold">
                                             {visibleCourses.reduce((sum, c) => sum + (c.lessonsCount || 0), 0)} محاضرة
                                         </td>
-                                        <td className="px-4 py-4 text-center text-emerald-400 font-bold" dir="ltr">
+                                        <td className="px-4 py-4 text-center text-emerald-400 font-bold">
                                             {(() => {
                                                 const totalMins = visibleCourses.reduce((sum, c) => {
-                                                    const matchH = c.duration?.match(/(\d+)h/);
-                                                    const matchM = c.duration?.match(/(\d+)m/);
-                                                    const h = matchH ? parseInt(matchH[1]) : 0;
-                                                    const m = matchM ? parseInt(matchM[1]) : 0;
+                                                    const str = c.durationEn || c.duration || '';
+                                                    const matchH = str.match(/(\d+)\s*[hHس]/);
+                                                    const matchM = str.match(/(\d+)\s*[mMد]/);
+                                                    const h = matchH ? parseInt(matchH[1], 10) : 0;
+                                                    const m = matchM ? parseInt(matchM[1], 10) : 0;
                                                     return sum + (h * 60) + m;
                                                 }, 0);
                                                 const finalH = Math.floor(totalMins / 60);
                                                 const finalM = totalMins % 60;
-                                                return finalH > 0 ? `${finalH}h ${finalM}m` : `${finalM}m`;
+                                                return finalH > 0 ? `${finalH}س ${finalM}د` : `${finalM}د`;
                                             })()}
                                         </td>
                                         <td className="px-4 py-4 text-center text-amber-400 font-bold">
