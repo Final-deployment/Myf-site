@@ -43,7 +43,7 @@ jobs:
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
-        key: ${{ secrets.VPS_SSH_KEY }}
+        password: ${{ secrets.VPS_PASSWORD }}
         source: "deploy_production_latest.zip"
         target: "/var/www/apps/scientific-bench"
 
@@ -52,9 +52,9 @@ jobs:
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
-        key: ${{ secrets.VPS_SSH_KEY }}
+        password: ${{ secrets.VPS_PASSWORD }}
+        command_timeout: 5m
         script: |
           cd /var/www/apps/scientific-bench
           chmod +x deploy.sh
-          # Run deployment script (requires sudo for Nginx reload often, depends on VPS setup)
           ./deploy.sh
