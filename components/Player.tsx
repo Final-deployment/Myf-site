@@ -730,7 +730,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
             </div>
           </div>
 
-          {/* Video Area */}
+          {/* Video / Audio Area */}
           <div className="flex-1 w-full flex flex-col items-center justify-center p-2 min-h-[400px]">
             <div ref={containerRef} className={`relative group transition-all rounded-2xl overflow-hidden shadow-2xl bg-black ${isFullscreen ? 'fixed inset-0 z-50 rounded-none w-full h-full flex items-center justify-center' : 'w-fit max-w-full mx-auto'}`} style={{ height: isFullscreen ? '100vh' : 'auto' }}>
               {videoLoading && !videoError && (
@@ -765,7 +765,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                 controlsList="nodownload"
                 onContextMenu={(e) => e.preventDefault()}
                 onClick={() => setIsPlaying(prev => !prev)}
-                className={`max-h-[70vh] w-auto max-w-full mx-auto block transition-opacity duration-300 cursor-pointer ${videoLoading ? 'opacity-0' : 'opacity-100'}`}
+                className={`max-h-[70vh] w-auto max-w-full mx-auto block transition-opacity duration-300 cursor-pointer object-contain ${videoLoading ? 'opacity-0' : 'opacity-100'}`}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => {
                   setIsPlaying(false);

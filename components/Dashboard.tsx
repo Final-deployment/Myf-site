@@ -339,21 +339,35 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
                               </div>
 
                               <button
-                                 onClick={() => !isLocked && onPlayCourse(course)}
+                                 onClick={() => {
+                                    if (isLocked) return;
+                                    if ((course as any).isEnrolled) {
+                                       onPlayCourse(course);
+                                    } else {
+                                       setActiveTab?.('courses');
+                                    }
+                                 }}
                                  disabled={isLocked}
                                  className={`mt-auto w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn
                                     ${isLocked
                                        ? 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/5'
-                                       : 'bg-white/5 hover:bg-violet-600 hover:text-white text-gray-300'}`}
+                                       : (course as any).isEnrolled
+                                          ? 'bg-white/5 hover:bg-violet-600 hover:text-white text-gray-300'
+                                          : 'bg-white/5 hover:bg-emerald-600 hover:text-white text-amber-400 border border-amber-500/20'}`}
                               >
                                  {isLocked ? (
                                     <>
                                        <span>مغلق مؤقتاً</span>
                                        <Lock className="w-3 h-3" />
                                     </>
-                                 ) : (
+                                 ) : (course as any).isEnrolled ? (
                                     <>
                                        <span>انتقال للدورة</span>
+                                       <ArrowRight className="w-3 h-3 group-hover/btn:-translate-x-1 transition-transform rtl:rotate-180" />
+                                    </>
+                                 ) : (
+                                    <>
+                                       <span>سجّل من دوراتي أولاً</span>
                                        <ArrowRight className="w-3 h-3 group-hover/btn:-translate-x-1 transition-transform rtl:rotate-180" />
                                     </>
                                  )}

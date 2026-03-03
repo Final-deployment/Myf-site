@@ -146,6 +146,20 @@ function initDatabase() {
         )
     `);
 
+  // --- Extension Archive Table ---
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS extension_archive (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            course_id TEXT NOT NULL,
+            extended_by TEXT NOT NULL,
+            extended_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            days_added INTEGER DEFAULT 2,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
+        )
+    `);
+
   // --- Certificates Table ---
   db.exec(`
         CREATE TABLE IF NOT EXISTS certificates (
@@ -384,18 +398,35 @@ function initDatabase() {
   if (foundationalCourse) {
     console.log('ENFORCING FOUNDATIONAL ENROLLMENT: Ensuring all students can access the first course...');
 
-    // 1. Update days_available to 30 for foundational courses if they are too low
-    db.prepare("UPDATE courses SET days_available = MAX(days_available, 30) WHERE folder_id = 'foundation_shariah' OR id = ?").run(foundationalCourseId);
+    // 1. Seed correct per-course days_available values
+    const courseDaysMapping = {
+      'course_madkhal': 5,
+      'course_aqeeda': 15,
+      'course_fiqh1-waseelit': 20,
+      'course_nifas': 12,
+      'course_tafseer': 5,
+      'course_tazkiyah': 10,
+      'course_seerah': 15,
+      'course_arba3oon': 25,
+      'course_fiqh2-it7af': 25
+    };
+    const updateDaysStmt = db.prepare('UPDATE courses SET days_available = ? WHERE id = ?');
+    for (const [courseId, days] of Object.entries(courseDaysMapping)) {
+      updateDaysStmt.run(days, courseId);
+    }
 
-    // 2. Enroll all existing students who aren't enrolled
+    // 2. Enroll all existing students who aren't enrolled in the foundational course
     const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
+    const foundCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+    const daysForFoundational = (foundCourse && foundCourse.days_available) || 5;
+
     const enrollStmt = db.prepare(`
       INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
       VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
     `);
 
     const deadlineDate = new Date();
-    deadlineDate.setDate(deadlineDate.getDate() + 30);
+    deadlineDate.setDate(deadlineDate.getDate() + daysForFoundational);
     const deadline = deadlineDate.toISOString();
 
     let enrollmentCount = 0;
@@ -409,19 +440,7 @@ function initDatabase() {
       db.prepare('UPDATE courses SET students_count = (SELECT COUNT(*) FROM enrollments WHERE course_id = ?) WHERE id = ?').run(foundationalCourseId, foundationalCourseId);
     }
 
-    // 3. FORCE UPDATE: Ensure ALL existing students have at least 30 days from NOW if their deadline is shorter
-    // This handles the case where students were previously enrolled with a very short deadline
-    const now = new Date();
-    const future30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    // Using simple string comparison for ISO dates in SQLite
-    db.prepare(`
-      UPDATE enrollments 
-      SET deadline = ?, is_locked = 0 
-      WHERE course_id = ? AND (deadline < ? OR deadline IS NULL)
-    `).run(future30, foundationalCourseId, future30);
-
-    console.log(`Enforced 30-day deadline for ${foundationalCourseId} for all students.`);
+    console.log(`Seeded days_available for ${Object.keys(courseDaysMapping).length} courses.`);
   }
 
   console.log('SQLite database initialized successfully.');
