@@ -34,7 +34,6 @@ jobs:
           server.cjs \
           package.json \
           package-lock.json \
-          db.json \
           docker-compose.yml \
           Dockerfile
 
