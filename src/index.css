@@ -1,0 +1,309 @@
+/**
+ * Main Stylesheet - Al-Mastaba Al-Ilmiya
+ * 
+ * Tailwind CSS with custom styles for the Islamic educational platform.
+ * @module styles
+ */
+
+/* Tailwind Base Layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Base Styles
+   ============================================================================ */
+
+@layer base {
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Focus styles for accessibility */
+  :focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
+  }
+
+  /* Skip link for accessibility */
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #fbbf24;
+    color: #0f3d36;
+    padding: 8px 16px;
+    z-index: 10000;
+    font-weight: bold;
+    text-decoration: none;
+  }
+
+  .skip-link:focus {
+    top: 0;
+  }
+
+  /* Fix for invisible dropdown text in dark mode */
+  select,
+  option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-radius: 8px;
+  }
+}
+
+/* ============================================================================
+   Component Styles
+   ============================================================================ */
+
+@layer components {
+
+  /* Islamic Background Pattern */
+  .islamic-bg {
+    background-color: #0f3d36;
+    background-image:
+      linear-gradient(rgba(15, 61, 54, 0.95), rgba(15, 61, 54, 0.9)),
+      url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l15 15-15 15L15 15z' fill='none' stroke='%23fbbf24' stroke-width='1.5' stroke-opacity='0.4'/%3E%3Cpath d='M0 30l15 15-15 15L-15 45z' fill='none' stroke='%23fbbf24' stroke-width='1.5' stroke-opacity='0.4'/%3E%3Cpath d='M60 30l15 15-15 15L45 45z' fill='none' stroke='%23fbbf24' stroke-width='1.5' stroke-opacity='0.4'/%3E%3Cpath d='M30 60l15 15-15 15L15 75z' fill='none' stroke='%23fbbf24' stroke-width='1.5' stroke-opacity='0.4'/%3E%3Ccircle cx='30' cy='30' r='5' fill='%23d97706' fill-opacity='0.3'/%3E%3C/svg%3E");
+    background-size: 60px 60px;
+  }
+
+  /* Mashrabiya Pattern Overlay */
+  .mashrabiya-pattern {
+    background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='20' height='20' fill='none'/%3E%3Cpath d='M0 0h20v20H0z' fill='none' stroke='%23ffffff' stroke-opacity='0.15' stroke-width='1'/%3E%3Cpath d='M10 0v20M0 10h20' stroke='%23ffffff' stroke-opacity='0.1' stroke-width='0.5'/%3E%3C/svg%3E");
+  }
+
+  /* Glass Panel - Standard */
+  .glass-panel {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(4, 47, 46, 0.6) 100%);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Glass Panel - Gold Accent */
+  .glass-panel-gold {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(20, 20, 20, 0.3) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    box-shadow: 0 4px 25px rgba(245, 158, 11, 0.15);
+  }
+
+  /* Glass Panel - Heavy (for landing page) */
+  .glass-panel-heavy {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    border-radius: 30px;
+    position: relative;
+  }
+
+  /* Glass Card Hover Effect */
+  .glass-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    border-color: rgba(251, 191, 36, 0.4);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(6, 78, 59, 0.8) 100%);
+    transition: all 0.3s ease-out;
+  }
+
+  /* Text Effects */
+  .text-glow {
+    text-shadow: 0 0 15px rgba(16, 185, 129, 0.9);
+  }
+
+  .gold-glow {
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.7);
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(to bottom, #ffd700, #ff8c00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* Giant Decorative Symbols */
+  .giant-symbol-arch {
+    position: absolute;
+    width: 800px;
+    height: 800px;
+    background-repeat: no-repeat;
+    opacity: 0.1;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 200V100C20 50 60 10 100 10s80 40 80 90v100' fill='none' stroke='%23fcd34d' stroke-width='3' /%3E%3Cpath d='M30 200V105C30 65 65 30 100 30s70 35 70 75v95' fill='none' stroke='%23ffffff' stroke-width='1.5' /%3E%3C/svg%3E");
+  }
+
+  .giant-symbol-star {
+    position: absolute;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.1;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M200 0 L250 150 L400 200 L250 250 L200 400 L150 250 L0 200 L150 150 Z' fill='none' stroke='%23fcd34d' stroke-width='3'/%3E%3Ccircle cx='200' cy='200' r='100' stroke='%23ffffff' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  }
+
+  /* Corner Ornaments */
+  .corner-ornament-complex {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='50' height='50' viewBox='0 0 50 50' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0v30l10-10h20l-10-10h10l10-10H0z' fill='%23fbbf24' fill-opacity='0.6'/%3E%3Cpath d='M0 0h50v3H3v47h-3v-50' fill='%23fbbf24' fill-opacity='0.8'/%3E%3C/svg%3E");
+  }
+
+  .corner-tl {
+    top: 0;
+    left: 0;
+  }
+
+  .corner-tr {
+    top: 0;
+    right: 0;
+    transform: scaleX(-1);
+  }
+
+  .corner-bl {
+    bottom: 0;
+    left: 0;
+    transform: scaleY(-1);
+  }
+
+  .corner-br {
+    bottom: 0;
+    right: 0;
+    transform: scale(-1);
+  }
+
+  /* Background Pattern Overlay */
+  .bg-pattern-overlay {
+    background-image: url('https://raw.githubusercontent.com/NinjaWorld1234/Files/refs/heads/main/muslim_youth_forum_landing_page.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  /* Logo Box */
+  .logo-box {
+    width: 80px;
+    height: 80px;
+    background-color: #033a2c;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Custom Scrollbar Utility */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+}
+
+/* ============================================================================
+   Skeleton Loading Animations
+   ============================================================================ */
+
+@layer components {
+  .skeleton {
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0.05) 25%,
+        rgba(255, 255, 255, 0.1) 50%,
+        rgba(255, 255, 255, 0.05) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+
+    100% {
+      background-position: -200% 0;
+    }
+  }
+}
+
+/* ============================================================================
+   Theme Variables (Day/Night)
+   ============================================================================ */
+
+:root {
+  /* Night theme (default) */
+  --bg-primary: #0f3d36;
+  --bg-secondary: #0a2f2a;
+  --text-primary: #ffffff;
+  --text-secondary: #d1d5db;
+  --accent-primary: #10b981;
+  --accent-gold: #fbbf24;
+}
+
+.theme-day {
+  --bg-primary: #f0fdf4;
+  --bg-secondary: #dcfce7;
+  --text-primary: #064e3b;
+  --text-secondary: #065f46;
+  --accent-primary: #059669;
+  --accent-gold: #d97706;
+}
+
+.theme-night {
+  --bg-primary: #0f3d36;
+  --bg-secondary: #0a2f2a;
+  --text-primary: #ffffff;
+  --text-secondary: #d1d5db;
+  --accent-primary: #10b981;
+  --accent-gold: #fbbf24;
+}
+
+/* Dropdown appearance overrides for themes */
+.theme-day select,
+.theme-day option {
+  background-color: #ffffff !important;
+  color: #064e3b !important;
+}
+
+.theme-night select,
+.theme-night option {
+  background-color: #0a2f2a !important;
+  color: #ffffff !important;
+}
+
+/* Mobile Scaling - 20% smaller (80% zoom) */
+@media (max-width: 768px) {
+  body {
+    zoom: 0.8;
+    /* Ensure scrollbars are visible when needed */
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+}

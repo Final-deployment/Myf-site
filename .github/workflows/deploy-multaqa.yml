@@ -1,0 +1,71 @@
+name: Deploy Multaqa
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '.github/workflows/fix-site.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build frontend
+      run: npm run build
+
+    - name: Create Deployment Package
+      run: |
+        zip -r deploy_production_latest.zip \
+          dist \
+          server \
+          server.cjs \
+          package.json \
+          package-lock.json \
+          db.json \
+          docker-compose.yml \
+          Dockerfile
+
+    - name: Copy deployment package to VPS
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        password: ${{ secrets.VPS_PASSWORD }}
+        source: "deploy_production_latest.zip"
+        target: "/var/www/apps/scientific-bench"
+
+    - name: Execute deployment script on VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        password: ${{ secrets.VPS_PASSWORD }}
+        command_timeout: 5m
+        script: |
+          APP_DIR="/var/www/apps/scientific-bench"
+          cd $APP_DIR
+
+          echo ">>> Unzipping updated application..."
+          unzip -o deploy_production_latest.zip || true
+
+          echo ">>> Building and starting Docker container..."
+          docker compose up -d --build
+
+          echo ">>> Cleaning up..."
+          rm -f deploy_production_latest.zip
+
+          echo ">>> Deployment Complete!"
+          docker ps

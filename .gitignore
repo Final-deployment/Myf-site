@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+deploy_pkg/
+build/
+.vercel
+temp_deploy/
+
+# Zips
+*.zip
+
+# Local env files
+.env
+.env.*
+.env.local
+.env.clean
+.env.vps
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production.vps
+
+# Backups
+*.bak
+
+# Database
+*.sqlite
+database.sqlite
+main.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SSH Keys
+*.pem
+Mastaba-key/

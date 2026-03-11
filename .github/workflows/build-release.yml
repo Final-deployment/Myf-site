@@ -1,0 +1,51 @@
+name: Build and Package for Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build frontend
+      run: npm run build
+
+    - name: Prepare deployment package
+      run: |
+        mkdir deploy
+        cp -r dist deploy/
+        cp -r server deploy/
+        cp server.cjs deploy/
+        cp package.json deploy/
+        cp package-lock.json deploy/
+        cp db.json deploy/
+        cp docker-compose.yml deploy/
+        cp Dockerfile deploy/
+        # Create a sample env file or instructions
+        echo "# Create your .env file here" > deploy/.env.example
+        
+    - name: Zip the package
+      run: |
+        cd deploy
+        zip -r ../scientific-bench-deploy.zip .
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: scientific-bench-deploy
+        path: scientific-bench-deploy.zip
+        retention-days: 7

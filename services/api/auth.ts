@@ -1,0 +1,151 @@
+/**
+ * Authentication Service
+ */
+import type { User } from '../../types';
+import { getApiUrl } from './config';
+
+const STORAGE_PREFIX = 'mastaba_';
+
+export interface ApiError {
+    message: string;
+    messageAr?: string;
+    code?: string;
+}
+
+export interface AuthError extends ApiError {
+    needsVerification?: boolean;
+    email?: string;
+}
+
+export const getAuthToken = (): string | undefined => {
+    try {
+        const token = localStorage.getItem('authToken');
+        if (token) return token;
+
+        const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+        const user = stored ? JSON.parse(stored) : null;
+        return user?.access_token || undefined;
+    } catch {
+        return undefined;
+    }
+};
+
+export const authApi = {
+    login: async (email: string, password: string): Promise<User | null> => {
+        try {
+            const response = await fetch(getApiUrl('/login'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                if (errorData.needsVerification) {
+                    const authError: AuthError = {
+                        message: errorData.error || 'Email not verified',
+                        messageAr: errorData.errorAr,
+                        needsVerification: true,
+                        email: email
+                    };
+                    throw authError;
+                }
+                return null;
+            }
+
+            const data = await response.json();
+            if (data.accessToken && data.user) {
+                const user: User = {
+                    ...data.user,
+                    access_token: data.accessToken,
+                    nameEn: data.user.nameEn || data.user.name,
+                    joinDate: data.user.joinDate,
+                    emailVerified: !!data.user.emailVerified,
+                    supervisorId: data.user.supervisor_id || data.user.supervisorId, // Ensure both cases work
+                    supervisorCapacity: data.user.supervisor_capacity || data.user.supervisorCapacity,
+                    supervisorPriority: data.user.supervisor_priority || data.user.supervisorPriority,
+                };
+                localStorage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
+                localStorage.setItem('authToken', data.accessToken);
+                return user;
+            }
+            return null;
+        } catch (error: unknown) {
+            if ((error as AuthError).needsVerification) throw error;
+            return null;
+        }
+    },
+
+    register: async (userData: any): Promise<{ user: User | null; error: any | null }> => {
+        try {
+            const response = await fetch(getApiUrl('/register'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData)
+            });
+            const data = await response.json();
+            if (!response.ok) return { user: null, error: { message: data.error || 'Registration failed', messageAr: data.errorAr } };
+
+            const user: User = { ...data.user, access_token: data.accessToken };
+            if (data.accessToken) localStorage.setItem('authToken', data.accessToken);
+            return { user, error: null };
+        } catch (error: any) {
+            return { user: null, error: { message: error.message } };
+        }
+    },
+
+    verifyOtp: async (email: string, token: string): Promise<{ success: boolean; user: User | null; error: any | null }> => {
+        try {
+            const response = await fetch(getApiUrl('/verify-email'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, otp: token })
+            });
+            const data = await response.json();
+            if (!response.ok) return { success: false, user: null, error: data.errorAr || data.error };
+
+            const user = {
+                ...data.user,
+                access_token: data.accessToken,
+                supervisorId: data.user.supervisor_id || data.user.supervisorId,
+                supervisorCapacity: data.user.supervisor_capacity || data.user.supervisorCapacity,
+                supervisorPriority: data.user.supervisor_priority || data.user.supervisorPriority,
+            };
+            localStorage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
+            return { success: true, user, error: null };
+        } catch (error: any) {
+            return { success: false, user: null, error: { message: error.message } };
+        }
+    },
+
+    resendOtp: async (email: string): Promise<{ error: any | null }> => {
+        try {
+            const response = await fetch(getApiUrl('/resend-otp'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                return { error: data.errorAr || data.error };
+            }
+            return { error: null };
+        } catch (error: any) {
+            return { error: { message: error.message } };
+        }
+    },
+
+    getCurrentUser: (): User | null => {
+        try {
+            const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+            return stored ? JSON.parse(stored) : null;
+        } catch {
+            return null;
+        }
+    },
+
+    logout: (): void => {
+        localStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+        localStorage.removeItem('authToken');
+    }
+};
