@@ -885,7 +885,8 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
       )}
 
       {/* Lock out overlay if deadline passed */}
-      {((course as any).isLockedByDeadline || (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester)) && (
+      {(((course as any).isLockedByDeadline && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester) || 
+        (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester)) && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-fade-in">
           <div className="bg-red-900/30 border border-red-500/50 p-8 rounded-3xl max-w-md text-center space-y-4 shadow-2xl">
             <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
