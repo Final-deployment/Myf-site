@@ -175,8 +175,8 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                             </div>
                         )}
 
-                        {/* Academic Data (Hidden for Admins/Supervisors) */}
-                        {details?.user?.role !== 'admin' && details?.user?.role !== 'supervisor' && (
+                        {/* Academic Data (Shown for Students only) */}
+                        {details?.user?.role === 'student' && (
                             <>
                                 {/* Enrollments */}
                                 <div>
@@ -241,7 +241,7 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                                         </div>
                                                         <span className={`text-sm font-bold ${isLocked && !isExemptUser ? 'text-red-400' : 'text-emerald-400'}`}>{course.progress}%</span>
                                                     </div>
-                                                    {isLocked && user?.role === 'supervisor' && (
+                                                    {isLocked && (user?.role === 'supervisor' || user?.role === 'admin') && (
                                                         <button
                                                             onClick={() => handleUnlockCourse(course.course_id)}
                                                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
