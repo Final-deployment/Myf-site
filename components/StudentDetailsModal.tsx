@@ -175,8 +175,11 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                             </div>
                         )}
 
-                        {/* Enrollments */}
-                        <div>
+                        {/* Academic Data (Hidden for Admins/Supervisors) */}
+                        {details?.user?.role !== 'admin' && details?.user?.role !== 'supervisor' && (
+                            <>
+                                {/* Enrollments */}
+                                <div>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                                 <h4 className="flex items-center gap-2 text-lg font-bold text-white">
                                     <BookOpen className="w-5 h-5 text-emerald-400" />
@@ -205,20 +208,21 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                         const deadline = course.deadline ? new Date(course.deadline) : null;
                                         const isExpired = deadline ? deadline.getTime() < Date.now() : false;
                                         const diffDays = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24)) : null;
+                                        const isExemptUser = details?.user?.role === 'admin' || details?.user?.role === 'supervisor';
 
                                         return (
-                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border ${isLocked ? 'border-red-500/50' : 'border-transparent'}`}>
+                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border ${isLocked && !isExemptUser ? 'border-red-500/50' : 'border-transparent'}`}>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2">
-                                                        <p className={`font-medium ${isLocked ? 'text-red-400' : 'text-white'}`}>{course.courseTitle}</p>
-                                                        {isLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">مغلق (لانتهاء الوقت)</span>}
+                                                        <p className={`font-medium ${isLocked && !isExemptUser ? 'text-red-400' : 'text-white'}`}>{course.courseTitle}</p>
+                                                        {isLocked && !isExemptUser && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">مغلق (لانتهاء الوقت)</span>}
                                                     </div>
                                                     <div className="flex items-center gap-4 mt-1">
                                                         <p className="text-xs text-gray-400">آخر دخول: {course.last_accessed ? new Date(course.last_accessed).toLocaleDateString('ar-EG') : (course.progress > 0 && course.enrolled_at ? new Date(course.enrolled_at).toLocaleDateString('ar-EG') : 'لم يبدأ التعلم بعد')}</p>
-                                                        {(course.lessons_count || 0) > 0 && (
+                                                        {!isExemptUser && (course.lessons_count || 0) > 0 && (
                                                             <p className="text-xs text-blue-400 font-bold">الدروس المنجزة: {course.completed_lessons || 0} من {course.lessons_count}</p>
                                                         )}
-                                                        {deadline && (
+                                                        {!isExemptUser && deadline && (
                                                             <p className={`text-xs font-bold ${isExpired || isLocked ? 'text-red-400' : diffDays && diffDays <= 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
                                                                 المهلة: {deadline.toLocaleDateString('ar-EG')}
                                                                 {!isExpired && diffDays !== null && ` (متبقي ${diffDays} يوم)`}
@@ -231,11 +235,11 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                                     <div className="flex items-center gap-3 min-w-[120px]">
                                                         <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
                                                             <div
-                                                                className={`h-full rounded-full ${isLocked ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                                                className={`h-full rounded-full ${isLocked && !isExemptUser ? 'bg-red-500' : 'bg-emerald-500'}`}
                                                                 style={{ width: `${course.progress}%` }}
                                                             />
                                                         </div>
-                                                        <span className={`text-sm font-bold ${isLocked ? 'text-red-400' : 'text-emerald-400'}`}>{course.progress}%</span>
+                                                        <span className={`text-sm font-bold ${isLocked && !isExemptUser ? 'text-red-400' : 'text-emerald-400'}`}>{course.progress}%</span>
                                                     </div>
                                                     {isLocked && user?.role === 'supervisor' && (
                                                         <button
@@ -309,6 +313,8 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                 )}
                             </div>
                         </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

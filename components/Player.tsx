@@ -509,7 +509,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
               </div>
 
               {/* Time Left Countdown */}
-              {timeLeft && (
+              {user?.role !== 'admin' && user?.role !== 'supervisor' && timeLeft && (
                 <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
                   <span className="text-amber-400 font-bold text-xs flex items-center gap-2">
                     <svg className="w-4 h-4 animate-[spin_3s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -743,7 +743,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                     const quiz = item.data;
                     const isPassed = passedQuizIds.includes(quiz.id);
                     const afterEpIdx = quiz.afterEpisodeIndex || 0;
-                    const isAdmin = user?.role === 'admin';
+                    const isAdmin = user?.role === 'admin' || user?.role === 'supervisor' || !!user?.is_tester;
                     const isLocked = !isAdmin && afterEpIdx > 0 && isEpisodeLocked(afterEpIdx);
 
                     return (

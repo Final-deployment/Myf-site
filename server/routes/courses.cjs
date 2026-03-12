@@ -152,7 +152,10 @@ router.get('/', async (req, res) => {
                     isLockedByDeadline = true;
                 }
 
-                if (isLockedByDeadline && req.user?.role !== 'admin' && req.user?.role !== 'supervisor') {
+                if (req.user?.role === 'admin' || req.user?.role === 'supervisor') {
+                    isLockedByDeadline = false;
+                    isLocked = false;
+                } else if (isLockedByDeadline) {
                     isLocked = true;
                 }
             }
@@ -350,8 +353,9 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
                 // Simple placeholder logic for SQLite
                 const completedCount = db.prepare(`
                     SELECT COUNT(*) as count 
-                    FROM episode_progress 
-                    WHERE user_id = ? AND course_id = ? AND completed = 1
+                    FROM episode_progress ep
+                    INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id
+                    WHERE ep.user_id = ? AND ep.course_id = ? AND ep.completed = 1
                 `).get(req.user.id, courseId).count;
 
                 const progress = Math.round((completedCount / episodes.length) * 100);

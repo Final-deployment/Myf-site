@@ -33,7 +33,7 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
         const users = db.prepare(`
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status,
             u.supervisor_capacity as supervisorCapacity, u.supervisor_priority as supervisorPriority, u.supervisor_id as supervisorId,
-            (SELECT COUNT(*) FROM episode_progress ep WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
+            (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
             FROM users u
         `).all();
@@ -51,7 +51,7 @@ router.get('/students', authenticateToken, requireAdminOrSupervisor, (req, res) 
     try {
         let query = `
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status, u.supervisor_id as supervisorId,
-            (SELECT COUNT(*) FROM episode_progress ep WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
+            (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
             FROM users u
             WHERE u.role = 'student'
@@ -313,7 +313,7 @@ router.get('/:id/details', authenticateToken, (req, res) => {
         const enrollments = db.prepare(`
             SELECT e.course_id, c.title as courseTitle, e.progress, e.last_accessed, e.enrolled_at, e.is_locked, e.deadline,
                    c.lessons_count,
-                   (SELECT COUNT(*) FROM episode_progress ep WHERE ep.user_id = e.user_id AND ep.course_id = e.course_id AND ep.completed = 1) as completed_lessons
+                   (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes eps ON ep.episode_id = eps.id AND eps.courseId = ep.course_id WHERE ep.user_id = e.user_id AND ep.course_id = e.course_id AND ep.completed = 1) as completed_lessons
             FROM enrollments e 
             JOIN courses c ON e.course_id = c.id 
             WHERE e.user_id = ?
