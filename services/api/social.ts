@@ -42,6 +42,21 @@ export const socialApi = {
         return await response.json();
     },
 
+    sendBroadcastMessage: async (content: string, attachmentUrl?: string, attachmentType?: string, attachmentName?: string): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/social/broadcast'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content, attachmentUrl, attachmentType, attachmentName })
+        });
+        if (response.status === 401) throw new Error('انتهت صلاحية الجلسة، يرجى تسجيل الخروج ثم تسجيل الدخول مجدداً');
+        if (!response.ok) throw new Error('فشل إرسال التعميم');
+        return await response.json();
+    },
+
     sendComplaint: async (content: string): Promise<any> => {
         const token = getAuthToken();
         // Complaints always go to the system admin. We need to find the admin id or use a special keyword if backend supports it.

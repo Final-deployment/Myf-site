@@ -10,7 +10,6 @@ if (result.error) {
 }
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
@@ -33,32 +32,23 @@ startBackupScheduler();
 const app = express();
 
 // ============================================================================
-// SECURITY: HTTP Security Headers (Helmet)
-// ============================================================================
-app.use(helmet({
-    contentSecurityPolicy: false, // Disabled to allow inline styles/scripts from frontend
-    crossOriginEmbedderPolicy: false // Disabled for media loading compatibility
-}));
-
-// ============================================================================
 // SECURITY: Restricted CORS Configuration
 // ============================================================================
 const allowedOrigins = [
     'http://localhost:5000',
-    'http://localhost:5001',
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:5176',
     'http://localhost:5177',
-    'http://localhost:5178',
-    'http://localhost:5179',
     'https://localhost',           // Capacitor Android (androidScheme: 'https')
     'capacitor://localhost',       // Capacitor iOS
     'http://localhost',            // Capacitor fallback
-
-
+    'https://mastaba.myf-online.com',
+    'https://myf-online.com',
+    'https://www.myf-online.com',
+    'http://147.93.62.42:3001', 'http://147.93.62.42',
     'http://72.61.88.213:3001', 'http://72.61.88.213',
     'https://muslimyouth.ps', 'http://muslimyouth.ps',
     process.env.FRONTEND_URL,
@@ -102,7 +92,7 @@ app.use(cors(corsOptions));
 // ============================================================================
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 120; // 120 requests per minute per IP
+const MAX_REQUESTS_PER_WINDOW = 1000; // Increased to 1000 for smoother development
 
 const rateLimiter = (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
@@ -131,24 +121,14 @@ const rateLimiter = (req, res, next) => {
     next();
 };
 
-// Cleanup expired entries from rateLimitStore every 5 minutes to prevent memory leak
-setInterval(() => {
-    const now = Date.now();
-    for (const [ip, entry] of rateLimitStore.entries()) {
-        if (now > entry.resetTime) {
-            rateLimitStore.delete(ip);
-        }
-    }
-}, 5 * 60 * 1000);
-
 // Apply rate limiting to all routes
 app.use(rateLimiter);
 
 // ============================================================================
 // Body Parsing Middleware
 // ============================================================================
-app.use(express.json({ limit: '25mb' }));
-app.use(express.raw({ type: ['application/octet-stream', 'audio/webm', 'audio/ogg', 'video/webm', 'video/mp4', 'image/*'], limit: '25mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.raw({ type: ['application/octet-stream', 'audio/webm', 'audio/ogg', 'video/webm', 'video/mp4', 'image/*'], limit: '100mb' }));
 
 // ============================================================================
 // SECURITY: Enhanced Request Logger

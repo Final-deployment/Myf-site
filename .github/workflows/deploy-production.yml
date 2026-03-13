@@ -57,5 +57,6 @@ jobs:
         command_timeout: 5m
         script: |
           cd /var/www/apps/scientific-bench
+          unzip -o deploy_production_latest.zip deploy.sh
           chmod +x deploy.sh
           ./deploy.sh

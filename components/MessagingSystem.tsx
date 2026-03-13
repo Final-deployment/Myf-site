@@ -24,6 +24,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
     const [searchQuery, setSearchQuery] = useState('');
     const [localError, setLocalError] = useState<string | null>(null);
     const [isComplaintMode, setIsComplaintMode] = useState(false);
+    const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [adminUser, setAdminUser] = useState<User | null>(null);
 
     // Attachment State
@@ -130,6 +131,39 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                         newMsg.content || (newMsg.attachmentType ? 'ملف مرفق' : 'رسالة جديدة'),
                         '/icons/icon-192x192.png'
                     );
+
+                    // --- NEW: Audio/Vibration Ping for admin_manager ---
+                    if (user?.role === 'admin' && user?.id === 'admin_manager') {
+                        // Vibrate (Mobile PWA)
+                        if ('vibrate' in navigator) {
+                            navigator.vibrate([200, 100, 200]);
+                        }
+                        
+                        // Play synthetic ping sound
+                        try {
+                            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                            if (AudioContext) {
+                                const ctx = new AudioContext();
+                                const osc = ctx.createOscillator();
+                                const gain = ctx.createGain();
+                                
+                                osc.type = 'sine';
+                                osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+                                osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); // Slide up to A6
+                                
+                                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                                
+                                osc.connect(gain);
+                                gain.connect(ctx.destination);
+                                
+                                osc.start();
+                                osc.stop(ctx.currentTime + 0.5);
+                            }
+                        } catch (err) {
+                            console.log('Audio playback prevented by browser policy until user interaction');
+                        }
+                    }
                 }
             }
 
@@ -231,7 +265,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
     // --- Sending Logic ---
 
     const sendMessage = async () => {
-        if ((!chatInput.trim() && !attachment) || !selectedUser) return;
+        if ((!chatInput.trim() && !attachment) || (!selectedUser && !isBroadcastMode)) return;
 
         // Admin cannot reply to complaints - REMOVED this restriction to allow admin support
         /*
@@ -243,8 +277,8 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
 
         setSending(true);
         try {
-            if (!selectedUser) throw new Error('يرجى اختيار مستخدم للمراسلة');
-            const receiverId = selectedUser.id;
+            if (!selectedUser && !isBroadcastMode) throw new Error('يرجى اختيار مستخدم للمراسلة أو تفعيل وضع التعميم');
+            
             let attachmentUrl = undefined;
             let attachmentType = undefined;
 
@@ -284,19 +318,30 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
             }
 
             // 3. Send Message to Backend
-            const newMsg = await api.sendMessage(
-                receiverId,
-                chatInput,
-                attachmentUrl,
-                attachmentType,
-                attachment?.name,
-                isComplaintMode
-            );
-            setMessages(prev => [...prev, newMsg]);
+            if (isBroadcastMode) {
+                const res = await api.sendBroadcastMessage(
+                    chatInput,
+                    attachmentUrl,
+                    attachmentType,
+                    attachment?.name
+                );
+                toast.success(`تم إرسال التعميم بنجاح لـ ${res.count} طالب`);
+            } else if (selectedUser) {
+                const newMsg = await api.sendMessage(
+                    selectedUser.id,
+                    chatInput,
+                    attachmentUrl,
+                    attachmentType,
+                    attachment?.name,
+                    isComplaintMode
+                );
+                setMessages(prev => [...prev, newMsg]);
+            }
 
             // Reset State
             setChatInput('');
             setIsComplaintMode(false);
+            setIsBroadcastMode(false);
             handleRemoveAttachment();
             scrollToBottom();
 
@@ -531,6 +576,24 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                     />
                     <Search className="absolute right-2.5 top-2.5 w-4 h-4 text-gray-500" />
                 </div>
+                {/* Broadcast Button for Tech Support Manager */}
+                {isAdmin && user?.id === 'admin_manager' && (
+                    <button
+                        onClick={() => {
+                            setSelectedUser(null);
+                            setIsBroadcastMode(true);
+                            setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                            isBroadcastMode
+                                ? 'bg-violet-600 text-white shadow-[0_0_20px_rgba(139,92,246,0.4)]'
+                                : 'bg-violet-600/20 text-violet-300 border border-violet-500/30 hover:bg-violet-600/40'
+                        }`}
+                    >
+                        <Zap className="w-4 h-4" />
+                        إرسال تعميم (لكل الطلاب)
+                    </button>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
@@ -673,6 +736,8 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                                         </div>
                                     </div>
                                 </div>
+                            ) : isBroadcastMode ? (
+                                <h3 className="font-bold text-violet-400">إرسال تعميم لكل الطلاب</h3>
                             ) : (
                                 <h3 className="font-bold text-gray-400">اختر محادثة</h3>
                             )}
@@ -765,9 +830,29 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                         <div ref={messagesEndRef} />
                     </div>
 
+                    {/* Broadcast Welcome Screen (Tech Support Only) */}
+                    {!selectedUser && isAdmin && user?.id === 'admin_manager' && !isBroadcastMode && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-black/60 backdrop-blur-sm z-10">
+                            <div className="w-20 h-20 bg-violet-600/20 rounded-full flex items-center justify-center mb-6 border border-violet-500/30">
+                                <Zap className="w-10 h-10 text-violet-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">الدعم الفني والشكاوى</h2>
+                            <p className="text-gray-400 max-w-md mb-8">
+                                من هنا يمكنك استقبال شكاوى واقتراحات الطلاب والرد عليها مباشرة. يمكنك أيضاً إرسال تعميم هام يصل لجميع الطلاب في وقت واحد.
+                            </p>
+                            <button
+                                onClick={() => setIsBroadcastMode(true)}
+                                className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] flex items-center gap-2"
+                            >
+                                <Zap className="w-5 h-5 fill-current" />
+                                إرسال تعميم (لكل الطلاب)
+                            </button>
+                        </div>
+                    )}
+
                     {/* Input Area */}
-                    {(selectedUser || (!isAdmin && !isSupervisor)) && (
-                        <div className="p-4 bg-black/40 border-t border-white/5 backdrop-blur-sm relative">
+                    {(selectedUser || (!isAdmin && !isSupervisor) || isBroadcastMode) && (
+                        <div className="p-4 bg-black/40 border-t border-white/5 backdrop-blur-sm relative z-20">
                             {/* Admin can now reply to all messages including complaints */}
                             <>
                                 {/* Complaint indicator for students */}
@@ -782,6 +867,38 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                                             const supervisor = students.find(u => u.id === sId);
                                             if (supervisor) setSelectedUser(supervisor);
                                         }} className="mr-auto text-white underline">إلغاء</button>
+                                    </div>
+                                )}
+                                
+                                {/* Broadcast indicator for Admin Manager */}
+                                {isBroadcastMode && (
+                                    <div className="mb-3 p-2 bg-violet-600/20 border border-violet-500/40 rounded-lg text-violet-300 flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.1)]">
+                                        <div className="p-1.5 bg-violet-500/30 rounded-md">
+                                            <Zap className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                                            <span className="text-sm font-bold tracking-wide">وضع إرسال التعميم الشامل</span>
+                                            <p className="text-[10px] sm:text-xs text-white/80 leading-relaxed font-medium">الرسالة أو المرفق سَيُرسَل <b>كإشعار جديد وفردي</b> إلى جميع حسابات الطلاب المسجلين فوراً. يُرجى مراجعة المحتوى قبل الإرسال.</p>
+                                        </div>
+                                        <button onClick={() => {
+                                            setIsBroadcastMode(false);
+                                        }} className="mr-auto px-3 py-1.5 bg-black/40 hover:bg-black/60 rounded-lg text-white/80 hover:text-white transition-colors text-xs font-bold border border-white/10 shrink-0">إلغاء</button>
+                                    </div>
+                                )}
+                                
+                                {/* Broadcast indicator for Admin Manager */}
+                                {isBroadcastMode && (
+                                    <div className="mb-3 p-2 bg-violet-600/20 border border-violet-500/40 rounded-lg text-violet-300 flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.1)]">
+                                        <div className="p-1.5 bg-violet-500/30 rounded-md">
+                                            <Zap className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                                            <span className="text-sm font-bold tracking-wide">وضع إرسال التعميم الشامل</span>
+                                            <p className="text-[10px] sm:text-xs text-white/80 leading-relaxed font-medium">الرسالة أو المرفق سَيُرسَل <b>كإشعار جديد وفردي</b> إلى جميع حسابات الطلاب المسجلين فوراً. يُرجى مراجعة المحتوى قبل الإرسال.</p>
+                                        </div>
+                                        <button onClick={() => {
+                                            setIsBroadcastMode(false);
+                                        }} className="mr-auto px-3 py-1.5 bg-black/40 hover:bg-black/60 rounded-lg text-white/80 hover:text-white transition-colors text-xs font-bold border border-white/10 shrink-0">إلغاء</button>
                                     </div>
                                 )}
                                 {/* 0. Local Error Message (Inline) */}

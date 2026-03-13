@@ -443,6 +443,67 @@ router.post('/messages', (req, res) => {
     }
 });
 
+// Broadcast Message (Only for admin_manager)
+router.post('/broadcast', (req, res) => {
+    const { content, attachmentUrl, attachmentType, attachmentName } = req.body;
+    const senderId = req.user.id;
+
+    if (senderId !== 'admin_manager') {
+        return res.status(403).json({ error: 'غير مصرح لك بإرسال تعميمات. هذه الصلاحية لمدير الدعم الفني فقط.' });
+    }
+
+    try {
+        // Get all students
+        const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
+        
+        if (students.length === 0) {
+            return res.json({ success: true, count: 0, message: 'لا يوجد طلاب مسجلين' });
+        }
+
+        const timestamp = new Date().toISOString();
+        let expiryDate = null;
+        
+        if (attachmentUrl || attachmentType) {
+            const date = new Date();
+            date.setDate(date.getDate() + 14); // Keep broadcast attachments for 14 days
+            expiryDate = date.toISOString();
+        }
+
+        const insert = db.prepare(`
+            INSERT INTO messages (id, senderId, receiverId, content, read, timestamp, attachmentUrl, attachmentType, attachmentName, expiryDate, isComplaint)
+            VALUES (@id, @senderId, @receiverId, @content, 0, @timestamp, @attachmentUrl, @attachmentType, @attachmentName, @expiryDate, 0)
+        `);
+
+        // Execute as a transaction for performance
+        const broadcastTx = db.transaction((studentsToMessage) => {
+            let count = 0;
+            for (const student of studentsToMessage) {
+                insert.run({
+                    id: 'msg_' + crypto.randomUUID(),
+                    senderId: 'admin_manager',
+                    receiverId: student.id,
+                    content: content || '',
+                    timestamp,
+                    attachmentUrl: attachmentUrl || null,
+                    attachmentType: attachmentType || null,
+                    attachmentName: attachmentName || null,
+                    expiryDate
+                });
+                count++;
+            }
+            return count;
+        });
+
+        const messagesSent = broadcastTx(students);
+        console.log(`[BROADCAST] admin_manager sent broadcast to ${messagesSent} students.`);
+        
+        res.status(201).json({ success: true, count: messagesSent });
+    } catch (e) {
+        console.error('[BROADCAST_ERROR]:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.put('/messages/:id/read', (req, res) => {
     const { id } = req.params;
     try {
