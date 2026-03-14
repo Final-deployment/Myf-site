@@ -86,25 +86,17 @@ async function startBackupScheduler() {
     // Check every hour
     setInterval(async () => {
         const now = new Date();
-        // Run at 2:XX AM and 14:XX PM (Twice a day)
-        if (now.getHours() === 2 || now.getHours() === 14) {
+        // Run 4 times a day (every 6 hours: 0, 6, 12, 18)
+        if (now.getHours() % 6 === 0) {
             try {
-                // Check if auto-backup is enabled in DB
-                const setting = db.prepare('SELECT value FROM system_settings WHERE key = "auto_backup_enabled"').get();
-                if (setting && setting.value === '1') {
-                    const cloudSetting = db.prepare('SELECT value FROM system_settings WHERE key = "cloud_backup_enabled"').get();
-                    const retentionSetting = db.prepare('SELECT value FROM system_settings WHERE key = "backup_retention_days"').get();
-
-                    const toCloud = cloudSetting && cloudSetting.value === '1';
-                    const retentionDays = retentionSetting ? parseInt(retentionSetting.value, 10) : 30;
-
-                    console.log(`[BackupService] Triggering automatic backup (Hour: ${now.getHours()})...`);
-                    await performBackup(toCloud);
-
-                    if (toCloud) {
-                        await cleanupOldBackups(retentionDays);
-                    }
-                }
+                console.log(`[BackupService] Triggering automatic backup (Hour: ${now.getHours()})...`);
+                
+                // Forced by user requirements
+                const toCloud = true;
+                const retentionDays = 60; // 2 months
+                
+                await performBackup(toCloud);
+                await cleanupOldBackups(retentionDays);
             } catch (e) {
                 console.error('[BackupService] Scheduler error:', e.message);
             }

@@ -10,7 +10,7 @@ const SECRET_KEY = process.env.SECRET_KEY || 'your-default-secret';
 
 // Login
 router.post('/login', (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         if (!user) return res.status(400).json({ error: 'Cannot find user' });
@@ -26,10 +26,11 @@ router.post('/login', (req, res) => {
                 });
             }
             const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = user;
+            const expiresIn = rememberMe ? '30d' : '24h';
             const accessToken = jwt.sign(
                 { id: user.id, email: user.email, role: user.role, emailVerified: !!user.emailVerified },
                 SECRET_KEY,
-                { expiresIn: '24h' }
+                { expiresIn }
             );
             res.json({ accessToken, user: userWithoutPassword });
         } else {

@@ -129,6 +129,28 @@ router.post('/upload-proxy', async (req, res) => {
 router.use(authenticateToken);
 
 // Messages
+router.put('/messages/read', (req, res) => {
+    const userId = req.user.id;
+    const { senderId } = req.body;
+    
+    if (!senderId) {
+        return res.status(400).json({ error: 'Sender ID is required' });
+    }
+
+    try {
+        db.prepare(`
+            UPDATE messages 
+            SET read = 1 
+            WHERE receiverId = ? AND senderId = ? AND read = 0
+        `).run(userId, senderId);
+        
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[Mark Messages Read] Error:', e);
+        res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
+});
+
 router.get('/messages', async (req, res) => {
     const userId = req.user.id;
     try {

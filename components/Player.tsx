@@ -508,18 +508,31 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                 </button>
               </div>
 
-              {/* Time Left Countdown */}
-              {user?.role !== 'admin' && user?.role !== 'supervisor' && timeLeft && (
-                <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
-                  <span className="text-amber-400 font-bold text-xs flex items-center gap-2">
-                    <svg className="w-4 h-4 animate-[spin_3s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    الوقت المتبقي لإنهاء المساق:
-                  </span>
-                  <div className="flex gap-1.5" dir="ltr">
-                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.days}d</span>
-                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.hours}h</span>
-                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.mins}m</span>
-                  </div>
+              {/* Time Left Countdown / Completion Badge */}
+              {user?.role !== 'admin' && user?.role !== 'supervisor' && (
+                <div className={`flex items-center justify-between border p-3 rounded-xl ${isTrulyCompleted ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                  {isTrulyCompleted ? (
+                    <span className="text-emerald-400 font-bold text-xs flex items-center gap-2">
+                       <CheckCircle className="w-4 h-4" />
+                       المساق منجَز بنجاح
+                    </span>
+                  ) : timeLeft ? (
+                    <>
+                      <span className="text-amber-400 font-bold text-xs flex items-center gap-2">
+                        <svg className="w-4 h-4 animate-[spin_3s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        الوقت المتبقي لإنهاء المساق:
+                      </span>
+                      <div className="flex gap-1.5" dir="ltr">
+                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.days}d</span>
+                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.hours}h</span>
+                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.mins}m</span>
+                      </div>
+                    </>
+                  ) : (
+                      <span className="text-gray-400 font-bold text-xs flex items-center gap-2">
+                         لا يوجد فترة محددة
+                      </span>
+                  )}
                 </div>
               )}
 

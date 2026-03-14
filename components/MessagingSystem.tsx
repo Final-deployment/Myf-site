@@ -473,6 +473,21 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
         }
     }, [isAdmin, sortedStudents, loading]);
 
+    // Mark messages as read when opening a conversation
+    useEffect(() => {
+        if (selectedUser && user) {
+            const hasUnreadFromSelected = messages.some(m => m.senderId === selectedUser.id && !m.read);
+            if (hasUnreadFromSelected) {
+                api.markMessagesAsRead(selectedUser.id).then(() => {
+                    // Optimistically update local state
+                    setMessages(prev => prev.map(m => 
+                        m.senderId === selectedUser.id && !m.read ? { ...m, read: 1 } : m
+                    ));
+                }).catch(console.error);
+            }
+        }
+    }, [selectedUser, messages, user]);
+
 
     const renderUserItem = (target: User) => {
         const unreadCount = messages.filter(m => m.senderId === target.id && !m.read).length;
@@ -802,7 +817,11 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                                         {renderAttachment(msg)}
                                         <div className={`flex items-center gap-1 mt-2 text-[10px] ${isMe ? 'text-violet-200' : 'text-gray-500'}`}>
                                             <span dir="ltr">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
-                                            {isMe && (msg.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
+                                            {isMe && (
+                                                msg.read ? 
+                                                <CheckCheck className="w-4 h-4 text-sky-400 drop-shadow-[0_0_2px_rgba(56,189,248,0.5)]" /> : 
+                                                <Check className="w-4 h-4" opacity={0.7} />
+                                            )}
                                         </div>
                                     </div>
 

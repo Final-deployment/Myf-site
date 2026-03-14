@@ -284,7 +284,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
 
 
          {/* Stats Cards */}
-         <section className="grid grid-cols-1 md:grid-cols-3 gap-5" aria-label="إحصائيات سريعة">
+         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="إحصائيات سريعة">
             <StatCard
                label="نسبة الإكمال"
                value={stats.isLoading ? '...' : `${stats.completionRate}%`}
@@ -293,6 +293,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                trend="+5.6%"
                trendText="مقارنة بالشهر الماضي"
                onClick={() => handleNavigate('reports')}
+            />
+            <StatCard
+               label="رسائل الدعم الجديدة"
+               value={unreadCount !== undefined ? unreadCount : '...'}
+               icon={Bell}
+               color="emerald"
+               trend={unreadCount && unreadCount > 0 ? 'مهم' : 'لا يوجد'}
+               trendText="بانتظار الرد"
+               onClick={() => handleNavigate('messages')}
             />
             <StatCard
                label="الدورات النشطة"
@@ -307,7 +316,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                label="إجمالي الطلاب"
                value={stats.isLoading ? '...' : stats.totalStudents.toLocaleString()}
                icon={Users}
-               color="emerald"
+               color="blue" // changed from emerald to alternate colors nicely
                trend="+12%"
                trendText="زيادة ثابتة"
                onClick={() => handleNavigate('students')}

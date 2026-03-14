@@ -39,9 +39,10 @@ interface AuthContextType {
      * Attempts to log in a user
      * @param email - User's email address
      * @param password - User's password
+     * @param rememberMe - Whether to persist the session securely
      * @returns Promise that resolves to true if login successful
      */
-    login: (email: string, password: string) => Promise<boolean>;
+    login: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
     /** Logs out the current user */
     logout: () => void;
     /**
@@ -157,10 +158,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     /**
      * Attempts to log in with email and password
      */
-    const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    const login = useCallback(async (email: string, password: string, rememberMe: boolean = false): Promise<boolean> => {
         setIsLoading(true);
         try {
-            const loggedUser = await api.login(email, password);
+            const loggedUser = await api.login(email, password, rememberMe);
             if (loggedUser) {
                 setUser(loggedUser);
                 updateLastActivity(); // Start tracking activity

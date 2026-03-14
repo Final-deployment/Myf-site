@@ -19,6 +19,7 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +28,7 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
     // Attempt Login
     if (initialView === 'login') {
       try {
-        const success = await login(email, password);
+        const success = await login(email, password, rememberMe);
         if (success) {
           onLoginSuccess();
         } else {
@@ -134,8 +135,13 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
             <div className="flex items-center justify-between text-xs pt-1">
               <label className="flex items-center gap-2 text-gray-400 cursor-pointer hover:text-gray-300">
                 <div className="w-4 h-4 rounded border border-gray-600 flex items-center justify-center peer-checked:bg-emerald-500 peer-checked:border-emerald-500">
-                  <input type="checkbox" className="hidden" />
-                  <div className="w-2 h-2 bg-emerald-500 rounded-sm"></div>
+                  <input 
+                    type="checkbox" 
+                    className="hidden cursor-pointer" 
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  {rememberMe && <div className="w-2 h-2 bg-emerald-500 rounded-sm"></div>}
                 </div>
                 <span>تذكرني</span>
               </label>

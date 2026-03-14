@@ -147,7 +147,8 @@ router.get('/', async (req, res) => {
                 deadline = enrollment.deadline;
                 isLockedByDeadline = !!enrollment.is_locked;
 
-                if (!isLockedByDeadline && deadline && new Date() > new Date(deadline)) {
+                // Do not lock if course is already completed (100% progress)
+                if (!isLockedByDeadline && deadline && new Date() > new Date(deadline) && progress < 100) {
                     db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, c.id);
                     isLockedByDeadline = true;
                 }
@@ -314,10 +315,10 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
         }
 
         // SECURITY: Check enrollment deadline
-        const enrollment = db.prepare('SELECT deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
+        const enrollment = db.prepare('SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
         if (enrollment) {
             let locked = enrollment.is_locked;
-            if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline)) {
+            if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
                 db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(req.user.id, courseId);
                 locked = 1;
             }

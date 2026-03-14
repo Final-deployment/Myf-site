@@ -19,10 +19,10 @@ export interface AuthError extends ApiError {
 
 export const getAuthToken = (): string | undefined => {
     try {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         if (token) return token;
 
-        const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+        const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser') || sessionStorage.getItem(STORAGE_PREFIX + 'currentUser');
         const user = stored ? JSON.parse(stored) : null;
         return user?.access_token || undefined;
     } catch {
@@ -31,12 +31,12 @@ export const getAuthToken = (): string | undefined => {
 };
 
 export const authApi = {
-    login: async (email: string, password: string): Promise<User | null> => {
+    login: async (email: string, password: string, rememberMe: boolean = false): Promise<User | null> => {
         try {
             const response = await fetch(getApiUrl('/login'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
+                body: JSON.stringify({ email, password, rememberMe })
             });
 
             if (!response.ok) {
@@ -65,8 +65,9 @@ export const authApi = {
                     supervisorCapacity: data.user.supervisor_capacity || data.user.supervisorCapacity,
                     supervisorPriority: data.user.supervisor_priority || data.user.supervisorPriority,
                 };
-                localStorage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
-                localStorage.setItem('authToken', data.accessToken);
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
+                storage.setItem('authToken', data.accessToken);
                 return user;
             }
             return null;
@@ -137,7 +138,7 @@ export const authApi = {
 
     getCurrentUser: (): User | null => {
         try {
-            const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+            const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser') || sessionStorage.getItem(STORAGE_PREFIX + 'currentUser');
             return stored ? JSON.parse(stored) : null;
         } catch {
             return null;
@@ -147,5 +148,7 @@ export const authApi = {
     logout: (): void => {
         localStorage.removeItem(STORAGE_PREFIX + 'currentUser');
         localStorage.removeItem('authToken');
+        sessionStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+        sessionStorage.removeItem('authToken');
     }
 };

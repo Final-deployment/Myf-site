@@ -120,10 +120,10 @@ router.post('/results', authenticateToken, (req, res) => {
         // SECURITY: Check enrollment deadline
         const quiz = db.prepare('SELECT courseId FROM quizzes WHERE id = ?').get(quizId);
         if (quiz && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-            const enrollment = db.prepare('SELECT deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, quiz.courseId);
+            const enrollment = db.prepare('SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, quiz.courseId);
             if (enrollment) {
                 let locked = enrollment.is_locked;
-                if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline)) {
+                if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
                     db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
                     locked = 1;
                 }

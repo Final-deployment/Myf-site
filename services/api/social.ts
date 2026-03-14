@@ -42,6 +42,20 @@ export const socialApi = {
         return await response.json();
     },
 
+    markMessagesAsRead: async (senderId: string): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/social/messages/read'), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ senderId })
+        });
+        if (!response.ok) throw new Error('فشل تحديث حالة القراءة');
+        return await response.json();
+    },
+
     sendBroadcastMessage: async (content: string, attachmentUrl?: string, attachmentType?: string, attachmentName?: string): Promise<any> => {
         const token = getAuthToken();
         const response = await fetch(getApiUrl('/social/broadcast'), {

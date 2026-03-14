@@ -107,6 +107,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
   /** Student navigation menu items */
   const studentItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: t('sidebar.dashboard') },
+    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'courses', icon: BookOpen, label: t('sidebar.myCourses') },
     { id: 'library', icon: GraduationCap, label: t('sidebar.library') },
     { id: 'certificates', icon: Award, label: t('sidebar.certificates') },
@@ -116,12 +117,12 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
     { id: 'favorites', icon: Heart, label: t('sidebar.favorites') },
     { id: 'progress', icon: TrendingUp, label: t('sidebar.progress') },
     { id: 'search', icon: Search, label: t('sidebar.search') },
-    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
   ], [t, unreadMessagesCount]);
 
   /** Admin navigation menu items */
   const adminItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: t('admin.dashboard') },
+    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'students', icon: Users, label: t('admin.students') },
     { id: 'audio-courses', icon: Mic2, label: t('admin.audioCourses') },
     { id: 'reports', icon: BarChart3, label: t('admin.reports') },
@@ -130,15 +131,14 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
     { id: 'quizzes', icon: ClipboardList, label: t('admin.quizManagement') },
     { id: 'activity-log', icon: Activity, label: t('admin.activityLog') },
     { id: 'certificates', icon: Award, label: t('admin.certificatesAdmin') },
-    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
   ], [t, unreadMessagesCount]);
 
   /** Supervisor navigation menu items */
   const supervisorItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: 'لوحة المشرف' },
+    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'students', icon: Users, label: 'الطلاب' },
     { id: 'audio-courses', icon: Mic2, label: 'الدورات' },
-    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'profile', icon: User, label: t('sidebar.profile') },
     { id: 'notifications', icon: Bell, label: t('sidebar.notifications') },
   ], [t, unreadMessagesCount]);
@@ -241,7 +241,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
 
                 {/* Logo Image */}
                 <img
-                  src="https://github.com/NinjaWorld1234/Files/blob/main/Mastaba%20LOGO.png?raw=true"
+                  src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Mastaba%20LOGO.png"
                   alt={t('sidebar.mastaba')}
                   className="relative z-10 w-24 h-24 object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-2xl"
                   loading="lazy"
