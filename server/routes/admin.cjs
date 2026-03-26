@@ -9,6 +9,7 @@
 
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const path = require('path');
@@ -94,7 +95,7 @@ router.post('/system-activity-logs', authenticateToken, (req, res) => {
         db.prepare(`
             INSERT INTO system_activity_logs (id, userId, action, details, timestamp)
             VALUES (?, ?, ?, ?, ?)
-        `).run('log_' + Date.now(), userId, action, details || '', new Date().toISOString());
+        `).run('log_' + crypto.randomUUID(), userId, action, details || '', new Date().toISOString());
         res.status(201).json({ success: true });
     } catch (e) {
         console.error('[ADMIN_LOGS_POST_ERROR]:', e.message);

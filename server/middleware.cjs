@@ -10,7 +10,11 @@
  */
 
 const jwt = require('jsonwebtoken');
-const SECRET_KEY = process.env.SECRET_KEY || 'your-default-secret';
+const SECRET_KEY = process.env.SECRET_KEY;
+if (!SECRET_KEY) {
+    console.error('[FATAL] SECRET_KEY environment variable is not set! Server cannot start securely.');
+    process.exit(1);
+}
 
 /**
  * Authenticate JWT Token (Required)

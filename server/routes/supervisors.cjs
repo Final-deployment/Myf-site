@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../database.cjs');
+
+// The protected support manager account — cannot be promoted/demoted
+const PROTECTED_MANAGER_ID = 'admin_manager';
 const { authenticateToken } = require('../middleware.cjs');
 
 // Apply authentication middleware to all routes
@@ -42,6 +45,10 @@ router.get('/', isAdmin, (req, res) => {
 // Promote a user to supervisor
 router.post('/promote', isAdmin, (req, res) => {
     const { userId, capacity, priority } = req.body;
+    // PROTECTION: Block role change on the protected manager account
+    if (userId === PROTECTED_MANAGER_ID) {
+        return res.status(403).json({ error: 'لا يمكن تغيير رتبة حساب مدير الدعم الفني' });
+    }
     try {
         db.prepare(`
             UPDATE users 
@@ -59,7 +66,7 @@ router.post('/promote', isAdmin, (req, res) => {
 // Update supervisor settings
 router.post('/settings', isAdmin, (req, res) => {
     const { supervisorId, capacity, priority } = req.body;
-    console.log('[DEBUG_SV_SETTINGS] Request:', { supervisorId, capacity, priority });
+    console.log('[SV_SETTINGS] Request:', { supervisorId, capacity, priority });
     try {
         const info = db.prepare(`
             UPDATE users 
@@ -68,15 +75,17 @@ router.post('/settings', isAdmin, (req, res) => {
             WHERE id = ? AND role = 'supervisor'
         `).run(capacity, priority, supervisorId);
 
-        console.log('[DEBUG_SV_SETTINGS] Update Result:', info);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[SV_SETTINGS] Update Result:', info);
+        }
 
         if (info.changes === 0) {
-            console.warn('[DEBUG_SV_SETTINGS] Warning: No rows updated. Check ID or Role.');
+            console.warn('[SV_SETTINGS] Warning: No rows updated. Check ID or Role.');
         }
 
         res.json({ success: true, message: 'Supervisor settings updated' });
     } catch (e) {
-        console.error('[DEBUG_SV_SETTINGS] Error:', e);
+        console.error('[SV_SETTINGS] Error:', e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -84,14 +93,18 @@ router.post('/settings', isAdmin, (req, res) => {
 // Assign student to supervisor
 router.post('/assign', isAdmin, (req, res) => {
     const { studentId, supervisorId } = req.body;
-    console.log('[DEBUG_SV_ASSIGN] Request:', { studentId, supervisorId });
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('[SV_ASSIGN] Request:', { studentId, supervisorId });
+    }
     try {
         // supervisorId can be null to assign to Admin
         const info = db.prepare('UPDATE users SET supervisor_id = ? WHERE id = ?').run(supervisorId || null, studentId);
-        console.log('[DEBUG_SV_ASSIGN] Result:', info);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[SV_ASSIGN] Result:', info);
+        }
         res.json({ success: true, message: 'Student assigned successfully' });
     } catch (e) {
-        console.error('[DEBUG_SV_ASSIGN] Error:', e);
+        console.error('[SV_ASSIGN] Error:', e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -99,6 +112,10 @@ router.post('/assign', isAdmin, (req, res) => {
 // Demote supervisor and reassign students
 router.post('/demote', isAdmin, (req, res) => {
     const { supervisorId, targetSupervisorId } = req.body;
+    // PROTECTION: Block role change on the protected manager account
+    if (supervisorId === PROTECTED_MANAGER_ID) {
+        return res.status(403).json({ error: 'لا يمكن تغيير رتبة حساب مدير الدعم الفني' });
+    }
     try {
         db.transaction(() => {
             // Reassign students
@@ -125,7 +142,9 @@ router.post('/demote', isAdmin, (req, res) => {
 router.get('/my-students', (req, res) => {
     try {
         const supervisorId = req.user.id;
-        console.log('[DEBUG_MY_STUDENTS] Fetching for supervisor:', supervisorId);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[MY_STUDENTS] Fetching for supervisor:', supervisorId);
+        }
 
         const students = db.prepare(`
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status,
@@ -135,10 +154,12 @@ router.get('/my-students', (req, res) => {
             WHERE u.supervisor_id = ?
         `).all(supervisorId);
 
-        console.log(`[DEBUG_MY_STUDENTS] Found ${students.length} students`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[MY_STUDENTS] Found ${students.length} students`);
+        }
         res.json(students);
     } catch (e) {
-        console.error('[DEBUG_MY_STUDENTS] ERROR:', e);
+        console.error('[MY_STUDENTS] ERROR:', e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -157,7 +178,8 @@ router.get('/students-progress', (req, res) => {
         if (supervisorId) {
             studentsQuery += ` WHERE u.supervisor_id = ?`;
             params.push(supervisorId);
-        } else if (req.query.supervisorId) {
+        } else if (req.user.role === 'admin' && req.query.supervisorId) {
+            // SECURITY: Only admins can filter by arbitrary supervisorId
             studentsQuery += ` WHERE u.supervisor_id = ?`;
             params.push(req.query.supervisorId);
         }
@@ -213,15 +235,23 @@ router.post('/students/:userId/courses/:courseId/unlock', (req, res) => {
             }
         }
 
-        const days = parseInt(extraDays) || 7; // Default 7 extra days
+        const days = parseInt(extraDays) || 2; // Default 2 extra days (aligned with users.cjs)
         const newDeadline = new Date();
         newDeadline.setDate(newDeadline.getDate() + days);
 
-        db.prepare(`
-            UPDATE enrollments 
-            SET is_locked = 0, deadline = ? 
-            WHERE user_id = ? AND course_id = ?
-        `).run(newDeadline.toISOString(), userId, courseId);
+        db.transaction(() => {
+            db.prepare(`
+                UPDATE enrollments 
+                SET is_locked = 0, deadline = ? 
+                WHERE user_id = ? AND course_id = ?
+            `).run(newDeadline.toISOString(), userId, courseId);
+
+            // Log the extension to the archive
+            db.prepare(`
+                INSERT INTO extension_archive (user_id, course_id, extended_by, days_added)
+                VALUES (?, ?, ?, ?)
+            `).run(userId, courseId, req.user.id, days);
+        })();
 
         res.json({ success: true, newDeadline: newDeadline.toISOString() });
     } catch (e) {

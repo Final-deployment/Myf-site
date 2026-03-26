@@ -90,6 +90,8 @@ export interface User {
   supervisorCapacity?: number;
   /** Assignment priority (for supervisors) */
   supervisorPriority?: number;
+  /** Whether this user is a tester with free navigation */
+  is_tester?: boolean | number;
 }
 
 // ============================================================================

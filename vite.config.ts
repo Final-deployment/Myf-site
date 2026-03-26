@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: './',
     server: {
-      port: 5173,
+      port: 5177,
       host: '0.0.0.0',
       proxy: {
         '/api': {
@@ -62,14 +62,14 @@ export default defineConfig(({ mode }) => {
           ],
           screenshots: [
             {
-              src: 'https://github.com/NinjaWorld1234/Files/blob/main/muslim_youth_forum_landing_page.png?raw=true',
+              src: 'https://raw.githubusercontent.com/NinjaWorld1234/Files/main/muslim_youth_forum_landing_page.png',
               sizes: '1920x1080',
               type: 'image/png',
               form_factor: 'wide',
               label: 'الرئيسية'
             },
             {
-              src: 'https://github.com/NinjaWorld1234/Files/blob/main/Dark.png?raw=true',
+              src: 'https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Dark.png',
               sizes: '1920x1080',
               type: 'image/png',
               form_factor: 'wide',

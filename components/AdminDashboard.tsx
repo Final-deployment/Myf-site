@@ -253,27 +253,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
    return (
       <div className="space-y-6 animate-fade-in pb-10" role="main" aria-label="لوحة التحكم">
 
-         {/* New Message Banner for Admin */}
-         {unreadCount !== undefined && unreadCount > 0 ? (
-            <div
-               onClick={() => setActiveTab?.('messages')}
-               className="bg-gradient-to-r from-emerald-600/20 to-teal-600/20 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between cursor-pointer group hover:border-emerald-400/50 transition-all backdrop-blur-md relative z-30 mb-8"
-            >
-               <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-900/40 group-hover:scale-110 transition-transform">
-                     <Bell className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                     <h4 className="text-white font-bold text-sm">لديك رسائل دعم جديدة!</h4>
-                     <p className="text-emerald-200/70 text-xs mt-0.5">هناك {unreadCount} رسائل لم يتم الرد عليها بعد.</p>
-                  </div>
-               </div>
-               <div className="flex items-center gap-2 text-emerald-300 text-xs font-bold bg-white/5 px-3 py-1.5 rounded-lg group-hover:bg-white/10 transition-colors">
-                  <span>انتقال للمحادثات</span>
-                  <Play className="w-3 h-3 rotate-180" />
-               </div>
-            </div>
-         ) : null}
          {/* Header */}
          <header className="flex justify-between items-end mb-6 relative">
             <div className="absolute -left-20 -top-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none" aria-hidden="true"></div>
@@ -305,7 +284,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
 
 
          {/* Stats Cards */}
-         <section className="grid grid-cols-1 md:grid-cols-3 gap-5" aria-label="إحصائيات سريعة">
+         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" aria-label="إحصائيات سريعة">
             <StatCard
                label="نسبة الإكمال"
                value={stats.isLoading ? '...' : `${stats.completionRate}%`}
@@ -314,6 +293,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                trend="+5.6%"
                trendText="مقارنة بالشهر الماضي"
                onClick={() => handleNavigate('reports')}
+            />
+            <StatCard
+               label="رسائل الدعم الجديدة"
+               value={unreadCount !== undefined ? unreadCount : '...'}
+               icon={Bell}
+               color="emerald"
+               trend={unreadCount && unreadCount > 0 ? 'مهم' : 'لا يوجد'}
+               trendText="بانتظار الرد"
+               onClick={() => handleNavigate('messages')}
             />
             <StatCard
                label="الدورات النشطة"
@@ -328,7 +316,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                label="إجمالي الطلاب"
                value={stats.isLoading ? '...' : stats.totalStudents.toLocaleString()}
                icon={Users}
-               color="emerald"
+               color="blue" // changed from emerald to alternate colors nicely
                trend="+12%"
                trendText="زيادة ثابتة"
                onClick={() => handleNavigate('students')}

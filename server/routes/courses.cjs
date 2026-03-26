@@ -1,20 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { generateDownloadUrl } = require('../r2.cjs');
-
-// Middleware to be passed from server.cjs or defined here
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) return res.sendStatus(401);
-    const jwt = require('jsonwebtoken');
-    jwt.verify(token, process.env.SECRET_KEY, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
-}
+const { authenticateToken, optionalAuth, requireAdmin } = require('../middleware.cjs');
 
 // Get all courses (Optionally authenticated to get progress)
 router.get('/', async (req, res) => {
@@ -43,6 +32,7 @@ router.get('/', async (req, res) => {
         // Fetch all passed quizzes for this user to determine locking
         let passedCourseIds = new Set();
         if (userId) {
+            // 1) Courses where the student passed the quiz
             const passedResults = db.prepare(`
                 SELECT DISTINCT q.courseId 
                 FROM quiz_results qr
@@ -50,21 +40,70 @@ router.get('/', async (req, res) => {
                 WHERE qr.userId = ? AND qr.percentage >= q.passing_score
             `).all(userId);
             passedResults.forEach(r => passedCourseIds.add(String(r.courseId)));
+
+            // 2) Courses that have NO quizzes but are completed (progress = 100%)
+            //    These are considered "passed" automatically
+            const completedNoQuiz = db.prepare(`
+                SELECT e.course_id 
+                FROM enrollments e
+                WHERE e.user_id = ? AND e.progress >= 100
+                AND NOT EXISTS (SELECT 1 FROM quizzes q WHERE q.courseId = e.course_id)
+            `).all(userId);
+            completedNoQuiz.forEach(r => passedCourseIds.add(String(r.course_id)));
         }
 
-        const coursesWithExtra = await Promise.all(courses.map(async (c, index) => {
-            const episodes = db.prepare('SELECT * FROM episodes WHERE courseId = ? ORDER BY orderIndex ASC').all(c.id);
+        // --- PERFORMANCE: Batch-load all related data upfront to avoid N+1 queries ---
 
-            // Fetch signed book URL if exists
-            let bookUrl = null;
-            if (c.book_path) {
+        // 1. Batch-load ALL episodes (grouped by courseId)
+        const allEpisodes = db.prepare('SELECT * FROM episodes ORDER BY orderIndex ASC').all();
+        const episodesByCourse = new Map();
+        for (const ep of allEpisodes) {
+            const key = String(ep.courseId);
+            if (!episodesByCourse.has(key)) episodesByCourse.set(key, []);
+            episodesByCourse.get(key).push(ep);
+        }
+
+        // 2. Batch-load ALL enrollments for this user (if authenticated)
+        const enrollmentMap = new Map();
+        if (userId) {
+            const allEnrollments = db.prepare('SELECT * FROM enrollments WHERE user_id = ?').all(userId);
+            for (const en of allEnrollments) {
+                enrollmentMap.set(String(en.course_id), en);
+            }
+        }
+
+        // 3. Batch-load ALL episode progress for this user (if authenticated)
+        const progressMap = new Map();
+        if (userId) {
+            const allProgress = db.prepare('SELECT * FROM episode_progress WHERE user_id = ?').all(userId);
+            for (const p of allProgress) {
+                progressMap.set(String(p.episode_id), p);
+            }
+        }
+
+        // 4. Batch-sign ALL book URLs upfront (avoid N+1 async calls in the loop)
+        const bookUrlMap = new Map();
+        const coursesWithBooks = courses.filter(c => c.book_path);
+        if (coursesWithBooks.length > 0) {
+            const bookResults = await Promise.all(coursesWithBooks.map(async (c) => {
                 try {
-                    bookUrl = await generateDownloadUrl(`Books/${c.book_path}`);
+                    const url = await generateDownloadUrl(`Books/${c.book_path}`);
+                    return { id: c.id, url };
                 } catch (e) {
                     console.error(`Failed to sign book URL for course ${c.id}:`, e);
+                    return { id: c.id, url: null };
                 }
+            }));
+            for (const result of bookResults) {
+                bookUrlMap.set(String(result.id), result.url);
             }
+        }
 
+        const coursesWithExtra = courses.map((c, index) => {
+            const episodes = episodesByCourse.get(String(c.id)) || [];
+
+            // Fetch signed book URL from pre-signed map
+            const bookUrl = bookUrlMap.get(String(c.id)) || null;
             // Get progress if userId is known
             let progress = 0;
             let isLocked = false;
@@ -79,7 +118,7 @@ router.get('/', async (req, res) => {
             // Robust index check: find position within current folder program
             const indexInFolder = folderCourses.findIndex(course => String(course.id) === String(c.id));
 
-            if (!req.user || req.user.role === 'admin') {
+            if (!req.user || req.user.role === 'admin' || req.user.role === 'supervisor') {
                 isLocked = false;
             } else if (indexInFolder === 0 || indexInFolder === -1) {
                 isLocked = false; // First course in each folder is always unlocked
@@ -99,24 +138,26 @@ router.get('/', async (req, res) => {
                 prerequisiteName = null;
             }
 
-            // Progress check
+            // Progress check (from batch-loaded enrollment data)
             let deadline = null;
             let isLockedByDeadline = false;
-            if (userId) {
-                const enrollment = db.prepare('SELECT progress, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, c.id);
-                if (enrollment) {
-                    progress = enrollment.progress;
-                    deadline = enrollment.deadline;
-                    isLockedByDeadline = !!enrollment.is_locked;
+            const enrollment = userId ? enrollmentMap.get(String(c.id)) : null;
+            if (enrollment) {
+                progress = enrollment.progress;
+                deadline = enrollment.deadline;
+                isLockedByDeadline = !!enrollment.is_locked;
 
-                    if (!isLockedByDeadline && deadline && new Date() > new Date(deadline)) {
-                        db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, c.id);
-                        isLockedByDeadline = true;
-                    }
+                // Do not lock if course is already completed (100% progress)
+                if (!isLockedByDeadline && deadline && new Date() > new Date(deadline) && progress < 100) {
+                    db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, c.id);
+                    isLockedByDeadline = true;
+                }
 
-                    if (isLockedByDeadline && req.user?.role !== 'admin' && req.user?.role !== 'supervisor') {
-                        isLocked = true;
-                    }
+                if (req.user?.role === 'admin' || req.user?.role === 'supervisor') {
+                    isLockedByDeadline = false;
+                    isLocked = false;
+                } else if (isLockedByDeadline) {
+                    isLocked = true;
                 }
             }
 
@@ -148,11 +189,11 @@ router.get('/', async (req, res) => {
                 isLockedByDeadline: isLockedByDeadline,
                 isLocked: isLocked,
                 lockedByPrerequisiteName: prerequisiteName,
-                isEnrolled: userId ? !!db.prepare('SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, c.id) : false,
+                isEnrolled: userId ? !!enrollment : false,
                 episodes: episodes.map(ep => {
                     let epProgress = { completed: false, lastPosition: 0, watchedDuration: 0 };
                     if (userId) {
-                        const prog = db.prepare('SELECT completed, last_position, watched_duration FROM episode_progress WHERE user_id = ? AND episode_id = ?').get(userId, ep.id);
+                        const prog = progressMap.get(String(ep.id));
                         if (prog) {
                             epProgress = {
                                 completed: !!prog.completed,
@@ -174,7 +215,7 @@ router.get('/', async (req, res) => {
                     };
                 })
             };
-        }));
+        });
         res.json(coursesWithExtra);
     } catch (e) {
         console.error('Error fetching courses:', e);
@@ -184,7 +225,9 @@ router.get('/', async (req, res) => {
 
 // Enroll in a course
 router.post('/enroll', authenticateToken, (req, res) => {
-    console.log(`[DEBUG COURSES] POST /enroll reached for user ${req.user.id}`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`[COURSES] POST /enroll reached for user ${req.user.id}`);
+    }
     const { courseId } = req.body;
     const userId = req.user.id;
 
@@ -196,7 +239,7 @@ router.post('/enroll', authenticateToken, (req, res) => {
         const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
         if (!course) return res.status(404).json({ error: 'Course not found' });
 
-        if (req.user.role !== 'admin') {
+        if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
 
             const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
             const folderCourses = db.prepare('SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC').all(currentFolderId);
@@ -250,7 +293,7 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
     const { courseId, episodeId, completed, lastPosition, watchedDuration } = req.body;
 
     // SECURITY: Ensure course isn't locked
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
         const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
         if (course) {
             const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
@@ -272,10 +315,10 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
         }
 
         // SECURITY: Check enrollment deadline
-        const enrollment = db.prepare('SELECT deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
+        const enrollment = db.prepare('SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
         if (enrollment) {
             let locked = enrollment.is_locked;
-            if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline)) {
+            if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
                 db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(req.user.id, courseId);
                 locked = 1;
             }
@@ -311,8 +354,9 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
                 // Simple placeholder logic for SQLite
                 const completedCount = db.prepare(`
                     SELECT COUNT(*) as count 
-                    FROM episode_progress 
-                    WHERE user_id = ? AND course_id = ? AND completed = 1
+                    FROM episode_progress ep
+                    INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id
+                    WHERE ep.user_id = ? AND ep.course_id = ? AND ep.completed = 1
                 `).get(req.user.id, courseId).count;
 
                 const progress = Math.round((completedCount / episodes.length) * 100);
@@ -328,7 +372,7 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
 });
 
 // Create Course
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, requireAdmin, (req, res) => {
     const course = req.body;
     try {
         const stmt = db.prepare(`
@@ -366,7 +410,7 @@ router.post('/', authenticateToken, (req, res) => {
                 `);
             for (const ep of course.episodes) {
                 epStmt.run({
-                    id: ep.id ? String(ep.id) : ('ep_' + Date.now() + Math.random()),
+                    id: ep.id ? String(ep.id) : ('ep_' + crypto.randomUUID()),
                     courseId: String(course.id),
                     title: ep.title,
                     title_en: ep.titleEn || ep.title,
@@ -386,7 +430,7 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // Update Course
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
     const { id } = req.params;
     const updates = req.body;
     try {
@@ -414,7 +458,7 @@ router.put('/:id', authenticateToken, (req, res) => {
             `);
             for (const ep of updates.episodes) {
                 epStmt.run({
-                    id: ep.id || ('ep_' + Date.now() + Math.random()),
+                    id: ep.id || ('ep_' + crypto.randomUUID()),
                     courseId: id,
                     title: ep.title,
                     title_en: ep.titleEn || ep.title,
@@ -434,7 +478,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 });
 
 // Delete Course
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     const { id } = req.params;
     try {
         db.prepare('DELETE FROM courses WHERE id = ?').run(id);

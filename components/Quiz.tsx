@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Circle, ArrowLeft, ArrowRight, RefreshCw, X, Eye } from 'lucide-react';
+import { CheckCircle2, Circle, ArrowLeft, ArrowRight, RefreshCw, X, Eye, Award, BookOpen } from 'lucide-react';
 import { Quiz as QuizType, Question } from '../types';
 import { useLanguage } from './LanguageContext';
 import { useAuth } from './AuthContext';
@@ -10,9 +10,10 @@ interface QuizProps {
   quiz: QuizType;
   onSuccess: () => void;
   onClose: () => void;
+  courseName?: string;
 }
 
-const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
+const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose, courseName }) => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
@@ -39,21 +40,23 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
   const passingScore = quiz.passingScore || 70;
 
   const handleNext = () => {
-    const isCorrect = selectedOption === question.correctAnswer;
-    const newAnswers = [...userAnswers, selectedOption as number];
+    const newAnswers = [...userAnswers];
+    newAnswers[currentQuestionIdx] = selectedOption as number;
     setUserAnswers(newAnswers);
 
-    let newScore = score;
-    if (isCorrect) {
-      newScore = score + 1;
-      setScore(newScore);
-    }
-
     if (currentQuestionIdx < totalQuestions - 1) {
-      setCurrentQuestionIdx(curr => curr + 1);
-      setSelectedOption(null);
+      const nextIdx = currentQuestionIdx + 1;
+      setCurrentQuestionIdx(nextIdx);
+      setSelectedOption(newAnswers[nextIdx] !== undefined ? newAnswers[nextIdx] : null);
     } else {
-      finishQuiz(newScore);
+      let finalScore = 0;
+      newAnswers.forEach((ans, idx) => {
+        if (ans !== undefined && ans === quiz.questions[idx].correctAnswer) {
+          finalScore++;
+        }
+      });
+      setScore(finalScore);
+      finishQuiz(finalScore);
     }
   };
 
@@ -81,8 +84,9 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
 
   const handlePrevious = () => {
     if (currentQuestionIdx > 0) {
-      setCurrentQuestionIdx(p => p - 1);
-      setSelectedOption(null);
+      const prevIdx = currentQuestionIdx - 1;
+      setCurrentQuestionIdx(prevIdx);
+      setSelectedOption(userAnswers[prevIdx] !== undefined ? userAnswers[prevIdx] : null);
     }
   };
 
@@ -141,6 +145,13 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
         <div className="glass-panel p-10 rounded-3xl text-center max-w-lg w-full relative overflow-hidden border-2 border-white/5">
           <div className={`absolute -top-24 -right-24 w-48 h-48 rounded-full blur-3xl opacity-20 ${isPassed ? 'bg-emerald-500' : 'bg-red-500'}`} />
 
+          {/* Course Name in Results */}
+          {courseName && (
+            <div className="mb-4 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+              <p className="text-violet-300 text-sm font-bold">{courseName}</p>
+            </div>
+          )}
+
           <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${isPassed ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
             {isPassed ? (
               <CheckCircle2 className="w-12 h-12 text-emerald-400" />
@@ -161,9 +172,10 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
           <div className="flex justify-center items-end gap-2 mb-2">
             <div className={`text-6xl font-bold ${isPassed ? 'text-emerald-400' : 'text-red-400'}`}>{percentage}%</div>
           </div>
-          <div className="flex flex-col gap-1 items-center mb-8">
+          <div className="flex flex-col gap-1 items-center mb-4">
             <p className="text-sm text-gray-400">درجتك النهائية</p>
-            <p className="text-xs text-amber-500 font-bold bg-amber-500/10 px-3 py-1 rounded-full">
+            <p className="text-xs text-gray-500">{score} من {totalQuestions} إجابة صحيحة</p>
+            <p className="text-xs text-amber-500 font-bold bg-amber-500/10 px-3 py-1 rounded-full mt-1">
               مطلوب {passingScore}% للنجاح
             </p>
           </div>
@@ -205,18 +217,62 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
     );
   }
 
+  const progressPercentage = ((currentQuestionIdx + 1) / totalQuestions) * 100;
+  const remaining = totalQuestions - currentQuestionIdx - 1;
+
   return (
     <>
       <div className="max-w-3xl mx-auto py-10 animate-fade-in">
-        <div className="flex justify-between items-center mb-6">
-          <span className="text-gray-400">
-            {t('quiz.questionCount').replace('{{current}}', (currentQuestionIdx + 1).toString()).replace('{{total}}', totalQuestions.toString())}
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-red-400">{t('quiz.remainingAttempts')}</span>
-            <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gold-500" style={{ width: `${((currentQuestionIdx + 1) / totalQuestions) * 100}%` }}></div>
+
+        {/* Course Name Header */}
+        {courseName && (
+          <div className="mb-6 text-center">
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-500/10 border border-violet-500/20 rounded-2xl">
+              <BookOpen className="w-5 h-5 text-violet-400" />
+              <span className="text-violet-300 font-bold text-lg">{courseName}</span>
             </div>
+          </div>
+        )}
+
+        {/* Enhanced Progress Header */}
+        <div className="mb-8 glass-panel p-5 rounded-2xl border border-white/10">
+          {/* Question Counter */}
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gold-500/20 flex items-center justify-center border border-gold-500/30">
+                <span className="text-gold-500 font-bold text-lg">{currentQuestionIdx + 1}</span>
+              </div>
+              <div>
+                <p className="text-white font-bold text-sm">السؤال {currentQuestionIdx + 1} من {totalQuestions}</p>
+                <p className="text-gray-500 text-xs">
+                  {remaining === 0 ? 'هذا هو السؤال الأخير' : `متبقي ${remaining} ${remaining === 1 ? 'سؤال' : remaining === 2 ? 'سؤالان' : remaining <= 10 ? 'أسئلة' : 'سؤال'}`}
+                </p>
+              </div>
+            </div>
+            <div className="text-left">
+              <span className="text-2xl font-bold text-gold-500">{Math.round(progressPercentage)}%</span>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full h-2.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-gold-500 to-amber-400 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+
+          {/* Question Dots */}
+          <div className="flex gap-1 mt-3 justify-center flex-wrap">
+            {quiz.questions.map((_, idx) => (
+              <div
+                key={idx}
+                className={`w-2 h-2 rounded-full transition-all ${idx < currentQuestionIdx ? 'bg-emerald-500' :
+                  idx === currentQuestionIdx ? 'bg-gold-500 scale-150' :
+                    'bg-gray-700'
+                  }`}
+              />
+            ))}
           </div>
         </div>
 
@@ -235,9 +291,9 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose }) => {
                   : 'bg-white/5 border-transparent hover:bg-white/10'
                   }`}
               >
-                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedOption === idx ? 'border-emerald-500 bg-emerald-500' : 'border-gray-500'
+                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center flex-shrink-0 text-xs font-bold ${selectedOption === idx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 text-gray-500'
                   }`}>
-                  {selectedOption === idx && <div className="w-2 h-2 bg-white rounded-full" />}
+                  {String.fromCharCode(1571 + idx)}
                 </div>
                 <span className={`text-lg ${selectedOption === idx ? 'text-white font-medium' : 'text-gray-300'}`}>
                   {option}

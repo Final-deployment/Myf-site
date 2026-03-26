@@ -21,7 +21,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   const [currentTime, setCurrentTime] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isCompleted, setIsCompleted] = useState(course.progress === 100);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
 
   const episodes = useMemo(() => course.episodes && course.episodes.length > 0
@@ -47,6 +47,33 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [nextCourse, setNextCourse] = useState<Course | null>(null);
   const [allCourses, setAllCourses] = useState<Course[]>([]);
+
+  /** Check if ALL quizzes for this course have been passed */
+  const allCourseQuizzesPassed = useMemo(() => {
+    const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
+    if (courseQuizzes.length === 0) return true; // No quizzes = considered passed
+    return courseQuizzes.every(q => passedQuizIds.includes(q.id));
+  }, [quizzes, passedQuizIds, course.id]);
+
+  /** Check if ALL episodes are completed */
+  const allEpisodesCompleted = useMemo(() => {
+    return episodes.length > 0 && episodes.every(ep => (ep as any).completed);
+  }, [episodes]);
+
+  /** Derive true completion: isCompleted (set when last episode finishes) + all quizzes passed
+   * Note: We don't check allEpisodesCompleted here because the episodes array from the initial
+   * API call is immutable and doesn't update after marking individual episodes complete via API.
+   * isCompleted is only set to true by handleMarkComplete/onClose after reaching the last episode,
+   * so episode completion is already guaranteed when isCompleted = true.
+   */
+  const isTrulyCompleted = isCompleted && allCourseQuizzesPassed;
+
+  /** Sync isCompleted for previously completed courses once quiz data is loaded */
+  useEffect(() => {
+    if (!isLoadingQuizzes && course.progress >= 100 && allCourseQuizzesPassed) {
+      setIsCompleted(true);
+    }
+  }, [isLoadingQuizzes, course.progress, allCourseQuizzesPassed]);
 
   const [timeLeft, setTimeLeft] = useState<{ days: number, hours: number, mins: number } | null>(null);
 
@@ -272,7 +299,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   useEffect(() => {
     const handleVisibilityChange = () => {
       // Only students get the security alert
-      if (document.hidden && isPlaying && user?.role !== 'admin' && user?.role !== 'supervisor') {
+      if (document.hidden && isPlaying && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester) {
         setIsPlaying(false);
         setShowSecurityAlert(true);
       }
@@ -280,7 +307,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Prevent PrintScreen or common shortcuts for students only
-      if (e.key === 'PrintScreen' && user?.role !== 'admin' && user?.role !== 'supervisor') {
+      if (e.key === 'PrintScreen' && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester) {
         setShowSecurityAlert(true);
         e.preventDefault();
       }
@@ -332,10 +359,20 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
       return;
     }
 
-    // If it's the last episode, mark course as complete
+    // If it's the last episode, check if all quizzes are passed before marking course as complete
     if (currentEpisodeIndex === episodes.length - 1) {
-      api.updateCourseProgress(course.id, 100);
-      setIsCompleted(true);
+      // Check if there are remaining quizzes that haven't been passed
+      const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
+      const allQuizzesPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => passedQuizIds.includes(q.id));
+
+      if (allQuizzesPassed) {
+        api.updateCourseProgress(course.id, 100);
+        setIsCompleted(true);
+      } else {
+        // Don't mark as complete, student still has quizzes to pass
+        console.log('Cannot complete course: not all quizzes passed yet.');
+        setIsCompleted(false);
+      }
     } else {
       // Auto-advance
       setCurrentEpisodeIndex(prev => prev + 1);
@@ -358,7 +395,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   };
 
   const isEpisodeLocked = (index: number) => {
-    if (user?.role === 'admin' || user?.role === 'supervisor') return false; // Administrative roles can go anywhere
+    if (user?.role === 'admin' || user?.role === 'supervisor' || user?.is_tester) return false; // Administrative roles and testers can go anywhere
     if (index === 0) return false;
     if (index <= maxReachedIndex) return false;
 
@@ -390,15 +427,27 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
         <div className="flex-1">
           <Quiz
             quiz={activeQuiz}
+            courseName={course.title}
             onSuccess={() => {
               setPassedQuizIds(prev => [...prev, activeQuiz.id]);
             }}
             onClose={() => {
-              if (passedQuizIds.includes(activeQuiz.id)) {
+              // Build a local snapshot including the just-passed quiz
+              const updatedPassedIds = passedQuizIds.includes(activeQuiz.id)
+                ? passedQuizIds
+                : [...passedQuizIds, activeQuiz.id];
+
+              if (updatedPassedIds.includes(activeQuiz.id)) {
                 if (currentEpisodeIndex < episodes.length - 1) {
                   setCurrentEpisodeIndex(prev => prev + 1);
                 } else {
-                  setIsCompleted(true);
+                  // Last episode: check if ALL course quizzes are now passed
+                  const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
+                  const allPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => updatedPassedIds.includes(q.id));
+                  if (allPassed) {
+                    api.updateCourseProgress(course.id, 100);
+                    setIsCompleted(true);
+                  }
                 }
               }
               setActiveQuiz(null);
@@ -413,6 +462,10 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
 
             {/* Custom Control Bar & Info Moved Here */}
             <div className="w-full bg-black/20 backdrop-blur-lg p-4 rounded-2xl border border-white/10 shadow-xl flex flex-col gap-4">
+              {/* Course Name */}
+              <div className="text-center px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                <p className="text-violet-300 font-bold text-sm">{course.title}</p>
+              </div>
               {/* Info & Mark Complete */}
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0">
@@ -444,34 +497,47 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                 </div>
                 <button
                   onClick={handleMarkComplete}
-                  disabled={user?.role !== 'admin' && user?.role !== 'supervisor' && progress < 100 && !isCompleted}
-                  className={`px-3 py-1.5 rounded-lg text-white text-xs font-bold transition-all shadow-lg flex-shrink-0 flex items-center gap-1 ${user?.role !== 'admin' && progress < 100 && !isCompleted
+                  disabled={user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && progress < 100 && !isCompleted}
+                  className={`px-3 py-1.5 rounded-lg text-white text-xs font-bold transition-all shadow-lg flex-shrink-0 flex items-center gap-1 ${user?.role !== 'admin' && !user?.is_tester && progress < 100 && !isCompleted
                     ? 'bg-gray-600 cursor-not-allowed opacity-50'
                     : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
                     }`}
                 >
-                  {user?.role !== 'admin' && user?.role !== 'supervisor' && progress < 100 && !isCompleted ? <Lock className="w-3 h-3" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                  {user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && progress < 100 && !isCompleted ? <Lock className="w-3 h-3" /> : <CheckCircle className="w-3.5 h-3.5" />}
                   {currentEpisodeIndex === episodes.length - 1 ? "إكمال" : "التالي"}
                 </button>
               </div>
 
-              {/* Time Left Countdown */}
-              {timeLeft && (
-                <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
-                  <span className="text-amber-400 font-bold text-xs flex items-center gap-2">
-                    <svg className="w-4 h-4 animate-[spin_3s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    الوقت المتبقي لإنهاء المساق:
-                  </span>
-                  <div className="flex gap-1.5" dir="ltr">
-                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.days}d</span>
-                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.hours}h</span>
-                    <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.mins}m</span>
-                  </div>
+              {/* Time Left Countdown / Completion Badge */}
+              {user?.role !== 'admin' && user?.role !== 'supervisor' && (
+                <div className={`flex items-center justify-between border p-3 rounded-xl ${isTrulyCompleted ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                  {isTrulyCompleted ? (
+                    <span className="text-emerald-400 font-bold text-xs flex items-center gap-2">
+                       <CheckCircle className="w-4 h-4" />
+                       المساق منجَز بنجاح
+                    </span>
+                  ) : timeLeft ? (
+                    <>
+                      <span className="text-amber-400 font-bold text-xs flex items-center gap-2">
+                        <svg className="w-4 h-4 animate-[spin_3s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        الوقت المتبقي لإنهاء المساق:
+                      </span>
+                      <div className="flex gap-1.5" dir="ltr">
+                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.days}d</span>
+                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.hours}h</span>
+                        <span className="bg-amber-500/20 text-amber-300 font-mono font-bold px-2 py-1 rounded text-xs">{timeLeft.mins}m</span>
+                      </div>
+                    </>
+                  ) : (
+                      <span className="text-gray-400 font-bold text-xs flex items-center gap-2">
+                         لا يوجد فترة محددة
+                      </span>
+                  )}
                 </div>
               )}
 
-              {/* Next Course Button - Only if completed and passed quiz */}
-              {isCompleted && nextCourse && !nextCourse.isLocked && (
+              {/* Next Course Button - STRICTLY requires all episodes completed AND all quizzes passed */}
+              {isTrulyCompleted && nextCourse && !nextCourse.isLocked && (
                 <button
                   onClick={() => onPlayCourse(nextCourse)}
                   className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-3 animate-bounce-subtle"
@@ -491,7 +557,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                   const newProgress = Number(e.target.value);
                   const newTime = (newProgress / 100) * duration;
 
-                  const isAdminOrSupervisor = user?.role === 'admin' || user?.role === 'supervisor';
+                  const isAdminOrSupervisor = user?.role === 'admin' || user?.role === 'supervisor' || !!user?.is_tester;
                   if (isAdminOrSupervisor || newTime <= maxTimeReached || isCompleted || newTime < currentTime) {
                     setProgress(newProgress);
                     if (videoRef.current && duration) {
@@ -573,7 +639,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                   onClick={() => {
                     if (videoRef.current) {
                       const newTime = videoRef.current.currentTime + 10;
-                      const isAdminOrSupervisor = user?.role === 'admin' || user?.role === 'supervisor';
+                      const isAdminOrSupervisor = user?.role === 'admin' || user?.role === 'supervisor' || !!user?.is_tester;
                       if (isAdminOrSupervisor || newTime <= maxTimeReached || isCompleted) {
                         videoRef.current.currentTime = newTime;
                       } else {
@@ -581,7 +647,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                       }
                     }
                   }}
-                  className={`p-1.5 rounded-full transition-colors ${(user?.role === 'admin' || user?.role === 'supervisor' || currentTime + 10 <= maxTimeReached || isCompleted)
+                  className={`p-1.5 rounded-full transition-colors ${(user?.role === 'admin' || user?.role === 'supervisor' || user?.is_tester || currentTime + 10 <= maxTimeReached || isCompleted)
                     ? 'hover:bg-white/10 text-gray-300 hover:text-white'
                     : 'text-gray-600 cursor-not-allowed'
                     }`}
@@ -690,7 +756,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                     const quiz = item.data;
                     const isPassed = passedQuizIds.includes(quiz.id);
                     const afterEpIdx = quiz.afterEpisodeIndex || 0;
-                    const isAdmin = user?.role === 'admin';
+                    const isAdmin = user?.role === 'admin' || user?.role === 'supervisor' || !!user?.is_tester;
                     const isLocked = !isAdmin && afterEpIdx > 0 && isEpisodeLocked(afterEpIdx);
 
                     return (
@@ -832,7 +898,8 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
       )}
 
       {/* Lock out overlay if deadline passed */}
-      {((course as any).isLockedByDeadline || (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor')) && (
+      {(((course as any).isLockedByDeadline && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester) || 
+        (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester)) && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-fade-in">
           <div className="bg-red-900/30 border border-red-500/50 p-8 rounded-3xl max-w-md text-center space-y-4 shadow-2xl">
             <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">

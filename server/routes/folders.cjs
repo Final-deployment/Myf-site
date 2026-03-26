@@ -10,6 +10,7 @@
 
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 
@@ -37,7 +38,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
     }
 
     try {
-        const id = 'folder_' + Date.now();
+        const id = 'folder_' + crypto.randomUUID();
         const sanitizedName = name.trim();
         const defaultThumbnail = 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=800&h=450&fit=crop';
 

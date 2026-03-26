@@ -50,6 +50,10 @@ function initDatabase() {
   try { db.prepare('ALTER TABLE users ADD COLUMN supervisor_id TEXT').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE users ADD COLUMN supervisor_capacity INTEGER DEFAULT 10').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE users ADD COLUMN supervisor_priority INTEGER DEFAULT 0').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE users ADD COLUMN is_tester INTEGER DEFAULT 0').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0').run(); } catch (e) { }
+  // Auto-approve all existing users and all non-student roles
+  try { db.prepare("UPDATE users SET approved = 1 WHERE approved = 0 AND (role != 'student' OR emailVerified = 1)").run(); } catch (e) { }
 
   // --- Courses Table ---
   db.exec(`
@@ -388,59 +392,65 @@ function initDatabase() {
   }
 
   // --- ONE-TIME RESET: Sequential Progress enforcement ---
-  // This is added to meet the user's request to "out the current students from all courses"
-  // and ensure they follow the new sequence. Since this is a specialized request,
-  // we execute it AND THEN add a flag to ensure it doesn't run every time.
-  // --- Ensure students are enrolled in foundational course ---
-  const foundationalCourseId = 'course_madkhal';
-  const foundationalCourse = db.prepare('SELECT id, days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+  // Only run this once, then set a flag in system_settings to skip on subsequent starts.
+  const enrollmentSeeded = db.prepare("SELECT 1 FROM system_settings WHERE key = 'enrollment_seeded'").get();
+  if (!enrollmentSeeded) {
+    const foundationalCourseId = 'course_madkhal';
+    const foundationalCourse = db.prepare('SELECT id, days_available FROM courses WHERE id = ?').get(foundationalCourseId);
 
-  if (foundationalCourse) {
-    console.log('ENFORCING FOUNDATIONAL ENROLLMENT: Ensuring all students can access the first course...');
+    if (foundationalCourse) {
+      console.log('ENFORCING FOUNDATIONAL ENROLLMENT: Ensuring all students can access the first course...');
 
-    // 1. Seed correct per-course days_available values
-    const courseDaysMapping = {
-      'course_madkhal': 5,
-      'course_aqeeda': 15,
-      'course_fiqh1-waseelit': 20,
-      'course_nifas': 12,
-      'course_tafseer': 5,
-      'course_tazkiyah': 10,
-      'course_seerah': 15,
-      'course_arba3oon': 25,
-      'course_fiqh2-it7af': 25
-    };
-    const updateDaysStmt = db.prepare('UPDATE courses SET days_available = ? WHERE id = ?');
-    for (const [courseId, days] of Object.entries(courseDaysMapping)) {
-      updateDaysStmt.run(days, courseId);
+      // 1. Seed correct per-course days_available values
+      const courseDaysMapping = {
+        'course_madkhal': 5,
+        'course_aqeeda': 15,
+        'course_fiqh1-waseelit': 20,
+        'course_nifas': 12,
+        'course_tafseer': 5,
+        'course_tazkiyah': 10,
+        'course_seerah': 15,
+        'course_arba3oon': 25,
+        'course_fiqh2-it7af': 25
+      };
+      const updateDaysStmt = db.prepare('UPDATE courses SET days_available = ? WHERE id = ?');
+      for (const [courseId, days] of Object.entries(courseDaysMapping)) {
+        updateDaysStmt.run(days, courseId);
+      }
+
+      // 2. Enroll all existing students who aren't enrolled in the foundational course
+      const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
+      const foundCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+      const daysForFoundational = (foundCourse && foundCourse.days_available) || 5;
+
+      const enrollStmt = db.prepare(`
+        INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
+        VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
+      `);
+
+      const deadlineDate = new Date();
+      deadlineDate.setDate(deadlineDate.getDate() + daysForFoundational);
+      const deadline = deadlineDate.toISOString();
+
+      let enrollmentCount = 0;
+      for (const student of students) {
+        const result = enrollStmt.run(student.id, foundationalCourseId, deadline);
+        if (result.changes > 0) enrollmentCount++;
+      }
+
+      if (enrollmentCount > 0) {
+        console.log(`Auto-enrolled ${enrollmentCount} students in ${foundationalCourseId}.`);
+        db.prepare('UPDATE courses SET students_count = (SELECT COUNT(*) FROM enrollments WHERE course_id = ?) WHERE id = ?').run(foundationalCourseId, foundationalCourseId);
+      }
+
+      console.log(`Seeded days_available for ${Object.keys(courseDaysMapping).length} courses.`);
     }
 
-    // 2. Enroll all existing students who aren't enrolled in the foundational course
-    const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
-    const foundCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
-    const daysForFoundational = (foundCourse && foundCourse.days_available) || 5;
-
-    const enrollStmt = db.prepare(`
-      INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
-      VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
-    `);
-
-    const deadlineDate = new Date();
-    deadlineDate.setDate(deadlineDate.getDate() + daysForFoundational);
-    const deadline = deadlineDate.toISOString();
-
-    let enrollmentCount = 0;
-    for (const student of students) {
-      const result = enrollStmt.run(student.id, foundationalCourseId, deadline);
-      if (result.changes > 0) enrollmentCount++;
-    }
-
-    if (enrollmentCount > 0) {
-      console.log(`Auto-enrolled ${enrollmentCount} students in ${foundationalCourseId}.`);
-      db.prepare('UPDATE courses SET students_count = (SELECT COUNT(*) FROM enrollments WHERE course_id = ?) WHERE id = ?').run(foundationalCourseId, foundationalCourseId);
-    }
-
-    console.log(`Seeded days_available for ${Object.keys(courseDaysMapping).length} courses.`);
+    // Set flag so this doesn't run again
+    db.prepare('INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)').run('enrollment_seeded', '1');
+    console.log('Enrollment seeding completed and flagged.');
+  } else {
+    console.log('Enrollment already seeded, skipping.');
   }
 
   console.log('SQLite database initialized successfully.');

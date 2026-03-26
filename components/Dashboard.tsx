@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { Play, Zap, Bell, X, Folder, Clock, ArrowRight, Lock } from 'lucide-react';
+import { Book, Play, CheckCircle, Clock, Trophy, Star, ChevronRight, Lock, BookOpen, GraduationCap, Flame, ArrowRight, Folder, LayoutGrid, Bell, X, Zap, MessageCircle, Image as ImageIcon, Video, Mic } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { BADGES } from '../constants';
 import { Course } from '../types';
@@ -119,6 +119,7 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
    const [complaint, setComplaint] = useState('');
    const [sendingComplaint, setSendingComplaint] = useState(false);
    const [isExpanded, setIsExpanded] = useState(false);
+   const [showSupportNotice, setShowSupportNotice] = useState(false);
    const toast = useToast();
 
    useEffect(() => {
@@ -163,6 +164,30 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
 
       const interval = setInterval(checkAnnouncements, 60000); // Check every minute
       return () => clearInterval(interval);
+   }, []);
+
+   // Support chat notification — show for 10 days from first seen
+   useEffect(() => {
+      const dismissed = localStorage.getItem('support_chat_notice_dismissed');
+      if (dismissed === '1') return;
+
+      const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
+      let firstSeen = localStorage.getItem('support_chat_notice_first_seen');
+
+      if (!firstSeen) {
+         firstSeen = Date.now().toString();
+         localStorage.setItem('support_chat_notice_first_seen', firstSeen);
+      }
+
+      const elapsed = Date.now() - parseInt(firstSeen, 10);
+      if (elapsed < TEN_DAYS_MS) {
+         setShowSupportNotice(true);
+      }
+   }, []);
+
+   const dismissSupportNotice = useCallback(() => {
+      setShowSupportNotice(false);
+      localStorage.setItem('support_chat_notice_dismissed', '1');
    }, []);
 
    const handleSendComplaint = useCallback(async () => {
@@ -272,6 +297,48 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
             </div>
          )}
 
+         {/* Support Chat Feature Announcement */}
+         {showSupportNotice && (
+            <div className="relative bg-gradient-to-r from-amber-600/20 via-orange-500/15 to-amber-600/10 border border-amber-500/40 rounded-2xl p-5 shadow-xl shadow-amber-900/10 overflow-hidden animate-in slide-in-from-top-3 duration-500">
+               <div className="absolute -top-10 -right-10 w-40 h-40 bg-amber-500/10 blur-3xl rounded-full" />
+               <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-orange-500/10 blur-3xl rounded-full" />
+               <button
+                  onClick={dismissSupportNotice}
+                  className="absolute top-3 left-3 p-1.5 rounded-full hover:bg-white/10 transition-colors text-amber-300/60 hover:text-white z-20"
+                  aria-label="إغلاق"
+               >
+                  <X className="w-4 h-4" />
+               </button>
+               <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-900/40 shrink-0">
+                     <MessageCircle className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                     <h4 className="text-amber-300 font-black text-base flex items-center gap-2">
+                        🎉 ميزة جديدة: الدعم الفني المباشر!
+                     </h4>
+                     <p className="text-amber-100/90 text-sm leading-relaxed">
+                        يمكنك الآن التواصل مع الدعم الفني مباشرة عبر <span className="font-bold text-white">فقاعة المحادثة البرتقالية</span> الموجودة في <span className="font-bold text-white">الزاوية السفلية اليسرى</span> من الشاشة.
+                     </p>
+                     <p className="text-amber-100/80 text-sm leading-relaxed">
+                        أرسل شكواك أو اقتراحاتك، وعزّز رسالتك بإرفاق ما تحتاجه لتوضيح الفكرة:
+                     </p>
+                     <div className="flex flex-wrap gap-2 mt-1">
+                        <span className="inline-flex items-center gap-1.5 bg-amber-500/15 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-500/20">
+                           <ImageIcon className="w-3.5 h-3.5" /> صور
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 bg-amber-500/15 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-500/20">
+                           <Video className="w-3.5 h-3.5" /> مقاطع فيديو
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 bg-amber-500/15 text-amber-200 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-500/20">
+                           <Mic className="w-3.5 h-3.5" /> رسائل صوتية
+                        </span>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         )}
+
          {/* Main Content Split */}
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -286,92 +353,50 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
                   </h3>
                </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[...courses].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0)).map((course, index) => {
-                     const folder = folders.find(f => f.id === course.folderId);
-
-                     // Prerequisite Logic:
-                     // 1. First course is always unlocked
-                     // 2. Subsequent courses require previous course to be completed (100% progress)
-                     const previousCourse = index > 0 ? courses[index - 1] : null;
-                     const isLocked = previousCourse ? (previousCourse.progress || 0) < 100 : false;
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                  {folders.map((folder) => {
+                     const folderCourses = courses.filter(c => c.folderId === folder.id);
+                     const enrolledInFolder = folderCourses.filter(c => (c as any).isEnrolled);
 
                      return (
-                        <div key={course.id} className={`glass-panel p-0 rounded-xl overflow-hidden group hover:border-violet-500/50 transition-all relative flex flex-col bg-[#0a1815]`}>
+                        <div
+                           key={folder.id}
+                           onClick={() => setActiveTab?.('courses')}
+                           className="glass-panel p-0 rounded-xl overflow-hidden cursor-pointer group hover:border-violet-500/50 transition-all bg-[#0a1815] relative h-48 flex flex-col"
+                        >
                            {/* Thumbnail */}
-                           <div className="h-32 w-full relative overflow-hidden">
-                              <img src={course.thumbnail} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
-                              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                              {folder && (
-                                 <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-gray-300 border border-white/10 flex items-center gap-1 z-10">
-                                    <Folder className="w-3 h-3 text-violet-400" />
-                                    <span className="truncate max-w-[100px]">{folder.name}</span>
-                                 </div>
-                              )}
-
-                              {/* Lock Overlay */}
-                              {isLocked && (
-                                 <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-center z-20">
-                                    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center mb-2 border border-white/20">
-                                       <Lock className="w-6 h-6 text-gray-400" />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-300 px-3 py-1 bg-black/50 rounded-full border border-white/10">
-                                       أكمل الدورة السابقة لفتح هذه الدورة
-                                    </span>
-                                 </div>
-                              )}
+                           <div className="absolute inset-0 w-full h-full">
+                              <img src={folder.thumbnail} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60" loading="lazy" alt={folder.name} />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#0a1815] via-[#0a1815]/80 to-transparent" />
                            </div>
 
-                           {/* Content */}
-                           <div className="p-4 flex-1 flex flex-col">
-                              <h4 className="font-bold text-white text-sm mb-1 line-clamp-1 group-hover:text-violet-300 transition-colors">
-                                 {language === 'ar' ? course.title : course.titleEn}
-                              </h4>
-                              <div className="text-[10px] text-gray-400 mb-4 flex items-center gap-3">
-                                 <span className="flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    {course.duration}
+                           {/* Content Overlay */}
+                           <div className="relative z-10 p-5 flex flex-col h-full justify-end">
+                              <div className="flex items-center gap-3 mb-2">
+                                 <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center border border-violet-500/30 group-hover:bg-violet-500 transition-all">
+                                    <Folder className="w-4 h-4 text-violet-400 group-hover:text-white" />
+                                 </div>
+                                 <h4 className="font-bold text-white text-lg group-hover:text-violet-300 transition-colors">
+                                    {folder.name}
+                                 </h4>
+                              </div>
+                              <div className="text-[10px] text-gray-400 flex items-center gap-4 mt-2">
+                                 <span className="flex items-center gap-1.5 bg-black/40 px-2 py-1 rounded border border-white/5">
+                                    <LayoutGrid className="w-3 h-3" />
+                                    {folderCourses.length} دورات
                                  </span>
-                                 <span className="flex items-center gap-1">
-                                    <Play className="w-3 h-3" />
-                                    {course.lessonsCount || 0} درس
-                                 </span>
+                                 {enrolledInFolder.length > 0 && (
+                                    <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20">
+                                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                       {enrolledInFolder.length} مسجل
+                                    </span>
+                                 )}
                               </div>
 
-                              <button
-                                 onClick={() => {
-                                    if (isLocked) return;
-                                    if ((course as any).isEnrolled) {
-                                       onPlayCourse(course);
-                                    } else {
-                                       setActiveTab?.('courses');
-                                    }
-                                 }}
-                                 disabled={isLocked}
-                                 className={`mt-auto w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn
-                                    ${isLocked
-                                       ? 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/5'
-                                       : (course as any).isEnrolled
-                                          ? 'bg-white/5 hover:bg-violet-600 hover:text-white text-gray-300'
-                                          : 'bg-white/5 hover:bg-emerald-600 hover:text-white text-amber-400 border border-amber-500/20'}`}
-                              >
-                                 {isLocked ? (
-                                    <>
-                                       <span>مغلق مؤقتاً</span>
-                                       <Lock className="w-3 h-3" />
-                                    </>
-                                 ) : (course as any).isEnrolled ? (
-                                    <>
-                                       <span>انتقال للدورة</span>
-                                       <ArrowRight className="w-3 h-3 group-hover/btn:-translate-x-1 transition-transform rtl:rotate-180" />
-                                    </>
-                                 ) : (
-                                    <>
-                                       <span>سجّل من دوراتي أولاً</span>
-                                       <ArrowRight className="w-3 h-3 group-hover/btn:-translate-x-1 transition-transform rtl:rotate-180" />
-                                    </>
-                                 )}
-                              </button>
+                              <div className="mt-4 w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn bg-white/5 hover:bg-violet-600 hover:text-white text-gray-300 border border-white/10">
+                                 <span>استعراض الدورة</span>
+                                 <ArrowRight className="w-3 h-3 group-hover/btn:-translate-x-1 transition-transform rtl:rotate-180" />
+                              </div>
                            </div>
                         </div>
                      );

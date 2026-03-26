@@ -26,6 +26,7 @@ import Header from './components/Header';
 import CoursesGrid from './components/CoursesGrid';
 import { ProtectedRoute, AdminRoute, PublicRoute, SupervisorRoute } from './components/RouteGuards';
 import { Course } from './types';
+import SupportChatBubble from './components/SupportChatBubble';
 
 // ============================================================================
 // Lazy-loaded Components (Code Splitting)
@@ -63,12 +64,14 @@ const ROUTE_IMPORTS = {
   'admin-activity-log': () => import('./components/AdminActivityLog'),
   'admin-certificates': () => import('./components/AdminCertificateManagement'),
   'admin-backup': () => import('./components/AdminBackupSettings'),
+  'admin-pending-students': () => import('./components/AdminPendingStudents'),
 
   // Auth
   landing: () => import('./components/LandingPage'),
   auth: () => import('./components/Auth'),
   registration: () => import('./components/RegistrationForm'),
   'email-verification': () => import('./components/EmailVerification'),
+  'forgot-password': () => import('./components/ForgotPassword'),
 };
 
 // Student Components
@@ -98,6 +101,7 @@ const AdminQuizManagement = lazy(ROUTE_IMPORTS['admin-quizzes']);
 const AdminActivityLog = lazy(ROUTE_IMPORTS['admin-activity-log']);
 const AdminCertificateManagement = lazy(ROUTE_IMPORTS['admin-certificates']);
 const AdminBackupSettings = lazy(ROUTE_IMPORTS['admin-backup']);
+const AdminPendingStudents = lazy(ROUTE_IMPORTS['admin-pending-students']);
 
 // Supervisor Components
 const SupervisorDashboard = lazy(() => import('./components/SupervisorDashboard'));
@@ -108,6 +112,7 @@ const LandingPage = lazy(ROUTE_IMPORTS.landing);
 const Auth = lazy(ROUTE_IMPORTS.auth);
 const RegistrationForm = lazy(ROUTE_IMPORTS.registration);
 const EmailVerification = lazy(ROUTE_IMPORTS['email-verification']);
+const ForgotPassword = lazy(ROUTE_IMPORTS['forgot-password']);
 
 // ============================================================================
 // Types
@@ -177,32 +182,37 @@ const AppContent: React.FC = () => {
     }
   }, [isAuthenticated, location.pathname, location.search, navigate]);
 
-  // Poll for unread messages
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const fetchUnread = async () => {
-      try {
-        const { api } = await import('./services/api');
-        // Use optimized endpoint
-        const count = await api.getUnreadCount();
-        setUnreadCount(count);
-      } catch (error) {
-        console.error("Failed to fetch unread messages", error);
-      }
-    };
-
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 10000); // Check every 10 seconds
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  // Unread message polling is handled by AppLayout to avoid duplicate requests
 
   // Preloading logic moved to AppLayout
 
   /**
    * Handles playing a course - navigates to player view
    */
-  const handlePlayCourse = (course: Course): void => {
+  const handlePlayCourse = async (course: Course): Promise<void> => {
+    // Block locked courses globally, but exempt admins and supervisors
+    if (course.isLocked && user?.role !== 'admin' && user?.role !== 'supervisor') {
+      alert(`هذا المساق مغلق. ${(course as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+      return;
+    }
+    // Auto-enroll if not enrolled
+    if (!(course as any).isEnrolled) {
+      try {
+        const { api } = await import('./services/api');
+        await api.enroll(course.id);
+        // Refetch updated course data
+        const allCourses = await api.getCourses();
+        const updated = allCourses.find((c: any) => String(c.id) === String(course.id));
+        if (updated) {
+          setActiveCourse(updated);
+          navigate(`/player/${updated.id}`);
+          return;
+        }
+      } catch (err: any) {
+        // If already enrolled, just continue
+        console.log('Enrollment attempt:', err?.message);
+      }
+    }
     setActiveCourse(course);
     navigate(`/player/${course.id}`);
   };
@@ -254,11 +264,18 @@ const AppContent: React.FC = () => {
               onToggleView={(view) => navigate(view === 'login' ? '/login' : '/signup')}
               onBack={() => navigate('/')}
               onLoginSuccess={() => navigate('/dashboard')}
+              onForgotPassword={() => navigate('/forgot-password')}
               onVerificationRequired={(email) => {
                 setPendingEmail(email);
                 navigate('/verify');
               }}
             />
+          </PublicRoute>
+        } />
+
+        <Route path="/forgot-password" element={
+          <PublicRoute>
+            <ForgotPassword onBack={() => navigate('/login')} />
           </PublicRoute>
         } />
 
@@ -303,6 +320,7 @@ const AppContent: React.FC = () => {
           </ProtectedRoute>
         } />
       </Routes>
+      <SupportChatBubble />
       <InstallPrompt />
     </>
   );
@@ -328,6 +346,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingStudentsCount, setPendingStudentsCount] = useState(0);
 
   // Correctly derive active tab and role prefix
   const pathSegments = pathname.split('/').filter(Boolean);
@@ -390,13 +409,37 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
+  // Poll for pending students count (admin only)
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'admin') return;
+    const fetchPending = async () => {
+      try {
+        const { getAuthToken } = await import('./services/api/auth');
+        const token = getAuthToken();
+        if (!token) return;
+        const response = await fetch('/api/pending-students', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPendingStudentsCount(Array.isArray(data) ? data.length : 0);
+        }
+      } catch (error) {
+        console.error('Failed to fetch pending students count', error);
+      }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user?.role]);
+
   // ========================================================================
   // Main App View
   // ========================================================================
   // Dynamic theme classes
   const themeClasses = isDark
-    ? 'bg-[url("https://github.com/NinjaWorld1234/Files/blob/main/Dark.png?raw=true")] bg-cover bg-center bg-fixed'
-    : 'bg-[url("https://github.com/NinjaWorld1234/Files/blob/main/muslim_youth_forum_landing_page.png?raw=true")] bg-cover bg-center bg-fixed';
+    ? 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Dark.png")] bg-cover bg-center bg-fixed'
+    : 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/muslim_youth_forum_landing_page.png")] bg-cover bg-center bg-fixed';
 
   return (
     <div className={`flex h-screen relative overflow-hidden ${themeClasses}`}>
@@ -415,6 +458,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         onLogout={handleLogout}
         role={user?.role || 'student'}
         unreadMessagesCount={unreadCount}
+        pendingStudentsCount={pendingStudentsCount}
       />
 
       {/* Main Content */}
@@ -457,7 +501,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 } />
 
                 {/* Admin Routes */}
-                <Route path="/admin" element={<AdminRoute><AdminDashboard setActiveTab={setActiveTab} /></AdminRoute>} />
+                <Route path="/admin" element={<AdminRoute><AdminDashboard setActiveTab={setActiveTab} unreadCount={unreadCount} /></AdminRoute>} />
                 <Route path="/admin/students" element={<AdminRoute><AdminStudents onOpenChat={handleOpenChat} /></AdminRoute>} />
                 <Route path="/admin/audio-courses" element={<AdminRoute><AdminAudioCourses onPreview={handlePlayCourse} /></AdminRoute>} />
                 <Route path="/admin/reports" element={<AdminRoute><AdminReports /></AdminRoute>} />
@@ -467,6 +511,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 <Route path="/admin/activity-log" element={<AdminRoute><AdminActivityLog /></AdminRoute>} />
                 <Route path="/admin/certificates" element={<AdminRoute><AdminCertificateManagement /></AdminRoute>} />
                 <Route path="/admin/messages" element={<AdminRoute><MessagingSystem /></AdminRoute>} />
+                <Route path="/admin/pending-students" element={<AdminRoute><AdminPendingStudents /></AdminRoute>} />
 
                 {/* Supervisor Routes */}
                 <Route path="/supervisor" element={<SupervisorRoute><SupervisorDashboard onOpenChat={handleOpenChat} /></SupervisorRoute>} />

@@ -68,13 +68,14 @@ const StudentRow = memo<{
     onPromote: (student: User) => void;
     onTransfer: (student: User) => void;
     onDemote: (id: string) => void;
-}>(({ student, supervisors, onDelete, onEdit, onView, onPromote, onTransfer, onDemote }) => {
+    onMakeAdmin: (id: string) => void;
+    onRevokeAdmin: (id: string) => void;
+}>(({ student, supervisors, onDelete, onEdit, onView, onPromote, onTransfer, onDemote, onMakeAdmin, onRevokeAdmin }) => {
     const handleDelete = useCallback(() => {
         if (window.confirm('هل أنت متأكد من حذف هذا الطالب؟')) {
             onDelete(student.id);
         }
     }, [student.id, onDelete]);
-
 
     // Removed handleEmail as it's replaced by onMessage
 
@@ -117,6 +118,7 @@ const StudentRow = memo<{
                 </div>
             </td>
             <td className="py-4 px-6 text-white">المستوى {student.level}</td>
+            <td className="py-4 px-6 text-white">{student.country || student.location || '-'}</td>
             <td className="py-4 px-6">
                 <div className="flex flex-col gap-1 max-w-[200px]">
                     <span className="text-white text-sm line-clamp-1" title={student.activeCourses || 'لا يوجد'}>
@@ -177,6 +179,32 @@ const StudentRow = memo<{
                     >
                         <UserX className="w-4 h-4" />
                     </button>
+                    {student.role !== 'admin' && (
+                        <button
+                            onClick={() => {
+                                if (window.confirm('هل أنت متأكد من تعيين هذا المستخدم كمدير صلحيات كاملة للنظام؟')) {
+                                    onMakeAdmin(student.id);
+                                }
+                            }}
+                            className="p-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 transition-colors"
+                            title="تعيين كمدير للنظام"
+                        >
+                            <Shield className="w-4 h-4 text-indigo-400" />
+                        </button>
+                    )}
+                    {student.role === 'admin' && (
+                        <button
+                            onClick={() => {
+                                if (window.confirm('هل أنت متأكد من إلغاء صلاحيات المدير لهذا المستخدم؟ سيتم تحويله إلى طالب.')) {
+                                    onRevokeAdmin(student.id);
+                                }
+                            }}
+                            className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+                            title="إلغاء صلاحيات المدير"
+                        >
+                            <UserX className="w-4 h-4 text-red-400" />
+                        </button>
+                    )}
                     {student.role === 'student' ? (
                         <button
                             onClick={() => onPromote(student)}
@@ -185,7 +213,7 @@ const StudentRow = memo<{
                         >
                             <Award className="w-4 h-4" />
                         </button>
-                    ) : (
+                    ) : student.role === 'supervisor' ? (
                         <button
                             onClick={() => onDemote(student.id)}
                             className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors"
@@ -193,7 +221,7 @@ const StudentRow = memo<{
                         >
                             <Shield className="w-4 h-4" />
                         </button>
-                    )}
+                    ) : null}
                     {student.role === 'student' && (
                         <button
                             onClick={() => onTransfer(student)}
@@ -825,6 +853,7 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
                                     <th className="py-4 px-6">الطالب</th>
                                     <th className="py-4 px-6">تاريخ الانضمام</th>
                                     <th className="py-4 px-6">المستوى</th>
+                                    <th className="py-4 px-6">البلد</th>
                                     <th className="py-4 px-6">التقدم</th>
                                     <th className="py-4 px-6">المشرف</th>
                                     <th className="py-4 px-6">الحالة</th>
@@ -845,12 +874,28 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
                                             onPromote={() => { setSelectedStudent(student); setIsPromoteModalOpen(true); }}
                                             onTransfer={() => { setSelectedStudent(student); setIsTransferModalOpen(true); }}
                                             onDemote={handleDemote}
+                                            onMakeAdmin={async (id) => {
+                                                try {
+                                                    await api.updateUser(id, { role: 'admin' });
+                                                    loadData();
+                                                } catch (e: any) {
+                                                    alert('فشل تعيين المدير: ' + e.message);
+                                                }
+                                            }}
+                                            onRevokeAdmin={async (id) => {
+                                                try {
+                                                    await api.updateUser(id, { role: 'student' });
+                                                    loadData();
+                                                } catch (e: any) {
+                                                    alert('فشل إلغاء صلاحيات المدير: ' + e.message);
+                                                }
+                                            }}
                                         />
                                     );
                                 })}
                                 {paginatedItems.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="py-12 text-center text-gray-500">
+                                        <td colSpan={8} className="py-12 text-center text-gray-500">
                                             لا يوجد طلاب مطابقين للبحث
                                         </td>
                                     </tr>

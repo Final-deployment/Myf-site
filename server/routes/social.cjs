@@ -1,12 +1,156 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken } = require('../middleware.cjs');
 const { deleteFile, generateDownloadUrl, uploadBufferToR2 } = require('../r2.cjs');
 
+// --- PUBLIC ROUTES (No Auth Required) ---
+router.post('/public/messages', (req, res) => {
+    const { content, guestName, attachmentUrl, attachmentType, attachmentName } = req.body;
+
+    if (!content && !attachmentUrl) {
+        return res.status(400).json({ error: 'الرسالة أو المرفق مطلوبان' });
+    }
+    if (!guestName) {
+        return res.status(400).json({ error: 'الاسم مطلوب' });
+    }
+
+    try {
+        // Route ALL public complaints exclusively to admin_manager (manager@mastaba.com)
+        const SUPPORT_MANAGER_ID = 'admin_manager';
+        const adminCheck = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'admin'").get(SUPPORT_MANAGER_ID);
+        if (!adminCheck) {
+            return res.status(503).json({ error: 'خدمة الدعم الفني غير متوفرة حالياً' });
+        }
+        const adminId = SUPPORT_MANAGER_ID;
+
+        const id = 'msg_' + crypto.randomUUID();
+        const timestamp = new Date().toISOString();
+
+        // Use the provided guestId or generate a new one
+        const guestId = req.body.guestId || ('guest_' + crypto.randomUUID());
+
+        // We embed the guest name in the content ONLY if it's the very first message
+        // This is a simple heuristic: if they didn't provide a guestId, it's their first message
+        const isFirstMessage = !req.body.guestId && guestName;
+        let finalContent = content || '';
+
+        if (isFirstMessage) {
+            finalContent = `[رسالة من زائر: ${guestName}]\n${finalContent}`.trim();
+        }
+
+        db.prepare(`
+            INSERT INTO messages (id, senderId, receiverId, content, timestamp, read, isComplaint, expiryDate, attachmentUrl, attachmentType, attachmentName)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, guestId, adminId, finalContent, timestamp, 0, 1, null, attachmentUrl || null, attachmentType || null, attachmentName || null);
+
+        res.json({ success: true, messageId: id, guestId });
+    } catch (e) {
+        console.error('Public message error:', e);
+        res.status(500).json({ error: 'حدث خطأ في الخادم' });
+    }
+});
+
+// Get public messages for a guest session
+router.get('/public/messages/:guestId', (req, res) => {
+    try {
+        const guestId = req.params.guestId;
+        if (!guestId || !guestId.startsWith('guest_')) {
+            return res.status(400).json({ error: 'Invalid guest ID' });
+        }
+
+        const messages = db.prepare(`
+            SELECT * FROM messages 
+            WHERE (senderId = ? OR receiverId = ?)
+            ORDER BY timestamp ASC
+        `).all(guestId, guestId);
+
+        res.json(messages);
+    } catch (e) {
+        console.error('Public get messages error:', e);
+        res.status(500).json({ error: 'حدث خطأ في الخادم' });
+    }
+});
+
+/**
+ * Server-side Proxy Upload (Public)
+ * Receives file bytes as application/octet-stream and uploads to R2
+ */
+router.post('/upload-proxy', async (req, res) => {
+    try {
+        let fileName = req.query.fileName;
+        let fileType = req.headers['content-type'];
+        let buffer;
+
+        // Support both JSON (Base64) and raw binary
+        if (req.body && req.body.base64Data) {
+            // Case 1: JSON with Base64
+            console.log(`[ProxyUpload] Decoding Base64 for ${req.body.fileName}`);
+            fileName = req.body.fileName || fileName || `upload-${Date.now()}`;
+            fileType = req.body.fileType || fileType || 'application/octet-stream';
+
+            // Remove data:URL prefix if present
+            const base64String = req.body.base64Data.replace(/^data:.*?;base64,/, '');
+            buffer = Buffer.from(base64String, 'base64');
+        } else if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+            // Case 2: Raw binary buffer
+            console.log(`[ProxyUpload] Processing raw binary buffer`);
+            buffer = req.body;
+            fileName = fileName || `upload-${Date.now()}`;
+        } else {
+            return res.status(400).json({ error: 'No file data received. Ensure Content-Type is application/octet-stream for raw, or send JSON with base64Data.' });
+        }
+
+        if (!buffer || buffer.length === 0) {
+            return res.status(400).json({ error: 'Empty file buffer' });
+        }
+
+        // 20MB size limit check (20 * 1024 * 1024 bytes)
+        const MAX_SIZE_MB = 20;
+        const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+        if (buffer.length > MAX_SIZE_BYTES) {
+            return res.status(413).json({ error: `حجم الملف يتجاوز الحد الأقصى المسموح به وهو ${MAX_SIZE_MB} ميغابايت` });
+        }
+
+        console.log(`[ProxyUpload] Received ${buffer.length} bytes for ${fileName} (${fileType})`);
+
+        const publicUrl = await uploadBufferToR2(buffer, fileName, fileType);
+
+        console.log(`[ProxyUpload] Success. URL: ${publicUrl}`);
+        res.json({ publicUrl });
+    } catch (e) {
+        console.error('[ProxyUpload] Failed:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- PROTECTED ROUTES ---
 router.use(authenticateToken);
 
 // Messages
+router.put('/messages/read', (req, res) => {
+    const userId = req.user.id;
+    const { senderId } = req.body;
+    
+    if (!senderId) {
+        return res.status(400).json({ error: 'Sender ID is required' });
+    }
+
+    try {
+        db.prepare(`
+            UPDATE messages 
+            SET read = 1 
+            WHERE receiverId = ? AND senderId = ? AND read = 0
+        `).run(userId, senderId);
+        
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[Mark Messages Read] Error:', e);
+        res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
+});
+
 router.get('/messages', async (req, res) => {
     const userId = req.user.id;
     try {
@@ -63,8 +207,10 @@ router.get('/messages', async (req, res) => {
 router.get('/messages/unread', (req, res) => {
     const userId = req.user.id;
     try {
-        // Exclude complaints from unread count for students
-        const roleFilter = req.user.role === 'student' ? 'AND (isComplaint = 0 OR isComplaint IS NULL)' : '';
+        // Exclude complaints and admin messages from unread count for students
+        const roleFilter = req.user.role === 'student'
+            ? "AND (isComplaint = 0 OR isComplaint IS NULL) AND senderId NOT IN (SELECT id FROM users WHERE role = 'admin') AND senderId != 'admin_manager'"
+            : '';
         const result = db.prepare(`SELECT COUNT(*) as count FROM messages WHERE receiverId = ? AND read = 0 ${roleFilter}`).get(userId);
         res.json({ count: result.count });
     } catch (e) {
@@ -81,6 +227,10 @@ router.get('/contacts', (req, res) => {
     try {
         let users = [];
         if (role === 'admin') {
+            // Admin sees all admins
+            const admins = db.prepare("SELECT id, name, role, avatar, email FROM users WHERE role = 'admin'").all();
+            console.log(`[SOCIAL_CONTACTS] Admin: found ${admins.length} admins`);
+
             // Admin sees all supervisors
             const supervisors = db.prepare("SELECT id, name, role, avatar, email FROM users WHERE role = 'supervisor'").all();
             console.log(`[SOCIAL_CONTACTS] Admin: found ${supervisors.length} supervisors`);
@@ -92,9 +242,49 @@ router.get('/contacts', (req, res) => {
                 JOIN messages m ON u.id = m.senderId
                 WHERE m.receiverId = ? AND m.isComplaint = 1
             `).all(userId);
-            console.log(`[SOCIAL_CONTACTS] Admin: found ${complainingStudents.length} complaining students`);
 
-            users = [...supervisors, ...complainingStudents];
+            // Admin ALSO sees guests
+            const guestMessages = db.prepare(`
+                SELECT DISTINCT senderId 
+                FROM messages 
+                WHERE receiverId = ? AND senderId LIKE 'guest_%'
+            `).all(userId);
+
+            const guests = guestMessages.map(g => {
+                try {
+                    // Find first message from this guest to extract name
+                    const firstMsg = db.prepare(`SELECT content FROM messages WHERE senderId = ? ORDER BY timestamp ASC LIMIT 1`).get(g.senderId);
+                    let guestNameStr = 'زائر ' + (g.senderId.split('_')[1] || '').substring(0, 4);
+
+                    if (firstMsg && firstMsg.content && firstMsg.content.includes('[رسالة من زائر:')) {
+                        const match = firstMsg.content.match(/\[رسالة من زائر:\s*(.*?)\]/);
+                        if (match && match[1]) {
+                            guestNameStr = match[1].trim();
+                        }
+                    }
+
+                    return {
+                        id: g.senderId,
+                        name: guestNameStr,
+                        role: 'guest', // User role 'guest' so UI explicitly flags it
+                        avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(guestNameStr || 'زائر') + '&background=random',
+                        email: 'guest@local'
+                    };
+                } catch (err) {
+                    console.error('[SOCIAL_CONTACTS] Error processing guest', g.senderId, err);
+                    return {
+                        id: g.senderId,
+                        name: 'زائر',
+                        role: 'guest',
+                        avatar: 'https://ui-avatars.com/api/?name=%D8%B2%D8%A7%D8%A6%D8%B1&background=random',
+                        email: 'guest@local'
+                    };
+                }
+            });
+
+            console.log(`[SOCIAL_CONTACTS] Admin: found ${complainingStudents.length} complaining students, ${guests.length} guests`);
+
+            users = [...admins, ...supervisors, ...complainingStudents, ...guests];
         } else if (role === 'supervisor') {
             // Supervisor sees all admins
             const admins = db.prepare("SELECT id, name, role, avatar, email FROM users WHERE role = 'admin'").all();
@@ -176,27 +366,28 @@ router.post('/messages', (req, res) => {
 
         // --- Role-Based Messaging Validation ---
 
-        // Fetch receiver details to check their role
-        receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(finalReceiverId);
+        // Fetch receiver details to check their role (unless it's a guest)
+        if (finalReceiverId && finalReceiverId.startsWith('guest_')) {
+            // It's a guest, so there is no user record
+            receiver = { role: 'guest' };
+            console.log(`[MSG_DEBUG] senderId=${senderId}, receiverId=${finalReceiverId}, isComplaint=${isComplaint}, receiverRole=guest`);
+        } else {
+            receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(finalReceiverId);
+            console.log(`[MSG_DEBUG] senderId=${senderId}, receiverId=${finalReceiverId}, isComplaint=${isComplaint}, receiverExists=${!!receiver}, receiverRole=${receiver?.role}`);
+        }
 
-        // EXTRA COMPLAINT PROTECTION (v5):
-        // If this is a complaint and the recipient is NOT an admin (or doesn't exist), 
-        // find admin_main first, otherwise fall back to any admin.
+        // COMPLAINT ROUTING: All complaints go exclusively to admin_manager (manager@mastaba.com)
+        const SUPPORT_MANAGER_ID = 'admin_manager';
         if (isComplaint === 1 || isComplaint === true) {
-            if (!receiver || receiver.role !== 'admin') {
-                // First, try to find admin_main specifically
-                let altAdmin = db.prepare("SELECT id FROM users WHERE id = 'admin_main' AND role = 'admin'").get();
-                if (!altAdmin) {
-                    // Fallback to any admin
-                    altAdmin = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
-                }
-                if (altAdmin) {
-                    console.log(`[COMPLAINT_ROUTING_v5] Redirecting complaint from ${finalReceiverId} to ${altAdmin.id}`);
-                    finalReceiverId = altAdmin.id;
-                    // Re-fetch receiver info for the new finalReceiverId
+            // Note: If an ADMIN is replying TO A GUEST or STUDENT, it's technically a complaint reply, but we don't re-route it back to the admin!
+            if (senderRole !== 'admin') {
+                const supportManager = db.prepare("SELECT id, role FROM users WHERE id = ?").get(SUPPORT_MANAGER_ID);
+                if (supportManager) {
+                    console.log(`[COMPLAINT_ROUTING] Routing complaint from ${senderId} to ${SUPPORT_MANAGER_ID}`);
+                    finalReceiverId = SUPPORT_MANAGER_ID;
                     receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(finalReceiverId);
-                } else if (!receiver) {
-                    return res.status(403).json({ error: 'الشكاوى ترسل للمدير فقط، ولم يتم العثور على مدير في النظام' });
+                } else {
+                    return res.status(503).json({ error: 'خدمة الدعم الفني غير متوفرة حالياً' });
                 }
             }
         }
@@ -232,17 +423,22 @@ router.post('/messages', (req, res) => {
 
         // Rule 3: Admin validation
         else if (senderRole === 'admin') {
-            // Admin can message Supervisors OR Students (as replies/support)
+            // Admin can message Supervisors, Students, OR Guests (as replies/support)
             console.log(`[ADMIN_MSG] Admin ${senderId} messaging ${receiver.role} ${finalReceiverId}`);
         }
 
-        const id = 'msg_' + Date.now();
+        const id = 'msg_' + crypto.randomUUID();
         const timestamp = new Date().toISOString();
 
         let expiryDate = null;
         if (attachmentUrl || attachmentType) {
             const date = new Date();
-            date.setDate(date.getDate() + 7);
+            // Technical Support files expire in 14 days, regular attachments in 7
+            if (isComplaint === 1 || isComplaint === true) {
+                date.setDate(date.getDate() + 14);
+            } else {
+                date.setDate(date.getDate() + 7);
+            }
             expiryDate = date.toISOString();
         }
 
@@ -269,9 +465,79 @@ router.post('/messages', (req, res) => {
     }
 });
 
+// Broadcast Message (Only for admin_manager)
+router.post('/broadcast', (req, res) => {
+    const { content, attachmentUrl, attachmentType, attachmentName } = req.body;
+    const senderId = req.user.id;
+
+    if (senderId !== 'admin_manager') {
+        return res.status(403).json({ error: 'غير مصرح لك بإرسال تعميمات. هذه الصلاحية لمدير الدعم الفني فقط.' });
+    }
+
+    try {
+        // Get all students
+        const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
+        
+        if (students.length === 0) {
+            return res.json({ success: true, count: 0, message: 'لا يوجد طلاب مسجلين' });
+        }
+
+        const timestamp = new Date().toISOString();
+        let expiryDate = null;
+        
+        if (attachmentUrl || attachmentType) {
+            const date = new Date();
+            date.setDate(date.getDate() + 14); // Keep broadcast attachments for 14 days
+            expiryDate = date.toISOString();
+        }
+
+        const insert = db.prepare(`
+            INSERT INTO messages (id, senderId, receiverId, content, read, timestamp, attachmentUrl, attachmentType, attachmentName, expiryDate, isComplaint)
+            VALUES (@id, @senderId, @receiverId, @content, 0, @timestamp, @attachmentUrl, @attachmentType, @attachmentName, @expiryDate, 0)
+        `);
+
+        // Execute as a transaction for performance
+        const broadcastTx = db.transaction((studentsToMessage) => {
+            let count = 0;
+            for (const student of studentsToMessage) {
+                insert.run({
+                    id: 'msg_' + crypto.randomUUID(),
+                    senderId: 'admin_manager',
+                    receiverId: student.id,
+                    content: content || '',
+                    timestamp,
+                    attachmentUrl: attachmentUrl || null,
+                    attachmentType: attachmentType || null,
+                    attachmentName: attachmentName || null,
+                    expiryDate
+                });
+                count++;
+            }
+            return count;
+        });
+
+        const messagesSent = broadcastTx(students);
+        console.log(`[BROADCAST] admin_manager sent broadcast to ${messagesSent} students.`);
+        
+        res.status(201).json({ success: true, count: messagesSent });
+    } catch (e) {
+        console.error('[BROADCAST_ERROR]:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.put('/messages/:id/read', (req, res) => {
     const { id } = req.params;
     try {
+        // SECURITY: Only allow the recipient to mark a message as read
+        const message = db.prepare('SELECT receiverId FROM messages WHERE id = ?').get(id);
+        if (!message) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+        // Allow admins to mark any message, otherwise only the recipient
+        if (req.user.role !== 'admin' && message.receiverId !== req.user.id) {
+            return res.status(403).json({ error: 'Cannot mark messages that are not yours as read' });
+        }
         db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(id);
         res.json({ success: true });
     } catch (e) {
@@ -293,47 +559,31 @@ router.put('/messages/conversation/:userId/read', (req, res) => {
     }
 });
 
-/**
- * Radical Fix: Server-side Proxy Upload
- * Receives file bytes as application/octet-stream and uploads to R2
- */
-router.post('/upload-proxy', async (req, res) => {
+// Admin ONLY: Delete a specific message
+router.delete('/messages/:id', (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'غير مصرح لك بحذف الرسائل' });
+    }
+    const { id } = req.params;
     try {
-        let fileName = req.query.fileName;
-        let fileType = req.headers['content-type'];
-        let buffer;
-
-        // Support both JSON (Base64) and raw binary
-        if (req.body && req.body.base64Data) {
-            // Case 1: JSON with Base64
-            console.log(`[ProxyUpload] Decoding Base64 for ${req.body.fileName}`);
-            fileName = req.body.fileName || fileName || `upload-${Date.now()}`;
-            fileType = req.body.fileType || fileType || 'application/octet-stream';
-
-            // Remove data:URL prefix if present
-            const base64String = req.body.base64Data.replace(/^data:.*?;base64,/, '');
-            buffer = Buffer.from(base64String, 'base64');
-        } else if (Buffer.isBuffer(req.body) && req.body.length > 0) {
-            // Case 2: Raw binary buffer
-            console.log(`[ProxyUpload] Processing raw binary buffer`);
-            buffer = req.body;
-            fileName = fileName || `upload-${Date.now()}`;
-        } else {
-            return res.status(400).json({ error: 'No file data received. Ensure Content-Type is application/octet-stream for raw, or send JSON with base64Data.' });
-        }
-
-        if (!buffer || buffer.length === 0) {
-            return res.status(400).json({ error: 'Empty file buffer' });
-        }
-
-        console.log(`[ProxyUpload] Received ${buffer.length} bytes for ${fileName} (${fileType})`);
-
-        const publicUrl = await uploadBufferToR2(buffer, fileName, fileType);
-
-        console.log(`[ProxyUpload] Success. URL: ${publicUrl}`);
-        res.json({ publicUrl });
+        db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+        res.json({ success: true });
     } catch (e) {
-        console.error('[ProxyUpload] Failed:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Admin ONLY: Delete an entire conversation with a specific user
+router.delete('/messages/conversation/:userId', (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'غير مصرح لك بحذف المحادثات' });
+    }
+    const { userId: targetId } = req.params;
+    const adminId = req.user.id;
+    try {
+        db.prepare('DELETE FROM messages WHERE (senderId = ? AND receiverId = ?) OR (senderId = ? AND receiverId = ?)').run(adminId, targetId, targetId, adminId);
+        res.json({ success: true });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });

@@ -10,6 +10,7 @@
 
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 const { generateDownloadUrl } = require('../r2.cjs');
@@ -56,7 +57,7 @@ router.post('/library', authenticateToken, requireAdmin, (req, res) => {
     }
 
     try {
-        const id = 'resource_' + Date.now();
+        const id = 'resource_' + crypto.randomUUID();
         db.prepare(`
             INSERT INTO library_resources (id, title, type, url, description, thumbnail, createdAt)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -91,7 +92,7 @@ router.post('/announcements', authenticateToken, requireAdmin, (req, res) => {
     }
 
     try {
-        const id = 'ann_' + Date.now();
+        const id = 'ann_' + crypto.randomUUID();
         const date = new Date().toISOString().split('T')[0];
 
         db.prepare('INSERT INTO announcements (id, title, content, type, date) VALUES (?, ?, ?, ?, ?)')

@@ -346,8 +346,11 @@ const Profile: React.FC = memo(() => {
                 </div>
             </section>
 
-            {/* Stats */}
-            <section
+            {/* Stats & Achievements (Hidden for Admins/Supervisors) */}
+            {authUser?.role !== 'admin' && authUser?.role !== 'supervisor' && (
+                <>
+                    {/* Stats */}
+                    <section
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
                 aria-label="إحصائيات المستخدم"
             >
@@ -365,6 +368,8 @@ const Profile: React.FC = memo(() => {
                     ))}
                 </div>
             </section>
+                </>
+            )}
         </div>
     );
 });

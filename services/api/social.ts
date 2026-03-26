@@ -37,7 +37,37 @@ export const socialApi = {
             },
             body: JSON.stringify({ receiverId, content, attachmentUrl, attachmentType, attachmentName, isComplaint })
         });
-        if (!response.ok) throw new Error('Failed to send message');
+        if (response.status === 401) throw new Error('انتهت صلاحية الجلسة، يرجى تسجيل الخروج ثم تسجيل الدخول مجدداً');
+        if (!response.ok) throw new Error('فشل إرسال الرسالة');
+        return await response.json();
+    },
+
+    markMessagesAsRead: async (senderId: string): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/social/messages/read'), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ senderId })
+        });
+        if (!response.ok) throw new Error('فشل تحديث حالة القراءة');
+        return await response.json();
+    },
+
+    sendBroadcastMessage: async (content: string, attachmentUrl?: string, attachmentType?: string, attachmentName?: string): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/social/broadcast'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content, attachmentUrl, attachmentType, attachmentName })
+        });
+        if (response.status === 401) throw new Error('انتهت صلاحية الجلسة، يرجى تسجيل الخروج ثم تسجيل الدخول مجدداً');
+        if (!response.ok) throw new Error('فشل إرسال التعميم');
         return await response.json();
     },
 
@@ -53,12 +83,13 @@ export const socialApi = {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                receiverId: 'admin_main', // Actual Admin ID in production
+                receiverId: 'admin_manager', // manager@mastaba.com — exclusive support account
                 content,
                 isComplaint: true
             })
         });
-        if (!response.ok) throw new Error('Failed to send complaint');
+        if (response.status === 401) throw new Error('انتهت صلاحية الجلسة، يرجى تسجيل الخروج ثم تسجيل الدخول مجدداً');
+        if (!response.ok) throw new Error('فشل إرسال الشكوى');
         return await response.json();
     },
 
@@ -88,6 +119,39 @@ export const socialApi = {
             return data.count;
         }
         return 0;
+    },
+
+    sendPublicMessage: async (content: string, guestName: string, guestId?: string | null, attachmentUrl?: string | null, attachmentType?: string | null, attachmentName?: string | null): Promise<any> => {
+        const response = await fetch(getApiUrl('/social/public/messages'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, guestName, guestId, attachmentUrl, attachmentType, attachmentName })
+        });
+        if (!response.ok) throw new Error('فشل إرسال الرسالة');
+        return await response.json();
+    },
+
+    getPublicMessages: async (guestId: string): Promise<any[]> => {
+        const response = await fetch(getApiUrl(`/social/public/messages/${guestId}`));
+        return response.ok ? await response.json() : [];
+    },
+
+    deleteMessage: async (messageId: string): Promise<void> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/social/messages/${messageId}`), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to delete message');
+    },
+
+    deleteConversation: async (userId: string): Promise<void> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/social/messages/conversation/${userId}`), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to delete conversation');
     }
 };
 

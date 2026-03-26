@@ -4,7 +4,7 @@
  */
 
 import React, { memo, useCallback, useMemo } from 'react';
-import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, LucideIcon } from 'lucide-react';
+import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, UserPlus, LucideIcon } from 'lucide-react';
 import { UserRole } from '../types';
 import { useLanguage } from './LanguageContext';
 
@@ -24,6 +24,7 @@ interface SidebarProps {
   role: UserRole;
   /** Number of unread messages */
   unreadMessagesCount?: number;
+  pendingStudentsCount?: number;
 }
 
 /**
@@ -100,13 +101,14 @@ NavItem.displayName = 'NavItem';
  * @param props - Sidebar props
  * @returns Sidebar component
  */
-const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPreload, onLogout, role, unreadMessagesCount = 0 }) => {
+const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPreload, onLogout, role, unreadMessagesCount = 0, pendingStudentsCount = 0 }) => {
   const { t, language } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   /** Student navigation menu items */
   const studentItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: t('sidebar.dashboard') },
+    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'courses', icon: BookOpen, label: t('sidebar.myCourses') },
     { id: 'library', icon: GraduationCap, label: t('sidebar.library') },
     { id: 'certificates', icon: Award, label: t('sidebar.certificates') },
@@ -116,13 +118,14 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
     { id: 'favorites', icon: Heart, label: t('sidebar.favorites') },
     { id: 'progress', icon: TrendingUp, label: t('sidebar.progress') },
     { id: 'search', icon: Search, label: t('sidebar.search') },
-    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
   ], [t, unreadMessagesCount]);
 
   /** Admin navigation menu items */
   const adminItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: t('admin.dashboard') },
+    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'students', icon: Users, label: t('admin.students') },
+    { id: 'pending-students', icon: UserPlus, label: 'طلبات الانتساب', badgeCount: pendingStudentsCount },
     { id: 'audio-courses', icon: Mic2, label: t('admin.audioCourses') },
     { id: 'reports', icon: BarChart3, label: t('admin.reports') },
     { id: 'library', label: t('admin.library'), icon: BookOpen },
@@ -130,15 +133,14 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
     { id: 'quizzes', icon: ClipboardList, label: t('admin.quizManagement') },
     { id: 'activity-log', icon: Activity, label: t('admin.activityLog') },
     { id: 'certificates', icon: Award, label: t('admin.certificatesAdmin') },
-    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
-  ], [t, unreadMessagesCount]);
+  ], [t, unreadMessagesCount, pendingStudentsCount]);
 
   /** Supervisor navigation menu items */
   const supervisorItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: 'لوحة المشرف' },
+    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'students', icon: Users, label: 'الطلاب' },
     { id: 'audio-courses', icon: Mic2, label: 'الدورات' },
-    { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'profile', icon: User, label: t('sidebar.profile') },
     { id: 'notifications', icon: Bell, label: t('sidebar.notifications') },
   ], [t, unreadMessagesCount]);
@@ -241,7 +243,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
 
                 {/* Logo Image */}
                 <img
-                  src="https://github.com/NinjaWorld1234/Files/blob/main/Mastaba%20LOGO.png?raw=true"
+                  src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Mastaba%20LOGO.png"
                   alt={t('sidebar.mastaba')}
                   className="relative z-10 w-24 h-24 object-contain group-hover:scale-110 transition-transform duration-500 drop-shadow-2xl"
                   loading="lazy"
@@ -330,7 +332,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
             <div className="w-full h-0.5 bg-current rounded-full" />
             <div className="w-full h-0.5 bg-current rounded-full" />
           </div>
-          <span className="text-[9px] font-medium mt-1">{t('sidebar.more') || 'المزيد'}</span>
+          <span className="text-[9px] font-medium mt-1">{t('sidebar.more') === 'sidebar.more' ? 'المزيد' : t('sidebar.more')}</span>
         </button>
       </div>
 

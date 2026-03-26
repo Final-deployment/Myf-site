@@ -13,15 +13,20 @@ docker stop mastaba-v4-container 2>/dev/null || true
 docker rm mastaba-v4-container 2>/dev/null || true
 
 echo ">>> Removing old Docker image..."
-docker rmi mastaba-v4-image:latest 2>/dev/null || true
+docker rmi mastaba-v4-image 2>/dev/null || true
 
 echo ">>> Building and starting Docker container..."
 docker compose up -d --build
 
 echo ">>> Configuring Nginx..."
-cp nginx_app.conf /etc/nginx/sites-available/scientific-bench
-ln -sf /etc/nginx/sites-available/scientific-bench /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+if [ ! -f /etc/nginx/sites-available/scientific-bench ]; then
+    echo "First time setup: Copying default HTTP Nginx config..."
+    cp nginx_app.conf /etc/nginx/sites-available/scientific-bench
+    ln -sf /etc/nginx/sites-available/scientific-bench /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+else
+    echo "Nginx config already exists. Skipping copy to preserve SSL settings."
+fi
 
 echo ">>> Reloading Nginx..."
 nginx -t && systemctl reload nginx

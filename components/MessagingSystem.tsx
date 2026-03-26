@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User as UserIcon, Loader, RefreshCw, Check, CheckCheck, Menu, X, Search, Mic, Paperclip, File as FileIcon, Image as ImageIcon, Trash2, StopCircle, Bell, Zap } from 'lucide-react';
+import { Send, User as UserIcon, Loader, RefreshCw, Check, CheckCheck, Menu, X, Search, Mic, Paperclip, File as FileIcon, Image as ImageIcon, Trash2, StopCircle, Bell, Zap, MessageSquareOff } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
 import { Message, User } from '../types';
@@ -24,6 +24,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
     const [searchQuery, setSearchQuery] = useState('');
     const [localError, setLocalError] = useState<string | null>(null);
     const [isComplaintMode, setIsComplaintMode] = useState(false);
+    const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [adminUser, setAdminUser] = useState<User | null>(null);
 
     // Attachment State
@@ -46,7 +47,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
 
     useEffect(() => {
         loadData();
-        const interval = setInterval(refreshMessages, 10000);
+        const interval = setInterval(refreshMessages, 5000);
         return () => clearInterval(interval);
     }, []);
 
@@ -116,7 +117,10 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
 
     const refreshMessages = async () => {
         try {
-            const msgs = await api.getMessages();
+            const [msgs, chatUsers] = await Promise.all([
+                api.getMessages(),
+                api.getContacts()
+            ]);
 
             // Check for new messages
             if (msgs.length > messages.length && messages.length > 0) {
@@ -127,10 +131,44 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                         newMsg.content || (newMsg.attachmentType ? 'ملف مرفق' : 'رسالة جديدة'),
                         '/icons/icon-192x192.png'
                     );
+
+                    // --- NEW: Audio/Vibration Ping for admin_manager ---
+                    if (user?.role === 'admin' && user?.id === 'admin_manager') {
+                        // Vibrate (Mobile PWA)
+                        if ('vibrate' in navigator) {
+                            navigator.vibrate([200, 100, 200]);
+                        }
+                        
+                        // Play synthetic ping sound
+                        try {
+                            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                            if (AudioContext) {
+                                const ctx = new AudioContext();
+                                const osc = ctx.createOscillator();
+                                const gain = ctx.createGain();
+                                
+                                osc.type = 'sine';
+                                osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+                                osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1); // Slide up to A6
+                                
+                                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                                
+                                osc.connect(gain);
+                                gain.connect(ctx.destination);
+                                
+                                osc.start();
+                                osc.stop(ctx.currentTime + 0.5);
+                            }
+                        } catch (err) {
+                            console.log('Audio playback prevented by browser policy until user interaction');
+                        }
+                    }
                 }
             }
 
             setMessages(msgs);
+            setStudents(chatUsers);
         } catch (e) {
             // Silent fail
         }
@@ -194,7 +232,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} `;
     };
 
     // --- File Handling ---
@@ -206,7 +244,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
             // Limit to 5MB (5 * 1024 * 1024 bytes)
             const MAX_SIZE = 5 * 1024 * 1024;
             if (file.size > MAX_SIZE) {
-                setLocalError(`نعتذر منك، لا يمكننا إرسال ملفات أكبر من 5 ميجابايت. حجم ملفك الحالي هو ${(file.size / (1024 * 1024)).toFixed(2)} ميجابايت.`);
+                setLocalError(`نعتذر منك، لا يمكننا إرسال ملفات أكبر من 5 ميجابايت.حجم ملفك الحالي هو ${(file.size / (1024 * 1024)).toFixed(2)} ميجابايت.`);
                 if (fileInputRef.current) fileInputRef.current.value = '';
                 return;
             }
@@ -227,7 +265,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
     // --- Sending Logic ---
 
     const sendMessage = async () => {
-        if ((!chatInput.trim() && !attachment) || !selectedUser) return;
+        if ((!chatInput.trim() && !attachment) || (!selectedUser && !isBroadcastMode)) return;
 
         // Admin cannot reply to complaints - REMOVED this restriction to allow admin support
         /*
@@ -239,8 +277,8 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
 
         setSending(true);
         try {
-            if (!selectedUser) throw new Error('يرجى اختيار مستخدم للمراسلة');
-            const receiverId = selectedUser.id;
+            if (!selectedUser && !isBroadcastMode) throw new Error('يرجى اختيار مستخدم للمراسلة أو تفعيل وضع التعميم');
+            
             let attachmentUrl = undefined;
             let attachmentType = undefined;
 
@@ -263,7 +301,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${user?.access_token || localStorage.getItem('token')}`
+                        'Authorization': `Bearer ${user?.access_token || localStorage.getItem('token')} `
                     },
                     body: JSON.stringify({
                         fileName: attachment.name,
@@ -280,19 +318,30 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
             }
 
             // 3. Send Message to Backend
-            const newMsg = await api.sendMessage(
-                receiverId,
-                chatInput,
-                attachmentUrl,
-                attachmentType,
-                attachment?.name,
-                isComplaintMode
-            );
-            setMessages(prev => [...prev, newMsg]);
+            if (isBroadcastMode) {
+                const res = await api.sendBroadcastMessage(
+                    chatInput,
+                    attachmentUrl,
+                    attachmentType,
+                    attachment?.name
+                );
+                toast.success(`تم إرسال التعميم بنجاح لـ ${res.count} طالب`);
+            } else if (selectedUser) {
+                const newMsg = await api.sendMessage(
+                    selectedUser.id,
+                    chatInput,
+                    attachmentUrl,
+                    attachmentType,
+                    attachment?.name,
+                    isComplaintMode
+                );
+                setMessages(prev => [...prev, newMsg]);
+            }
 
             // Reset State
             setChatInput('');
             setIsComplaintMode(false);
+            setIsBroadcastMode(false);
             handleRemoveAttachment();
             scrollToBottom();
 
@@ -324,7 +373,14 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
             }
         }
 
-        if (msg.attachmentType === 'image') {
+        const typeStr = (msg.attachmentType || '').toLowerCase();
+        const urlStr = (msg.attachmentUrl || '').toLowerCase().split('?')[0];
+
+        const isImage = typeStr.startsWith('image/') || typeStr === 'image' || !!urlStr.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
+        const isVideo = typeStr.startsWith('video/') || typeStr === 'video' || !!urlStr.match(/\.(mp4|webm|ogg|mov)$/i);
+        const isAudio = typeStr.startsWith('audio/') || typeStr === 'audio' || !!urlStr.match(/\.(mp3|wav|ogg|m4a|weba|webm)$/i);
+
+        if (isImage) {
             return (
                 <div className="mt-3 group relative">
                     <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl border border-white/10 hover:border-violet-500/50 transition-all shadow-lg">
@@ -337,14 +393,22 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
             );
         }
 
-        if (msg.attachmentType === 'audio') {
+        if (isAudio) {
             return (
                 <div className="mt-3 bg-white/5 rounded-xl border border-white/10 p-3 space-y-2 max-w-[280px]">
                     <div className="flex items-center gap-2 text-[10px] text-violet-300 font-bold mb-1">
                         <Mic className="w-3 h-3" />
                         <span>تسجيل صوتي</span>
                     </div>
-                    <audio controls src={msg.attachmentUrl} className="w-full h-10 custom-audio-mini" />
+                    <audio controls src={msg.attachmentUrl} className="w-[240px] h-12" />
+                </div>
+            );
+        }
+
+        if (isVideo) {
+            return (
+                <div className="mt-3">
+                    <video controls src={msg.attachmentUrl} className="w-full max-w-[300px] rounded-xl border border-white/10 shadow-lg" />
                 </div>
             );
         }
@@ -409,11 +473,45 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
         }
     }, [isAdmin, sortedStudents, loading]);
 
+    // Mark messages as read when opening a conversation
+    useEffect(() => {
+        if (selectedUser && user) {
+            const hasUnreadFromSelected = messages.some(m => m.senderId === selectedUser.id && !m.read);
+            if (hasUnreadFromSelected) {
+                api.markMessagesAsRead(selectedUser.id).then(() => {
+                    // Optimistically update local state
+                    setMessages(prev => prev.map(m => 
+                        m.senderId === selectedUser.id && !m.read ? { ...m, read: 1 } : m
+                    ));
+                }).catch(console.error);
+            }
+        }
+    }, [selectedUser, messages, user]);
+
 
     const renderUserItem = (target: User) => {
         const unreadCount = messages.filter(m => m.senderId === target.id && !m.read).length;
-        const lastMsg = messages.filter(m => m.senderId === target.id || m.receiverId === target.id).pop();
+        const totalMessages = messages.filter(m => m.senderId === target.id || m.receiverId === target.id).length;
         const isSelected = selectedUser?.id === target.id;
+
+        // Determine user role label and color
+        let roleLabel = 'مستخدم';
+        let roleColor = 'text-gray-400';
+
+        const targetRole = (target.role || '').toLowerCase();
+        if (targetRole === 'admin') {
+            roleLabel = 'مدير';
+            roleColor = 'text-indigo-400';
+        } else if (targetRole === 'supervisor') {
+            roleLabel = 'مشرف';
+            roleColor = 'text-violet-400';
+        } else if (targetRole === 'student') {
+            roleLabel = 'طالب';
+            roleColor = 'text-teal-400';
+        } else if (targetRole === 'guest' || String(target.id).startsWith('guest_')) {
+            roleLabel = 'زائر';
+            roleColor = 'text-orange-400';
+        }
 
         return (
             <button
@@ -430,7 +528,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                         }
                     }
                 }}
-                className={`w-full p-3 rounded-lg flex items-center gap-3 transition-all duration-200 border ${isSelected ? 'bg-violet-600/20 border-violet-500/40 shadow-[0_0_15px_rgba(139,92,246,0.1)]' : 'border-transparent hover:bg-white/5 hover:border-white/5'}`}
+                className={`w-full p-3 rounded-lg flex items-center gap-3 transition-all duration-200 border ${isSelected ? 'bg-violet-600/20 border-violet-500/40 shadow-[0_0_15px_rgba(139,92,246,0.1)]' : 'border-transparent hover:bg-white/5 hover:border-white/5'} `}
             >
                 <div className="relative">
                     {target.avatar ? (
@@ -446,26 +544,30 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                         </div>
                     )}
                 </div>
-                <div className="flex-1 text-right min-w-0">
+                <div className="flex-1 text-right min-w-0 flex flex-col justify-center">
                     <div className="flex justify-between items-center mb-0.5">
-                        <h4 className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                        <h4 className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-gray-300'} `}>
                             {target.name}
                         </h4>
-                        {lastMsg && <span className="text-[9px] text-gray-600">{new Date(lastMsg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>}
+                        {/* Total messages counter instead of time */}
+                        <div className="flex items-center gap-1.5 ml-1">
+                            {totalMessages > 0 && unreadCount > 0 && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${isSelected ? 'bg-violet-500/30 text-violet-200' : 'bg-white/10 text-gray-400'}`}>
+                                    {totalMessages} رسالة
+                                </span>
+                            )}
+                        </div>
                     </div>
-                    {lastMsg && (
-                        <p className={`text-[10px] truncate mt-1 flex items-center gap-1 ${unreadCount > 0 ? 'text-white font-bold' : 'text-gray-500'}`}>
-                            {lastMsg.senderId === user?.id ? 'أنت: ' : ''}
-                            {lastMsg.attachmentType === 'audio' ? '🎤 تسجيل صوتي' :
-                                lastMsg.attachmentType === 'image' ? '📷 صورة' :
-                                    lastMsg.attachmentType ? '📎 ملف' :
-                                        lastMsg.content}
-                        </p>
-                    )}
+                    {/* User Role instead of message preview */}
+                    <p className={`text-[10px] font-medium truncate mt-0.5 ${roleColor} `}>
+                        {roleLabel}
+                    </p>
                 </div>
             </button>
         );
     };
+
+    const hasMessages = (targetId: string | number) => messages.some(m => m.senderId === targetId || m.receiverId === targetId);
 
     const renderSidebarContent = () => (
         <>
@@ -489,19 +591,37 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                     />
                     <Search className="absolute right-2.5 top-2.5 w-4 h-4 text-gray-500" />
                 </div>
+                {/* Broadcast Button for Tech Support Manager */}
+                {isAdmin && user?.id === 'admin_manager' && (
+                    <button
+                        onClick={() => {
+                            setSelectedUser(null);
+                            setIsBroadcastMode(true);
+                            setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                            isBroadcastMode
+                                ? 'bg-violet-600 text-white shadow-[0_0_20px_rgba(139,92,246,0.4)]'
+                                : 'bg-violet-600/20 text-violet-300 border border-violet-500/30 hover:bg-violet-600/40'
+                        }`}
+                    >
+                        <Zap className="w-4 h-4" />
+                        إرسال تعميم (لكل الطلاب)
+                    </button>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
                 {isSupervisor && (
                     <>
                         {/* Admin Section */}
-                        {students.some(u => (u.role || '').toLowerCase() === 'admin') && (
+                        {students.some(u => (u.role || '').toLowerCase() === 'admin' && hasMessages(u.id)) && (
                             <div className="space-y-1">
                                 <div className="px-3 py-1 text-[10px] font-bold text-violet-400 uppercase tracking-wider flex items-center gap-2">
                                     <div className="w-1 h-3 bg-violet-500 rounded-full" />
                                     مدير النظام
                                 </div>
-                                {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'admin').map(admin => renderUserItem(admin))}
+                                {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'admin' && hasMessages(u.id)).map(admin => renderUserItem(admin))}
                             </div>
                         )}
 
@@ -532,8 +652,16 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                             sortedStudents.filter(u => (u.role || '').toLowerCase() === 'supervisor').map(supervisor => renderUserItem(supervisor))
                         )}
 
-                        {/* Admin for complaints button is handled separately in the UI, 
-                        but we show them in the list too if they exist */}
+                        {/* Admins for complaints */}
+                        {sortedStudents.some(u => (u.role || '').toLowerCase() === 'admin' && hasMessages(u.id)) && (
+                            <div className="mt-4 space-y-1">
+                                <div className="px-3 py-1 text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                                    <div className="w-1 h-3 bg-indigo-500 rounded-full" />
+                                    الإدارة (للدعم والشكاوى)
+                                </div>
+                                {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'admin' && hasMessages(u.id)).map(admin => renderUserItem(admin))}
+                            </div>
+                        )}
                     </div>
                 )}
                 {isAdmin && (
@@ -543,17 +671,27 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                             القوائم
                         </div>
 
-                        {/* Supervisors */}
-                        <div className="mb-2">
-                            <p className="px-3 text-[9px] text-gray-500 mb-1">المشرفون</p>
-                            {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'supervisor').map(supervisor => renderUserItem(supervisor))}
-                        </div>
+                        {/* Admins */}
+                        {sortedStudents.some(u => (u.role || '').toLowerCase() === 'admin' && u.id !== user?.id && hasMessages(u.id)) && (
+                            <div className="mb-2">
+                                <p className="px-3 text-[9px] text-indigo-400 mb-1">المدراء</p>
+                                {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'admin' && u.id !== user?.id && hasMessages(u.id)).map(admin => renderUserItem(admin))}
+                            </div>
+                        )}
 
-                        {/* Complaint Students */}
-                        {sortedStudents.some(u => (u.role || '').toLowerCase() === 'student') && (
+                        {/* Supervisors */}
+                        {sortedStudents.some(u => (u.role || '').toLowerCase() === 'supervisor' && hasMessages(u.id)) && (
+                            <div className="mb-2">
+                                <p className="px-3 text-[9px] text-gray-500 mb-1">المشرفون</p>
+                                {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'supervisor' && hasMessages(u.id)).map(supervisor => renderUserItem(supervisor))}
+                            </div>
+                        )}
+
+                        {/* Complaint Students & Guests */}
+                        {sortedStudents.some(u => ['student', 'guest'].includes((u.role || '').toLowerCase())) && (
                             <div>
-                                <p className="px-3 text-[9px] text-red-400 mb-1">شكاوى الطلاب</p>
-                                {sortedStudents.filter(u => (u.role || '').toLowerCase() === 'student').map(student => renderUserItem(student))}
+                                <p className="px-3 text-[9px] text-red-400 mb-1">شكاوى الطلاب والزوار</p>
+                                {sortedStudents.filter(u => ['student', 'guest'].includes((u.role || '').toLowerCase())).map(user => renderUserItem(user))}
                             </div>
                         )}
                     </div>
@@ -572,15 +710,15 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                 {(isAdmin || isSupervisor || isStudent) && (
                     <>
                         {/* 1. Desktop Sidebar (Always Visible on MD+) */}
-                        <div className="hidden md:flex flex-col w-80 shrink-0 bg-black/20 border-l border-white/5 relative z-20 min-w-[20rem]">
+                        <div className="hidden md:flex flex-col w-64 shrink-0 bg-black/20 border-l border-white/5 relative z-20 min-w-[16rem]">
                             {renderSidebarContent()}
                         </div>
 
                         {/* 2. Mobile Sidebar (Drawer) */}
                         <div className={`
-                            md:hidden fixed inset-y-0 right-0 z-50 w-80 bg-black/95 transition-transform duration-300 border-l border-white/5 flex flex-col
-                            ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
-                        `}>
+md:hidden fixed inset-y-0 right-0 z-50 w-64 bg-black/95 transition-transform duration-300 border-l border-white/5 flex flex-col
+${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
+`}>
                             {renderSidebarContent()}
                         </div>
                     </>
@@ -613,11 +751,33 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                                         </div>
                                     </div>
                                 </div>
+                            ) : isBroadcastMode ? (
+                                <h3 className="font-bold text-violet-400">إرسال تعميم لكل الطلاب</h3>
                             ) : (
                                 <h3 className="font-bold text-gray-400">اختر محادثة</h3>
                             )}
                         </div>
 
+                        {/* Conversation Actions (Admin Only) */}
+                        {isAdmin && selectedUser && (
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm('هل أنت متأكد من مسح جميع رسائل هذه المحادثة بالكامل؟')) return;
+                                    try {
+                                        await api.deleteConversation(selectedUser.id);
+                                        toast.success('تم حذف جميع الرسائل مع ' + selectedUser.name);
+                                        refreshMessages();
+                                    } catch (e) {
+                                        toast.error('فصل في مسح المحادثة');
+                                    }
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors text-xs font-bold"
+                                title="مسح المحادثة بالكامل"
+                            >
+                                <MessageSquareOff className="w-4 h-4" />
+                                <span className="hidden md:inline">مسح المحادثة بالكامل</span>
+                            </button>
+                        )}
                     </div>
 
                     {/* Messages List */}
@@ -625,30 +785,93 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                         {getConversationMessages().map((msg, idx) => {
                             const isMe = msg.senderId === user?.id;
                             return (
-                                <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[75%] p-4 rounded-2xl relative group ${isMe ? 'bg-violet-600 text-white rounded-tl-sm' : 'bg-white/10 text-gray-200 rounded-tr-sm'}`}>
+                                <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg items-start gap-2`}>
+
+                                    {/* Admin Delete Message Button (visible on hover) - Left side for others */}
+                                    {isAdmin && !isMe && (
+                                        <button
+                                            onClick={async () => {
+                                                if (!window.confirm('هل تريد مسح هذه الرسالة فعلا؟')) return;
+                                                try {
+                                                    await api.deleteMessage(msg.id);
+                                                    refreshMessages();
+                                                } catch (e) {
+                                                    toast.error('فشل في حذف الرسالة');
+                                                }
+                                            }}
+                                            className={`mt-2 opacity-0 group-hover/msg:opacity-100 transition-opacity p-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-full shrink-0`}
+                                            title="حذف الرسالة"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+
+                                    <div className={`max-w-[75%] p-4 rounded-2xl relative group ${isMe ? 'bg-violet-600 text-white rounded-tl-sm' : 'bg-white/10 text-gray-200 rounded-tr-sm'} shadow-md`}>
                                         {msg.isComplaint === 1 && (
                                             <div className="mb-2 flex items-center gap-1.5 px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md border border-red-500/30 w-fit">
                                                 <Bell className="w-3 h-3" />
                                                 <span className="text-[10px] font-bold uppercase tracking-wider">شكوى / مقترح</span>
                                             </div>
                                         )}
-                                        {msg.content && <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>}
+                                        {msg.content && <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>}
                                         {renderAttachment(msg)}
-                                        <div className={`flex items-center gap-1 mt-1 text-[10px] ${isMe ? 'text-violet-200' : 'text-gray-500'}`}>
-                                            <span>{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
-                                            {isMe && (msg.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
+                                        <div className={`flex items-center gap-1 mt-2 text-[10px] ${isMe ? 'text-violet-200' : 'text-gray-500'}`}>
+                                            <span dir="ltr">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
+                                            {isMe && (
+                                                msg.read ? 
+                                                <CheckCheck className="w-4 h-4 text-sky-400 drop-shadow-[0_0_2px_rgba(56,189,248,0.5)]" /> : 
+                                                <Check className="w-4 h-4" opacity={0.7} />
+                                            )}
                                         </div>
                                     </div>
+
+                                    {/* Admin Delete Message Button (visible on hover) - Right side for me */}
+                                    {isAdmin && isMe && (
+                                        <button
+                                            onClick={async () => {
+                                                if (!window.confirm('هل تريد مسح هذه الرسالة فعلا؟')) return;
+                                                try {
+                                                    await api.deleteMessage(msg.id);
+                                                    refreshMessages();
+                                                } catch (e) {
+                                                    toast.error('فشل في حذف الرسالة');
+                                                }
+                                            }}
+                                            className={`mt-2 opacity-0 group-hover/msg:opacity-100 transition-opacity p-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-full shrink-0`}
+                                            title="حذف الرسالة"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })}
                         <div ref={messagesEndRef} />
                     </div>
 
+                    {/* Broadcast Welcome Screen (Tech Support Only) */}
+                    {!selectedUser && isAdmin && user?.id === 'admin_manager' && !isBroadcastMode && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-black/60 backdrop-blur-sm z-10">
+                            <div className="w-20 h-20 bg-violet-600/20 rounded-full flex items-center justify-center mb-6 border border-violet-500/30">
+                                <Zap className="w-10 h-10 text-violet-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">الدعم الفني والشكاوى</h2>
+                            <p className="text-gray-400 max-w-md mb-8">
+                                من هنا يمكنك استقبال شكاوى واقتراحات الطلاب والرد عليها مباشرة. يمكنك أيضاً إرسال تعميم هام يصل لجميع الطلاب في وقت واحد.
+                            </p>
+                            <button
+                                onClick={() => setIsBroadcastMode(true)}
+                                className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] flex items-center gap-2"
+                            >
+                                <Zap className="w-5 h-5 fill-current" />
+                                إرسال تعميم (لكل الطلاب)
+                            </button>
+                        </div>
+                    )}
+
                     {/* Input Area */}
-                    {(selectedUser || (!isAdmin && !isSupervisor)) && (
-                        <div className="p-4 bg-black/40 border-t border-white/5 backdrop-blur-sm relative">
+                    {(selectedUser || (!isAdmin && !isSupervisor) || isBroadcastMode) && (
+                        <div className="p-4 bg-black/40 border-t border-white/5 backdrop-blur-sm relative z-20">
                             {/* Admin can now reply to all messages including complaints */}
                             <>
                                 {/* Complaint indicator for students */}
@@ -663,6 +886,38 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
                                             const supervisor = students.find(u => u.id === sId);
                                             if (supervisor) setSelectedUser(supervisor);
                                         }} className="mr-auto text-white underline">إلغاء</button>
+                                    </div>
+                                )}
+                                
+                                {/* Broadcast indicator for Admin Manager */}
+                                {isBroadcastMode && (
+                                    <div className="mb-3 p-2 bg-violet-600/20 border border-violet-500/40 rounded-lg text-violet-300 flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.1)]">
+                                        <div className="p-1.5 bg-violet-500/30 rounded-md">
+                                            <Zap className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                                            <span className="text-sm font-bold tracking-wide">وضع إرسال التعميم الشامل</span>
+                                            <p className="text-[10px] sm:text-xs text-white/80 leading-relaxed font-medium">الرسالة أو المرفق سَيُرسَل <b>كإشعار جديد وفردي</b> إلى جميع حسابات الطلاب المسجلين فوراً. يُرجى مراجعة المحتوى قبل الإرسال.</p>
+                                        </div>
+                                        <button onClick={() => {
+                                            setIsBroadcastMode(false);
+                                        }} className="mr-auto px-3 py-1.5 bg-black/40 hover:bg-black/60 rounded-lg text-white/80 hover:text-white transition-colors text-xs font-bold border border-white/10 shrink-0">إلغاء</button>
+                                    </div>
+                                )}
+                                
+                                {/* Broadcast indicator for Admin Manager */}
+                                {isBroadcastMode && (
+                                    <div className="mb-3 p-2 bg-violet-600/20 border border-violet-500/40 rounded-lg text-violet-300 flex items-center gap-2 shadow-[0_0_15px_rgba(139,92,246,0.1)]">
+                                        <div className="p-1.5 bg-violet-500/30 rounded-md">
+                                            <Zap className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                                            <span className="text-sm font-bold tracking-wide">وضع إرسال التعميم الشامل</span>
+                                            <p className="text-[10px] sm:text-xs text-white/80 leading-relaxed font-medium">الرسالة أو المرفق سَيُرسَل <b>كإشعار جديد وفردي</b> إلى جميع حسابات الطلاب المسجلين فوراً. يُرجى مراجعة المحتوى قبل الإرسال.</p>
+                                        </div>
+                                        <button onClick={() => {
+                                            setIsBroadcastMode(false);
+                                        }} className="mr-auto px-3 py-1.5 bg-black/40 hover:bg-black/60 rounded-lg text-white/80 hover:text-white transition-colors text-xs font-bold border border-white/10 shrink-0">إلغاء</button>
                                     </div>
                                 )}
                                 {/* 0. Local Error Message (Inline) */}
@@ -711,7 +966,7 @@ const MessagingSystem: React.FC<MessagingSystemProps> = ({ initialSelectedUserId
 
                                             {/* Audio Preview Player */}
                                             {audioPreviewUrl && (
-                                                <audio controls src={audioPreviewUrl} className="h-8 w-32 md:w-48 ml-2 custom-audio-mini" />
+                                                <audio controls src={audioPreviewUrl} className="h-12 w-48 ml-2 mt-1" />
                                             )}
 
                                             <button onClick={handleRemoveAttachment} className="p-2 transition-colors text-gray-400 hover:text-red-400 bg-white/5 hover:bg-white/10 rounded-lg" title="إزالة">

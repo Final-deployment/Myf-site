@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { db } = require('../database.cjs');
-const { uploadBufferToR2 } = require('../r2.cjs');
+const { uploadBufferToR2, listFiles, deleteFile } = require('../r2.cjs');
 
 /**
  * Performs a database backup and optionally uploads it to cloud
@@ -50,6 +50,34 @@ async function performBackup(toCloud = false) {
 }
 
 /**
+ * Cleans up old cloud backups based on the retention days setting
+ * @param {number} retentionDays 
+ */
+async function cleanupOldBackups(retentionDays) {
+    if (!retentionDays || retentionDays <= 0) return;
+    try {
+        console.log(`[BackupService] Checking for backups older than ${retentionDays} days...`);
+        const { files } = await listFiles('backups/');
+
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+        let deletedCount = 0;
+        for (const file of files) {
+            const fileDate = new Date(file.lastModified);
+            if (fileDate < cutoffDate) {
+                console.log(`[BackupService] Deleting old backup: ${file.name}`);
+                await deleteFile(file.id);
+                deletedCount++;
+            }
+        }
+        console.log(`[BackupService] Cleanup complete. Deleted ${deletedCount} old backups.`);
+    } catch (e) {
+        console.error('[BackupService] Cleanup error:', e.message);
+    }
+}
+
+/**
  * Runs the daily backup task if enabled
  */
 async function startBackupScheduler() {
@@ -58,18 +86,17 @@ async function startBackupScheduler() {
     // Check every hour
     setInterval(async () => {
         const now = new Date();
-        // Run at 3:XX AM
-        if (now.getHours() === 3) {
+        // Run 4 times a day (every 6 hours: 0, 6, 12, 18)
+        if (now.getHours() % 6 === 0) {
             try {
-                // Check if auto-backup is enabled in DB
-                const setting = db.prepare('SELECT value FROM system_settings WHERE key = "auto_backup_enabled"').get();
-                if (setting && setting.value === '1') {
-                    const cloudSetting = db.prepare('SELECT value FROM system_settings WHERE key = "cloud_backup_enabled"').get();
-                    const toCloud = cloudSetting && cloudSetting.value === '1';
-
-                    console.log('[BackupService] Triggering automatic daily backup...');
-                    await performBackup(toCloud);
-                }
+                console.log(`[BackupService] Triggering automatic backup (Hour: ${now.getHours()})...`);
+                
+                // Forced by user requirements
+                const toCloud = true;
+                const retentionDays = 60; // 2 months
+                
+                await performBackup(toCloud);
+                await cleanupOldBackups(retentionDays);
             } catch (e) {
                 console.error('[BackupService] Scheduler error:', e.message);
             }

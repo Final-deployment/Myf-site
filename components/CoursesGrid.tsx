@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Course, CourseFolder } from '../types';
 import { api } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
-import { Folder, ChevronRight, Plus, X, Image as ImageIcon, LayoutGrid, ArrowRight, Lock, Book } from 'lucide-react';
+import { Folder, ChevronRight, Plus, X, Image as ImageIcon, LayoutGrid, ArrowRight, Lock, Book, Award } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { QuizResult } from '../types';
 
 interface CoursesGridProps {
     onPlayCourse: (course: Course) => void;
@@ -18,6 +19,8 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
     const [enrollingId, setEnrollingId] = useState<string | null>(null);
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
+    const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
+    const [quizzes, setQuizzes] = useState<any[]>([]);
 
     // Add Folder Form State
     const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
@@ -35,6 +38,18 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                 setCourses(sorted);
             }
             if (Array.isArray(foldersData)) setFolders(foldersData);
+
+            // Fetch quiz results and quizzes for grade display
+            try {
+                const [resultsData, quizzesData] = await Promise.all([
+                    api.quizResults.get(),
+                    api.getQuizzes()
+                ]);
+                setQuizResults(resultsData || []);
+                setQuizzes(quizzesData || []);
+            } catch (e) {
+                console.error('Failed to load quiz data:', e);
+            }
 
         } catch (error) {
             console.error("Failed to load data", error);
@@ -234,12 +249,15 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         <th className="px-4 py-3 font-bold text-center">عدد المحاضرات</th>
                                         <th className="px-4 py-3 font-bold text-center">ساعات المادة</th>
                                         <th className="px-4 py-3 font-bold text-center">وقت الدراسة المتاح</th>
-                                        <th className="px-4 py-3 rounded-tl-lg font-bold text-center">الحالة</th>
+                                        <th className="px-4 py-3 font-bold text-center">الحالة</th>
+                                        <th className="px-4 py-3 rounded-tl-lg font-bold text-center">العلامة</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {visibleCourses.map((course, idx) => {
                                         const isEnrolled = (course as any).isEnrolled;
+                                        const isExempt = user?.role === 'admin' || user?.role === 'supervisor';
+                                        const effectivelyLocked = course.isLocked && !isExempt;
                                         return (
                                             <tr key={course.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                                 <td className="px-4 py-3 font-bold text-white flex items-center gap-2">
@@ -251,12 +269,35 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                                 <td className="px-4 py-3 text-center text-amber-400 font-bold">{(course as any).daysAvailable || 30} يوم</td>
                                                 <td className="px-4 py-3 text-center">
                                                     {isEnrolled ? (
-                                                        <span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md text-xs font-bold inline-block">نشط ({course.progress || 0}%)</span>
-                                                    ) : (course as any).isLocked ? (
+                                                        course.progress >= 100 ? (
+                                                            <span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1">✓ منتهية</span>
+                                                        ) : (
+                                                            <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md text-xs font-bold inline-block">نشطة ({course.progress || 0}%)</span>
+                                                        )
+                                                    ) : effectivelyLocked ? (
                                                         <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded-md text-xs font-bold flex items-center justify-center gap-1 w-max mx-auto"><Lock className="w-3 h-3" /> مغلق</span>
                                                     ) : (
-                                                        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md text-xs font-bold inline-block">متاح للتسجيل</span>
+                                                        <span className="bg-amber-500/20 text-amber-400 px-2 py-1 rounded-md text-xs font-bold inline-block">متاح للتسجيل</span>
                                                     )}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {(() => {
+                                                        const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
+                                                        if (courseQuizzes.length === 0) return <span className="text-gray-600 text-xs">لا يوجد</span>;
+                                                        // Get the latest result for each quiz of this course
+                                                        const courseResults = quizResults.filter(r => courseQuizzes.some(q => q.id === r.quizId));
+                                                        if (courseResults.length === 0) return <span className="text-gray-500 text-xs">لم يُقدّم</span>;
+                                                        // Get the latest result (last one)
+                                                        const latest = courseResults[courseResults.length - 1];
+                                                        const pct = latest.percentage;
+                                                        const passed = pct >= (courseQuizzes[0]?.passingScore || 70);
+                                                        return (
+                                                            <span className={`px-2 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1 ${passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                                <Award className="w-3 h-3" />
+                                                                {pct}%
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </td>
                                             </tr>
                                         );
@@ -287,6 +328,32 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                             {visibleCourses.reduce((sum, c) => sum + ((c as any).daysAvailable || 30), 0)} يوم
                                         </td>
                                         <td className="px-4 py-4 rounded-bl-lg"></td>
+                                        <td className="px-4 py-4 text-center">
+                                            {/* GPA Calculation */}
+                                            {(() => {
+                                                const gradedCourses = visibleCourses.filter(c => {
+                                                    const cq = quizzes.filter(q => q.courseId === c.id);
+                                                    if (cq.length === 0) return false;
+                                                    return quizResults.some(r => cq.some(q => q.id === r.quizId));
+                                                });
+                                                if (gradedCourses.length === 0) return <span className="text-gray-600 text-xs">—</span>;
+                                                const totalPct = gradedCourses.reduce((sum, c) => {
+                                                    const cq = quizzes.filter(q => q.courseId === c.id);
+                                                    const cr = quizResults.filter(r => cq.some(q => q.id === r.quizId));
+                                                    const latest = cr[cr.length - 1];
+                                                    return sum + (latest?.percentage || 0);
+                                                }, 0);
+                                                const gpa = Math.round(totalPct / gradedCourses.length);
+                                                return (
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <span className={`text-xl font-bold px-3 py-1 rounded-lg ${gpa >= 80 ? 'bg-emerald-500/20 text-emerald-400' : gpa >= 60 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                            {gpa}%
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-500">المعدل العام</span>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -297,31 +364,44 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {visibleCourses.map(course => {
                             const isEnrolled = (course as any).isEnrolled;
-                            const effectivelyLocked = course.isLocked && !(['admin', 'supervisor'].includes((course as any).__userRole || ''));
+                            const isExempt = user?.role === 'admin' || user?.role === 'supervisor';
+                            const effectivelyLocked = course.isLocked && !isExempt;
                             return (
                                 <div
                                     key={course.id}
-                                    className={`glass-panel p-0 rounded-2xl overflow-hidden transition-all duration-500 border border-white/5 ${course.isLocked ? 'border-red-500/20 opacity-80' : isEnrolled ? 'border-emerald-500/30 bg-emerald-500/5' : 'hover:border-white/20'}`}
+                                    className={`glass-panel p-0 rounded-2xl overflow-hidden transition-all duration-500 border border-white/5 ${effectivelyLocked ? 'border-red-500/20 opacity-80' : isEnrolled ? 'border-emerald-500/30 bg-emerald-500/5' : 'hover:border-white/20'}`}
                                 >
                                     <div
-                                        className={`h-48 relative group ${course.isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                        onClick={() => {
-                                            if (course.isLocked) return;
+                                        className={`h-48 relative group ${effectivelyLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                        onClick={async () => {
+                                            if (effectivelyLocked) {
+                                                alert(`هذا المساق مغلق. ${(course as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+                                                return;
+                                            }
                                             if (isEnrolled) {
                                                 onPlayCourse(course);
                                             } else {
-                                                handleEnroll(course.id);
+                                                // Auto-enroll and open
+                                                try {
+                                                    await api.enroll(course.id);
+                                                    const updatedCourses = await api.getCourses();
+                                                    const updated = updatedCourses.find((c: any) => String(c.id) === String(course.id));
+                                                    if (updated) onPlayCourse(updated);
+                                                    else onPlayCourse(course);
+                                                } catch (err: any) {
+                                                    alert(err.message || 'فشل التسجيل في الدورة');
+                                                }
                                             }
                                         }}
                                     >
                                         <img
                                             src={course.thumbnail}
-                                            className={`w-full h-full object-cover transition-all duration-700 ${course.isLocked ? 'grayscale opacity-50' : 'group-hover:scale-105'}`}
+                                            className={`w-full h-full object-cover transition-all duration-700 ${effectivelyLocked ? 'grayscale opacity-50' : 'group-hover:scale-105'}`}
                                             alt={course.title}
                                         />
                                         <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all" />
 
-                                        {course.isLocked ? (
+                                        {effectivelyLocked ? (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
                                                 <div className="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-md border border-white/20">
                                                     <Lock className="w-6 h-6 text-white/50" />
@@ -353,7 +433,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         <h3 className="font-bold text-lg text-white mb-1 leading-tight">{course.title}</h3>
                                         <p className="text-xs text-gray-400 mb-4">{course.instructor}</p>
 
-                                        {course.isLocked ? (
+                                        {effectivelyLocked ? (
                                             <div className="space-y-2">
                                                 <button
                                                     disabled
@@ -403,7 +483,20 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                             </button>
                                         ) : (
                                             <button
-                                                onClick={() => handleEnroll(course.id)}
+                                                onClick={async () => {
+                                                    setEnrollingId(course.id);
+                                                    try {
+                                                        await api.enroll(course.id);
+                                                        const updatedCourses = await api.getCourses();
+                                                        const updated = updatedCourses.find((c: any) => String(c.id) === String(course.id));
+                                                        if (updated) onPlayCourse(updated);
+                                                        else onPlayCourse(course);
+                                                    } catch (err: any) {
+                                                        alert(err.message || 'فشل التسجيل في الدورة');
+                                                    } finally {
+                                                        setEnrollingId(null);
+                                                    }
+                                                }}
                                                 className="w-full py-4 bg-white/5 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-xl font-bold text-sm transition-all border border-white/10 hover:border-emerald-500 flex items-center justify-center gap-2"
                                             >
                                                 تسجيل مجاني

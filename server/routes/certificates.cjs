@@ -9,6 +9,7 @@
 
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 
@@ -74,7 +75,7 @@ router.post('/issue', authenticateToken, requireAdmin, (req, res) => {
         const dbUserId = isManual ? 'manual_recipient' : userId;
 
         const cert = {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             user_id: dbUserId,
             course_id: courseId || 'manual',
             course_title: courseTitle,
@@ -82,7 +83,7 @@ router.post('/issue', authenticateToken, requireAdmin, (req, res) => {
             user_name: studentName,
             issue_date: new Date().toISOString().split('T')[0],
             grade: grade || 'Excellent',
-            certificate_code: `MANUAL-${Date.now()}`
+            certificate_code: `MANUAL-${crypto.randomUUID().slice(0, 8)}`
         };
 
 
@@ -127,7 +128,7 @@ router.post('/', authenticateToken, (req, res) => {
         const userRecord = db.prepare('SELECT name FROM users WHERE id = ?').get(user.id);
 
         const cert = {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             user_id: user.id,
             course_id: courseId,
             course_title: course.title,
@@ -135,7 +136,7 @@ router.post('/', authenticateToken, (req, res) => {
             user_name: userRecord?.name || user.name || user.email,
             issue_date: new Date().toISOString().split('T')[0],
             grade: 'Excellent',
-            certificate_code: `CERT-${Date.now()}`
+            certificate_code: `CERT-${crypto.randomUUID().slice(0, 8)}`
         };
 
         db.prepare(`
@@ -188,7 +189,7 @@ router.post('/master', authenticateToken, (req, res) => {
         const userRecord = db.prepare('SELECT name FROM users WHERE id = ?').get(user.id);
 
         const cert = {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             user_id: user.id,
             course_id: 'MASTER_CERT',
             course_title: 'الشهادة الجامعية الشاملة',
@@ -196,7 +197,7 @@ router.post('/master', authenticateToken, (req, res) => {
             user_name: userRecord?.name || user.name || user.email,
             issue_date: new Date().toISOString().split('T')[0],
             grade: 'Distinction',
-            certificate_code: `MASTER-${Date.now()}`
+            certificate_code: `MASTER-${crypto.randomUUID().slice(0, 8)}`
         };
 
         db.prepare(`

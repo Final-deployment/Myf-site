@@ -19,10 +19,10 @@ export interface AuthError extends ApiError {
 
 export const getAuthToken = (): string | undefined => {
     try {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
         if (token) return token;
 
-        const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+        const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser') || sessionStorage.getItem(STORAGE_PREFIX + 'currentUser');
         const user = stored ? JSON.parse(stored) : null;
         return user?.access_token || undefined;
     } catch {
@@ -31,12 +31,12 @@ export const getAuthToken = (): string | undefined => {
 };
 
 export const authApi = {
-    login: async (email: string, password: string): Promise<User | null> => {
+    login: async (email: string, password: string, rememberMe: boolean = false): Promise<User | null> => {
         try {
             const response = await fetch(getApiUrl('/login'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
+                body: JSON.stringify({ email, password, rememberMe })
             });
 
             if (!response.ok) {
@@ -47,6 +47,14 @@ export const authApi = {
                         messageAr: errorData.errorAr,
                         needsVerification: true,
                         email: email
+                    };
+                    throw authError;
+                }
+                if (errorData.pendingApproval) {
+                    const authError: AuthError & { pendingApproval: boolean } = {
+                        message: errorData.error || 'Account pending approval',
+                        messageAr: errorData.errorAr,
+                        pendingApproval: true
                     };
                     throw authError;
                 }
@@ -65,13 +73,15 @@ export const authApi = {
                     supervisorCapacity: data.user.supervisor_capacity || data.user.supervisorCapacity,
                     supervisorPriority: data.user.supervisor_priority || data.user.supervisorPriority,
                 };
-                localStorage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
-                localStorage.setItem('authToken', data.accessToken);
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
+                storage.setItem('authToken', data.accessToken);
                 return user;
             }
             return null;
         } catch (error: unknown) {
             if ((error as AuthError).needsVerification) throw error;
+            if ((error as any).pendingApproval) throw error;
             return null;
         }
     },
@@ -94,7 +104,7 @@ export const authApi = {
         }
     },
 
-    verifyOtp: async (email: string, token: string): Promise<{ success: boolean; user: User | null; error: any | null }> => {
+    verifyOtp: async (email: string, token: string): Promise<{ success: boolean; user: User | null; error: any | null; pendingApproval?: boolean }> => {
         try {
             const response = await fetch(getApiUrl('/verify-email'), {
                 method: 'POST',
@@ -103,6 +113,11 @@ export const authApi = {
             });
             const data = await response.json();
             if (!response.ok) return { success: false, user: null, error: data.errorAr || data.error };
+
+            // If pending approval, do NOT save user data or token — just return success
+            if (data.pendingApproval) {
+                return { success: true, user: null, error: null, pendingApproval: true };
+            }
 
             const user = {
                 ...data.user,
@@ -137,7 +152,7 @@ export const authApi = {
 
     getCurrentUser: (): User | null => {
         try {
-            const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+            const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser') || sessionStorage.getItem(STORAGE_PREFIX + 'currentUser');
             return stored ? JSON.parse(stored) : null;
         } catch {
             return null;
@@ -147,5 +162,7 @@ export const authApi = {
     logout: (): void => {
         localStorage.removeItem(STORAGE_PREFIX + 'currentUser');
         localStorage.removeItem('authToken');
+        sessionStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+        sessionStorage.removeItem('authToken');
     }
 };

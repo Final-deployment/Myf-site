@@ -2,14 +2,15 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
-const { generateOTP, sendVerificationEmail } = require('../email.cjs');
+const { generateOTP, sendVerificationEmail, sendPasswordEmail, sendApprovalNotificationEmail, sendRejectionNotificationEmail } = require('../email.cjs');
 
 const SECRET_KEY = process.env.SECRET_KEY || 'your-default-secret';
 
 // Login
 router.post('/login', (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         if (!user) return res.status(400).json({ error: 'Cannot find user' });
@@ -24,11 +25,20 @@ router.post('/login', (req, res) => {
                     email: user.email
                 });
             }
+            // Check if student is approved by admin
+            if (user.role === 'student' && !user.approved) {
+                return res.status(403).json({
+                    error: 'Account pending approval',
+                    errorAr: 'حسابك بانتظار موافقة المسؤولين. سيتم إبلاغك عبر البريد الإلكتروني عند الموافقة.',
+                    pendingApproval: true
+                });
+            }
             const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = user;
+            const expiresIn = rememberMe ? '30d' : '24h';
             const accessToken = jwt.sign(
                 { id: user.id, email: user.email, role: user.role, emailVerified: !!user.emailVerified },
                 SECRET_KEY,
-                { expiresIn: '24h' }
+                { expiresIn }
             );
             res.json({ accessToken, user: userWithoutPassword });
         } else {
@@ -42,11 +52,17 @@ router.post('/login', (req, res) => {
 // Register
 router.post('/register', async (req, res) => {
     const { email, password, name, nameEn, whatsapp, country, age, gender, educationLevel, role = 'student' } = req.body;
+
+    // Password strength validation
+    if (!password || password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters', errorAr: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
+    }
+
     try {
         const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         if (existing) return res.status(400).json({ error: 'User already exists' });
 
-        const id = 'user_' + Date.now();
+        const id = 'user_' + crypto.randomUUID();
         const hashedPassword = bcrypt.hashSync(password, 10);
         const otp = generateOTP();
         const expiry = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -88,30 +104,11 @@ router.post('/register', async (req, res) => {
         };
 
         db.prepare(`
-            INSERT INTO users (id, email, password, name, nameEn, role, points, level, joinDate, verificationCode, verificationExpiry, emailVerified, whatsapp, country, age, gender, educationLevel, supervisor_id)
-            VALUES (@id, @email, @password, @name, @nameEn, @role, @points, @level, @joinDate, @verificationCode, @verificationExpiry, @emailVerified, @whatsapp, @country, @age, @gender, @educationLevel, @supervisor_id)
+            INSERT INTO users (id, email, password, name, nameEn, role, points, level, joinDate, verificationCode, verificationExpiry, emailVerified, whatsapp, country, age, gender, educationLevel, supervisor_id, approved)
+            VALUES (@id, @email, @password, @name, @nameEn, @role, @points, @level, @joinDate, @verificationCode, @verificationExpiry, @emailVerified, @whatsapp, @country, @age, @gender, @educationLevel, @supervisor_id, 0)
         `).run(newUser);
 
-        // Auto-enroll new students in the foundational course
-        if (role === 'student') {
-            try {
-                const foundationalCourseId = 'course_madkhal';
-                const fCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
-                if (fCourse) {
-                    const date = new Date();
-                    date.setDate(date.getDate() + (fCourse.days_available || 30));
-                    const deadline = date.toISOString();
-                    db.prepare(`
-                        INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
-                        VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
-                    `).run(id, foundationalCourseId, deadline);
-                    db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
-                    console.log(`[AUTH] Auto-enrolled new student ${id} in ${foundationalCourseId}`);
-                }
-            } catch (enrollErr) {
-                console.error('[AUTH] Failed to auto-enroll new student:', enrollErr.message);
-            }
-        }
+        // NOTE: Auto-enrollment is now deferred until admin approval
 
         // Send verification email (non-blocking to prevent SMTP timeout from failing registration)
         sendVerificationEmail(email, name, otp).catch(emailErr => {
@@ -134,6 +131,18 @@ router.post('/verify-email', (req, res) => {
         if (new Date() > new Date(user.verificationExpiry)) return res.status(400).json({ error: 'OTP expired' });
 
         db.prepare('UPDATE users SET emailVerified = 1, verificationCode = NULL, verificationExpiry = NULL WHERE id = ?').run(user.id);
+
+        // If student is not yet approved, do NOT return accessToken - just confirm verification
+        if (user.role === 'student' && !user.approved) {
+            return res.json({
+                success: true,
+                pendingApproval: true,
+                message: 'Email verified. Your account is pending admin approval.',
+                messageAr: 'تم التحقق من بريدك الإلكتروني. حسابك بانتظار موافقة المسؤولين.'
+            });
+        }
+
+        // For approved users or non-students, return full login data
         const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role, emailVerified: true }, SECRET_KEY, { expiresIn: '24h' });
         const { password: _, ...userWithoutPassword } = user;
         res.json({ success: true, user: { ...userWithoutPassword, emailVerified: true }, accessToken });
@@ -161,7 +170,45 @@ router.post('/resend-otp', async (req, res) => {
 });
 
 // Import middleware
-const { authenticateToken } = require('../middleware.cjs');
+const { authenticateToken, requireAdmin } = require('../middleware.cjs');
+
+// Forgot Password (Public)
+router.post('/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required', errorAr: 'يرجى إدخال البريد الإلكتروني' });
+
+    try {
+        const user = db.prepare('SELECT id, name, email, role FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found', errorAr: 'لم يتم العثور على حساب بهذا البريد الإلكتروني' });
+        }
+
+        // Generate a random 8-character password
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        let newPassword = '';
+        for (let i = 0; i < 8; i++) {
+            newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        // Hash and save the new password
+        const hashedPassword = bcrypt.hashSync(newPassword, 10);
+        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
+
+        // Send the new password via email
+        const emailResult = await sendPasswordEmail(user.email, user.name, newPassword);
+
+        if (!emailResult.success) {
+            console.error('[FORGOT_PASSWORD] Failed to send email:', emailResult.error);
+            return res.status(500).json({ error: 'Failed to send email', errorAr: 'فشل في إرسال البريد الإلكتروني. حاول مرة أخرى.' });
+        }
+
+        console.log(`[AUTH] Password reset for user ${user.id} (${user.email})`);
+        res.json({ success: true, message: 'New password sent to your email', messageAr: 'تم إرسال كلمة المرور الجديدة إلى بريدك الإلكتروني' });
+    } catch (e) {
+        console.error('[FORGOT_PASSWORD_ERROR]:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // Change Password
 router.post('/change-password', authenticateToken, (req, res) => {
@@ -170,6 +217,11 @@ router.post('/change-password', authenticateToken, (req, res) => {
 
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: 'Please provide both current and new password' });
+    }
+
+    // Password strength validation
+    if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters', errorAr: 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل' });
     }
 
     try {
@@ -190,6 +242,109 @@ router.post('/change-password', authenticateToken, (req, res) => {
         res.json({ success: true, message: 'Password updated successfully' });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+// ============================================================================
+// Admin: Pending Students Management
+// ============================================================================
+
+// Get all pending (unapproved) students
+router.get('/pending-students', authenticateToken, requireAdmin, (req, res) => {
+    try {
+        const students = db.prepare(`
+            SELECT id, name, nameEn, email, whatsapp, country, age, gender, educationLevel, joinDate, emailVerified, approved
+            FROM users
+            WHERE role = 'student' AND approved = 0 AND emailVerified = 1
+            ORDER BY joinDate DESC
+        `).all();
+        res.json(students);
+    } catch (e) {
+        console.error('[PENDING_STUDENTS_ERROR]:', e.message);
+        res.status(500).json({ error: 'Failed to fetch pending students' });
+    }
+});
+
+// Approve a student
+router.post('/approve-student/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const student = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'student'").get(id);
+        if (!student) return res.status(404).json({ error: 'Student not found' });
+        if (student.approved) return res.status(400).json({ error: 'Student already approved' });
+
+        // Approve the student
+        db.prepare('UPDATE users SET approved = 1 WHERE id = ?').run(id);
+
+        // Auto-enroll in foundational course upon approval
+        try {
+            const foundationalCourseId = 'course_madkhal';
+            const fCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+            if (fCourse) {
+                const date = new Date();
+                date.setDate(date.getDate() + (fCourse.days_available || 30));
+                const deadline = date.toISOString();
+                db.prepare(`
+                    INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
+                    VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
+                `).run(id, foundationalCourseId, deadline);
+                db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
+                console.log(`[ADMIN] Auto-enrolled approved student ${id} in ${foundationalCourseId}`);
+            }
+        } catch (enrollErr) {
+            console.error('[ADMIN] Failed to auto-enroll approved student:', enrollErr.message);
+        }
+
+        // Send approval notification email
+        sendApprovalNotificationEmail(student.email, student.name).catch(err => {
+            console.error('[ADMIN] Failed to send approval email:', err.message);
+        });
+
+        // Log the action
+        try {
+            db.prepare(`
+                INSERT INTO system_activity_logs (id, userId, action, details, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            `).run('log_' + crypto.randomUUID(), req.user.id, 'approve_student', `Approved student: ${student.name} (${student.email})`, new Date().toISOString());
+        } catch (logErr) {}
+
+        console.log(`[ADMIN] Student ${id} approved by admin ${req.user.id}`);
+        res.json({ success: true, message: 'Student approved successfully' });
+    } catch (e) {
+        console.error('[APPROVE_STUDENT_ERROR]:', e.message);
+        res.status(500).json({ error: 'Failed to approve student' });
+    }
+});
+
+// Reject a student
+router.post('/reject-student/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+    try {
+        const student = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'student'").get(id);
+        if (!student) return res.status(404).json({ error: 'Student not found' });
+
+        // Send rejection notification email
+        sendRejectionNotificationEmail(student.email, student.name, reason || '').catch(err => {
+            console.error('[ADMIN] Failed to send rejection email:', err.message);
+        });
+
+        // Delete the student account
+        db.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+        // Log the action
+        try {
+            db.prepare(`
+                INSERT INTO system_activity_logs (id, userId, action, details, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            `).run('log_' + crypto.randomUUID(), req.user.id, 'reject_student', `Rejected student: ${student.name} (${student.email})${reason ? ' - Reason: ' + reason : ''}`, new Date().toISOString());
+        } catch (logErr) {}
+
+        console.log(`[ADMIN] Student ${id} rejected by admin ${req.user.id}`);
+        res.json({ success: true, message: 'Student rejected and removed' });
+    } catch (e) {
+        console.error('[REJECT_STUDENT_ERROR]:', e.message);
+        res.status(500).json({ error: 'Failed to reject student' });
     }
 });
 

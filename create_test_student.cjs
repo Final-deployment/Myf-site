@@ -26,7 +26,7 @@ async function createTestStudent() {
 
     try {
         db.prepare(`
-      INSERT INTO users (id, name, email, password, role, isVerified, status, createdAt)
+      INSERT INTO users (id, name, email, password, role, emailVerified, status, joinDate)
       VALUES (?, ?, ?, ?, 'student', 1, 'active', CURRENT_TIMESTAMP)
     `).run(userId, name, email, hashedPassword);
 

@@ -32,7 +32,6 @@ jobs:
         cp server.cjs deploy/
         cp package.json deploy/
         cp package-lock.json deploy/
-        cp db.json deploy/
         cp docker-compose.yml deploy/
         cp Dockerfile deploy/
         # Create a sample env file or instructions

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken } = require('../middleware.cjs');
 
@@ -35,7 +36,7 @@ router.post('/', authenticateToken, (req, res) => {
         const user = db.prepare('SELECT country FROM users WHERE id = ?').get(userId);
         const country = user ? user.country : '';
 
-        const id = 'rate_' + Date.now();
+        const id = 'rate_' + crypto.randomUUID();
         db.prepare(`
             INSERT INTO ratings (id, userId, userName, userCountry, rating, comment)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -56,7 +57,7 @@ router.post('/:id/reply', authenticateToken, (req, res) => {
     const role = req.user.role;
 
     try {
-        const id = 'reply_' + Date.now();
+        const id = 'reply_' + crypto.randomUUID();
         db.prepare(`
             INSERT INTO rating_replies (id, ratingId, userId, userName, role, content)
             VALUES (?, ?, ?, ?, ?, ?)

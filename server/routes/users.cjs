@@ -9,8 +9,12 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken, requireAdmin, requireOwnerOrAdmin, requireAdminOrSupervisor } = require('../middleware.cjs');
+
+// The protected support manager account — cannot be deleted, demoted, or have its role changed
+const PROTECTED_MANAGER_ID = 'admin_manager';
 
 // ============================================================================
 // SECURITY: Whitelist of allowed update fields (prevents SQL injection)
@@ -29,7 +33,7 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
         const users = db.prepare(`
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status,
             u.supervisor_capacity as supervisorCapacity, u.supervisor_priority as supervisorPriority, u.supervisor_id as supervisorId,
-            (SELECT COUNT(*) FROM episode_progress ep WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
+            (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
             FROM users u
         `).all();
@@ -47,7 +51,7 @@ router.get('/students', authenticateToken, requireAdminOrSupervisor, (req, res) 
     try {
         let query = `
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status, u.supervisor_id as supervisorId,
-            (SELECT COUNT(*) FROM episode_progress ep WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
+            (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
             FROM users u
             WHERE u.role = 'student'
@@ -134,7 +138,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         }
 
         const newUser = {
-            id: 'user_' + Date.now(),
+            id: 'user_' + crypto.randomUUID(),
             name,
             nameEn: nameEn || name,
             email,
@@ -172,11 +176,31 @@ router.put('/:id', authenticateToken, requireOwnerOrAdmin, (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
+    // PROTECTION: Block role/status changes on the protected manager account
+    if (id === PROTECTED_MANAGER_ID && req.user.id !== PROTECTED_MANAGER_ID) {
+        // Only the manager themselves can update their own profile (name, avatar, etc.)
+        // No one else can change their role or status
+        if (updates.role || updates.status) {
+            return res.status(403).json({ error: 'لا يمكن تعديل صلاحيات أو حالة حساب مدير الدعم الفني' });
+        }
+    }
+    // Even the manager themselves cannot change their own role
+    if (id === PROTECTED_MANAGER_ID && updates.role && updates.role !== 'admin') {
+        return res.status(403).json({ error: 'لا يمكن تغيير رتبة حساب مدير الدعم الفني' });
+    }
+
     try {
         // Filter updates to only allowed fields (SECURITY: prevents SQL injection)
         const safeUpdates = {};
         for (const key of Object.keys(updates)) {
-            if (ALLOWED_UPDATE_FIELDS.includes(key)) {
+            let isAllowed = ALLOWED_UPDATE_FIELDS.includes(key);
+
+            // Allow admins to update the role
+            if (key === 'role' && req.user.role === 'admin') {
+                isAllowed = true;
+            }
+
+            if (isAllowed) {
                 safeUpdates[key] = updates[key];
             } else {
                 console.warn(`[SECURITY] Blocked attempt to update field: ${key} by user ${req.user.id}`);
@@ -216,6 +240,11 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
         return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
+    // PROTECTION: Block deletion of the protected manager account
+    if (id === PROTECTED_MANAGER_ID) {
+        return res.status(403).json({ error: 'لا يمكن حذف حساب مدير الدعم الفني - هذا الحساب محمي من الحذف' });
+    }
+
     try {
         const result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
 
@@ -248,7 +277,8 @@ router.get('/:id/details', authenticateToken, (req, res) => {
 
     try {
         const userData = db.prepare(`
-            SELECT id, name, email, role, avatar, status, joinDate, points, level, whatsapp, country,
+            SELECT id, name, nameEn, email, role, avatar, status, joinDate, points, level, whatsapp, country,
+                   age, gender, educationLevel,
                    supervisor_capacity as supervisorCapacity, 
                    supervisor_priority as supervisorPriority,
                    supervisor_id as supervisorId
@@ -282,11 +312,28 @@ router.get('/:id/details', authenticateToken, (req, res) => {
 
         // Get enrollments
         const enrollments = db.prepare(`
-            SELECT c.title as courseTitle, e.progress, e.last_accessed as lastAccess 
+            SELECT e.course_id, c.title as courseTitle, e.progress, e.last_accessed, e.enrolled_at, e.is_locked, e.deadline,
+                   c.lessons_count,
+                   (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes eps ON ep.episode_id = eps.id AND eps.courseId = ep.course_id WHERE ep.user_id = e.user_id AND ep.course_id = e.course_id AND ep.completed = 1) as completed_lessons
             FROM enrollments e 
             JOIN courses c ON e.course_id = c.id 
             WHERE e.user_id = ?
         `).all(id);
+
+        // Get quiz results grouped by course
+        const quizResults = db.prepare(`
+            SELECT qr.quizId, qr.score, qr.total, qr.percentage, qr.completedAt,
+                   q.title as quizTitle, q.courseId, q.passing_score,
+                   c.title as courseTitle
+            FROM quiz_results qr
+            JOIN quizzes q ON qr.quizId = q.id
+            LEFT JOIN courses c ON q.courseId = c.id
+            WHERE qr.userId = ?
+            ORDER BY qr.completedAt DESC
+        `).all(id);
+
+        // Get total courses count
+        const totalCourses = db.prepare('SELECT COUNT(*) as count FROM courses WHERE status = ?').get('published');
 
         // Get certificates
         const certificates = db.prepare(`
@@ -296,10 +343,89 @@ router.get('/:id/details', authenticateToken, (req, res) => {
             WHERE cert.user_id = ?
         `).all(id);
 
-        res.json({ user, enrollments, certificates });
+        // Get extension archive
+        const extensions = db.prepare(`
+            SELECT ea.id, ea.course_id, c.title as courseTitle, ea.extended_at, ea.days_added,
+                   u.name as extendedBy, u.role as extendedByRole
+            FROM extension_archive ea
+            JOIN courses c ON ea.course_id = c.id
+            JOIN users u ON ea.extended_by = u.id
+            WHERE ea.user_id = ?
+            ORDER BY ea.extended_at DESC
+        `).all(id);
+
+        // Calculate academic summary
+        const completedCourses = enrollments.filter(e => e.progress >= 100).length;
+        const totalQuizzes = quizResults.length;
+        const avgScore = totalQuizzes > 0 
+            ? Math.round(quizResults.reduce((sum, qr) => sum + (qr.percentage || 0), 0) / totalQuizzes) 
+            : 0;
+
+        const academicSummary = {
+            enrolledCourses: enrollments.length,
+            completedCourses,
+            remainingCourses: (totalCourses?.count || 0) - enrollments.length,
+            totalAvailableCourses: totalCourses?.count || 0,
+            totalQuizzes,
+            avgQuizScore: avgScore,
+            certificatesCount: certificates.length
+        };
+
+        res.json({ user, enrollments, quizResults, academicSummary, certificates, extensions });
     } catch (e) {
         console.error('[USER_DETAILS_ERROR]:', e.message);
         res.status(500).json({ error: 'Failed to fetch user details' });
+    }
+});
+
+// ============================================================================
+// Unlock a student's course (Admin or Supervisor only)
+// ============================================================================
+router.put('/:userId/enrollment/:courseId/unlock', authenticateToken, requireAdminOrSupervisor, (req, res) => {
+    const { userId, courseId } = req.params;
+
+    try {
+        // If supervisor, check if this student belongs to them
+        if (req.user.role === 'supervisor') {
+            const student = db.prepare('SELECT supervisor_id FROM users WHERE id = ?').get(userId);
+            if (!student || student.supervisor_id !== req.user.id) {
+                return res.status(403).json({ error: 'Access denied. Student not assigned to you.' });
+            }
+        }
+
+        // Get course to calculate new deadline
+        const course = db.prepare('SELECT id FROM courses WHERE id = ?').get(courseId);
+        if (!course) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+
+        const days = 2; // Always extend by 2 days per user request
+        const date = new Date();
+        date.setDate(date.getDate() + days);
+        const newDeadline = date.toISOString();
+
+        db.transaction(() => {
+            const result = db.prepare(`
+                UPDATE enrollments 
+                SET is_locked = 0, deadline = ?
+                WHERE user_id = ? AND course_id = ?
+            `).run(newDeadline, userId, courseId);
+
+            if (result.changes === 0) {
+                throw new Error('Enrollment not found');
+            }
+
+            // Log the extension to the archive
+            db.prepare(`
+                INSERT INTO extension_archive (user_id, course_id, extended_by, days_added)
+                VALUES (?, ?, ?, ?)
+            `).run(userId, courseId, req.user.id, days);
+        })();
+
+        res.json({ success: true, message: 'Course unlocked successfully', newDeadline });
+    } catch (e) {
+        console.error('[UNLOCK_COURSE_ERROR]:', e.message);
+        res.status(500).json({ error: 'Failed to unlock course' });
     }
 });
 

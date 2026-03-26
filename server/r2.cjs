@@ -178,4 +178,49 @@ async function createFolder(folderPath) {
     return await s3Client.send(command);
 }
 
-module.exports = { s3Client, generateUploadUrl, generateDownloadUrl, uploadBufferToR2, listFiles, deleteFile, renameFile, createFolder, R2_BUCKET_NAME };
+/**
+ * Automates backing up the SQLite database to R2 and cleaning up old backups.
+ */
+async function backupDatabaseToR2(dbPath) {
+    const fs = require('fs');
+    try {
+        if (!fs.existsSync(dbPath)) {
+            console.error('[Backup] Database file not found at', dbPath);
+            return;
+        }
+
+        const buffer = fs.readFileSync(dbPath);
+        // e.g. database-backup-2023-10-27T12-30-00.sqlite
+        const fileName = `database-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
+        
+        console.log(`[Backup] Starting backup for ${fileName}...`);
+        
+        // Upload to a specific 'backups' folder in R2
+        await uploadBufferToR2(buffer, fileName, 'application/vnd.sqlite3', 'backups/');
+        console.log(`[Backup] Successfully uploaded ${fileName} to R2.`);
+
+        // --- Cleanup old backups (older than 60 days) ---
+        console.log('[Backup] Checking for old backups to clean up...');
+        const { files } = await listFiles('backups/');
+        
+        const now = new Date();
+        const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+        let deletedCount = 0;
+
+        for (const file of files) {
+            if (!file.lastModified) continue;
+            const lastModified = new Date(file.lastModified);
+            if (now - lastModified > sixtyDaysMs) {
+                console.log(`[Backup] Deleting old backup: ${file.name}`);
+                await deleteFile(file.fullName);
+                deletedCount++;
+            }
+        }
+        
+        console.log(`[Backup] Cleanup complete. Deleted ${deletedCount} old backups.`);
+    } catch (e) {
+        console.error('[Backup] Failed to backup database:', e);
+    }
+}
+
+module.exports = { s3Client, generateUploadUrl, generateDownloadUrl, uploadBufferToR2, listFiles, deleteFile, renameFile, createFolder, backupDatabaseToR2, R2_BUCKET_NAME };

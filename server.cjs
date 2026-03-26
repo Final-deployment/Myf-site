@@ -41,6 +41,7 @@ const allowedOrigins = [
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:5176',
+    'http://localhost:5177',
     'https://localhost',           // Capacitor Android (androidScheme: 'https')
     'capacitor://localhost',       // Capacitor iOS
     'http://localhost',            // Capacitor fallback
@@ -169,6 +170,18 @@ app.get('/api/health', (req, res) => {
 // REMOVED: /api/fix-db endpoint was a security vulnerability
 // Password resets should be done through proper admin channels
 // ============================================================================
+
+// ============================================================================
+// TEMPORARY FIX ENDPOINT
+// ============================================================================
+app.get('/api/admin/fix-locked-courses', (req, res) => {
+    try {
+        const result = db.prepare('UPDATE enrollments SET is_locked = 0 WHERE (progress >= 100 OR completed = 1) AND is_locked = 1').run();
+        res.json({ success: true, changes: result.changes, message: 'Unlocked completed courses successfully.' });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // ============================================================================
 // Centralized API Routes

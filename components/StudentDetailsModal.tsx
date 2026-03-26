@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, BookOpen, Award, Activity, Calendar, MapPin, Phone, UserCheck } from 'lucide-react';
+import { X, Mail, BookOpen, Award, Activity, Calendar, MapPin, Phone, UserCheck, History, ListFilter, ClipboardList, CheckCircle } from 'lucide-react';
 import { User, Course, Certificate } from '../types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
@@ -15,6 +15,24 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
     const { user } = useAuth();
     const [details, setDetails] = useState<any>(null);
     const [loading, setLoading] = useState(false);
+    const [sortBy, setSortBy] = useState<'recent' | 'progress_desc' | 'progress_asc' | 'deadline'>('recent');
+
+    const sortedEnrollments = React.useMemo(() => {
+        if (!details?.enrollments) return [];
+        return [...details.enrollments].sort((a, b) => {
+            if (sortBy === 'progress_desc') return b.progress - a.progress;
+            if (sortBy === 'progress_asc') return a.progress - b.progress;
+            if (sortBy === 'deadline') {
+                const dateA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+                const dateB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+                return dateA - dateB;
+            }
+            // default 'recent'
+            const dateA = a.last_accessed || a.enrolled_at || '';
+            const dateB = b.last_accessed || b.enrolled_at || '';
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
+        });
+    }, [details?.enrollments, sortBy]);
 
     useEffect(() => {
         if (isOpen && studentId) {
@@ -38,9 +56,9 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
     const handleUnlockCourse = async (courseId: string) => {
         if (!studentId) return;
         try {
-            const res = await api.supervisors.unlockCourse(studentId, courseId, 7);
+            const res = await api.supervisors.unlockCourse(studentId, courseId, 2);
             if (res.success) {
-                alert('تم فتح المساق وتمديد الفترة الزمنية لمدة 7 أيام بنجاح');
+                alert('تم فتح المساق وتمديد الفترة الزمنية لمدة يومين بنجاح');
                 loadDetails();
             }
         } catch (e: any) {
@@ -131,7 +149,73 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                 </div>
                                 <p className="text-white">{details?.user?.supervisorName || 'لا يوجد'}</p>
                             </div>
+                            {details?.user?.age && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <Calendar className="w-4 h-4" />
+                                        <span className="text-xs">العمر</span>
+                                    </div>
+                                    <p className="text-white">{details.user.age} سنة</p>
+                                </div>
+                            )}
+                            {details?.user?.gender && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <UserCheck className="w-4 h-4" />
+                                        <span className="text-xs">الجنس</span>
+                                    </div>
+                                    <p className="text-white">{details.user.gender === 'male' ? 'ذكر' : details.user.gender === 'female' ? 'أنثى' : details.user.gender}</p>
+                                </div>
+                            )}
+                            {details?.user?.educationLevel && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <BookOpen className="w-4 h-4" />
+                                        <span className="text-xs">المستوى التعليمي</span>
+                                    </div>
+                                    <p className="text-white">{details.user.educationLevel}</p>
+                                </div>
+                            )}
+                            {details?.user?.nameEn && details.user.nameEn !== details.user.name && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <Mail className="w-4 h-4" />
+                                        <span className="text-xs">الاسم بالإنجليزية</span>
+                                    </div>
+                                    <p className="text-white">{details.user.nameEn}</p>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Academic Summary (Students only) */}
+                        {details?.user?.role === 'student' && details?.academicSummary && (
+                            <div>
+                                <h4 className="flex items-center gap-2 text-lg font-bold text-white mb-4">
+                                    <Activity className="w-5 h-5 text-blue-400" />
+                                    الملخص الأكاديمي
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-gradient-to-br from-emerald-600/10 to-emerald-800/10 p-4 rounded-xl border border-emerald-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">المساقات المسجلة</p>
+                                        <p className="text-2xl font-bold text-emerald-400">{details.academicSummary.enrolledCourses}</p>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-blue-600/10 to-blue-800/10 p-4 rounded-xl border border-blue-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">المساقات المكتملة</p>
+                                        <p className="text-2xl font-bold text-blue-400">{details.academicSummary.completedCourses}</p>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-amber-600/10 to-amber-800/10 p-4 rounded-xl border border-amber-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">المساقات المتبقية</p>
+                                        <p className="text-2xl font-bold text-amber-400">{details.academicSummary.remainingCourses}</p>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-purple-600/10 to-purple-800/10 p-4 rounded-xl border border-purple-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">معدل الاختبارات</p>
+                                        <p className={`text-2xl font-bold ${details.academicSummary.avgQuizScore >= 70 ? 'text-emerald-400' : details.academicSummary.avgQuizScore > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                                            {details.academicSummary.avgQuizScore > 0 ? `${details.academicSummary.avgQuizScore}%` : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Supervisor Info */}
                         {details?.user?.role === 'supervisor' && (
@@ -157,30 +241,54 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                             </div>
                         )}
 
-                        {/* Enrollments */}
-                        <div>
-                            <h4 className="flex items-center gap-2 text-lg font-bold text-white mb-4">
-                                <BookOpen className="w-5 h-5 text-emerald-400" />
-                                الدورات المسجلة
-                            </h4>
+                        {/* Academic Data (Shown for Students only) */}
+                        {details?.user?.role === 'student' && (
+                            <>
+                                {/* Enrollments */}
+                                <div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                                <h4 className="flex items-center gap-2 text-lg font-bold text-white">
+                                    <BookOpen className="w-5 h-5 text-emerald-400" />
+                                    الدورات المسجلة
+                                </h4>
+                                {details?.enrollments?.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <ListFilter className="w-4 h-4 text-gray-400" />
+                                        <select
+                                            value={sortBy}
+                                            onChange={(e) => setSortBy(e.target.value as any)}
+                                            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                                        >
+                                            <option value="recent">الأحدث دخولاً</option>
+                                            <option value="progress_desc">الأعلى إنجازاً</option>
+                                            <option value="progress_asc">الأقل إنجازاً</option>
+                                            <option value="deadline">حسب الموعد النهائي</option>
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
                             <div className="space-y-3">
-                                {details?.enrollments?.length > 0 ? (
-                                    details.enrollments.map((course: any, idx: number) => {
+                                {sortedEnrollments.length > 0 ? (
+                                    sortedEnrollments.map((course: any, idx: number) => {
                                         const isLocked = !!course.is_locked;
                                         const deadline = course.deadline ? new Date(course.deadline) : null;
                                         const isExpired = deadline ? deadline.getTime() < Date.now() : false;
                                         const diffDays = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 3600 * 24)) : null;
+                                        const isExemptUser = details?.user?.role === 'admin' || details?.user?.role === 'supervisor';
 
                                         return (
-                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border ${isLocked ? 'border-red-500/50' : 'border-transparent'}`}>
+                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border ${isLocked && !isExemptUser ? 'border-red-500/50' : 'border-transparent'}`}>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2">
-                                                        <p className={`font-medium ${isLocked ? 'text-red-400' : 'text-white'}`}>{course.courseTitle}</p>
-                                                        {isLocked && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">مغلق (لانتهاء الوقت)</span>}
+                                                        <p className={`font-medium ${isLocked && !isExemptUser ? 'text-red-400' : 'text-white'}`}>{course.courseTitle}</p>
+                                                        {isLocked && !isExemptUser && <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">مغلق (لانتهاء الوقت)</span>}
                                                     </div>
                                                     <div className="flex items-center gap-4 mt-1">
-                                                        <p className="text-xs text-gray-400">آخر دخول: {course.last_accessed || course.enrolled_at ? new Date(course.last_accessed || course.enrolled_at).toLocaleDateString('ar-EG') : 'لم يدخل بعد'}</p>
-                                                        {deadline && (
+                                                        <p className="text-xs text-gray-400">آخر دخول: {course.last_accessed ? new Date(course.last_accessed).toLocaleDateString('ar-EG') : (course.progress > 0 && course.enrolled_at ? new Date(course.enrolled_at).toLocaleDateString('ar-EG') : 'لم يبدأ التعلم بعد')}</p>
+                                                        {!isExemptUser && (course.lessons_count || 0) > 0 && (
+                                                            <p className="text-xs text-blue-400 font-bold">الدروس المنجزة: {course.completed_lessons || 0} من {course.lessons_count}</p>
+                                                        )}
+                                                        {!isExemptUser && deadline && (
                                                             <p className={`text-xs font-bold ${isExpired || isLocked ? 'text-red-400' : diffDays && diffDays <= 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
                                                                 المهلة: {deadline.toLocaleDateString('ar-EG')}
                                                                 {!isExpired && diffDays !== null && ` (متبقي ${diffDays} يوم)`}
@@ -193,18 +301,18 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                                     <div className="flex items-center gap-3 min-w-[120px]">
                                                         <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
                                                             <div
-                                                                className={`h-full rounded-full ${isLocked ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                                                className={`h-full rounded-full ${isLocked && !isExemptUser ? 'bg-red-500' : 'bg-emerald-500'}`}
                                                                 style={{ width: `${course.progress}%` }}
                                                             />
                                                         </div>
-                                                        <span className={`text-sm font-bold ${isLocked ? 'text-red-400' : 'text-emerald-400'}`}>{course.progress}%</span>
+                                                        <span className={`text-sm font-bold ${isLocked && !isExemptUser ? 'text-red-400' : 'text-emerald-400'}`}>{course.progress}%</span>
                                                     </div>
-                                                    {isLocked && user?.role === 'supervisor' && (
+                                                    {isLocked && (user?.role === 'supervisor' || user?.role === 'admin') && (
                                                         <button
                                                             onClick={() => handleUnlockCourse(course.course_id)}
                                                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
                                                         >
-                                                            تمديد (7 أيام)
+                                                            تمديد (يومين)
                                                         </button>
                                                     )}
                                                 </div>
@@ -213,6 +321,78 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                     })
                                 ) : (
                                     <p className="text-gray-500 text-center py-4 bg-white/5 rounded-xl border border-dashed border-white/10">لا توجد دورات مسجلة</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Quiz Results */}
+                        {details?.quizResults?.length > 0 && (
+                            <div>
+                                <h4 className="flex items-center gap-2 text-lg font-bold text-white mb-4">
+                                    <ClipboardList className="w-5 h-5 text-purple-400" />
+                                    نتائج الاختبارات ({details.quizResults.length})
+                                </h4>
+                                <div className="space-y-3">
+                                    {details.quizResults.map((qr: any, idx: number) => {
+                                        const passed = qr.percentage >= (qr.passing_score || 70);
+                                        return (
+                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 border ${passed ? 'border-emerald-500/20' : 'border-red-500/20'}`}>
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-white text-sm">{qr.courseTitle || 'اختبار عام'}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">{qr.quizTitle}</p>
+                                                    {qr.completedAt && (
+                                                        <p className="text-xs text-gray-500 mt-0.5">{new Date(qr.completedAt).toLocaleDateString('ar-EG')}</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-3 min-w-[140px]">
+                                                        <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${passed ? 'bg-emerald-500' : 'bg-red-500'}`}
+                                                                style={{ width: `${qr.percentage}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className={`text-sm font-bold ${passed ? 'text-emerald-400' : 'text-red-400'}`}>{qr.percentage}%</span>
+                                                    </div>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                        {passed ? <CheckCircle className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                        {passed ? 'ناجح' : 'راسب'}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400">{qr.score}/{qr.total}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Extension Archive */}
+                        <div>
+                            <h4 className="flex items-center gap-2 text-lg font-bold text-white mb-4">
+                                <History className="w-5 h-5 text-blue-400" />
+                                أرشيف التمديدات ({details?.extensions?.length || 0})
+                            </h4>
+                            <div className="space-y-3">
+                                {details?.extensions?.length > 0 ? (
+                                    details.extensions.map((ext: any) => (
+                                        <div key={ext.id} className="bg-white/5 p-4 rounded-xl flex items-center justify-between border border-blue-500/20">
+                                            <div>
+                                                <p className="font-medium text-white text-sm">{ext.courseTitle}</p>
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    تم التمديد بواسطة: <span className="text-blue-400">{ext.extendedBy}</span>
+                                                </p>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-sm font-bold text-blue-400">+{ext.days_added} أيام</p>
+                                                <p className="text-[10px] text-gray-500 mt-1">
+                                                    {new Date(ext.extended_at).toLocaleString('ar-EG')}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-500 text-center py-4 bg-white/5 rounded-xl border border-dashed border-white/10">لا يوجد تمديدات سابقة لهذا الطالب</p>
                                 )}
                             </div>
                         </div>
@@ -241,6 +421,8 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                 )}
                             </div>
                         </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

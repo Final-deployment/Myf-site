@@ -29,21 +29,23 @@ jobs:
         zip -r deploy_production_latest.zip \
           dist \
           server \
+          services \
+          utils \
+          translations \
           server.cjs \
           package.json \
           package-lock.json \
-          db.json \
-          docker-compose.yml \
           Dockerfile \
           nginx_app.conf \
-          deploy.sh
+          deploy.sh \
+          fix_progress.cjs
 
     - name: Copy deployment package to VPS
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
+        key: ${{ secrets.VPS_SSH_KEY }}
         source: "deploy_production_latest.zip"
         target: "/var/www/apps/scientific-bench"
 
@@ -52,7 +54,7 @@ jobs:
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
+        key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 5m
         script: |
           cd /var/www/apps/scientific-bench

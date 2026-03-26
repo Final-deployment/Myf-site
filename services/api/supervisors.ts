@@ -20,18 +20,18 @@ async function apiFetch(url: string, options: any = {}) {
 }
 
 export const supervisorApi = {
-    list: () => apiFetch('/api/supervisors'),
+    list: () => apiFetch('/supervisors'),
     promote: (userId: string, capacity: number, priority: number) =>
-        apiFetch('/api/supervisors/promote', { method: 'POST', body: JSON.stringify({ userId, capacity, priority }) }),
+        apiFetch('/supervisors/promote', { method: 'POST', body: JSON.stringify({ userId, capacity, priority }) }),
     updateSettings: (supervisorId: string, capacity: number, priority: number) =>
-        apiFetch('/api/supervisors/settings', { method: 'POST', body: JSON.stringify({ supervisorId, capacity, priority }) }),
+        apiFetch('/supervisors/settings', { method: 'POST', body: JSON.stringify({ supervisorId, capacity, priority }) }),
     assignStudent: (studentId: string, supervisorId: string | null) =>
-        apiFetch('/api/supervisors/assign', { method: 'POST', body: JSON.stringify({ studentId, supervisorId }) }),
+        apiFetch('/supervisors/assign', { method: 'POST', body: JSON.stringify({ studentId, supervisorId }) }),
     demote: (supervisorId: string, targetSupervisorId: string | null = null) =>
-        apiFetch('/api/supervisors/demote', { method: 'POST', body: JSON.stringify({ supervisorId, targetSupervisorId }) }),
-    getMyStudents: () => apiFetch('/api/supervisors/my-students'),
+        apiFetch('/supervisors/demote', { method: 'POST', body: JSON.stringify({ supervisorId, targetSupervisorId }) }),
+    getMyStudents: () => apiFetch('/supervisors/my-students'),
     getStudentsProgress: (supervisorId?: string) =>
-        apiFetch(`/api/supervisors/students-progress${supervisorId ? `?supervisorId=${supervisorId}` : ''}`),
+        apiFetch(`/supervisors/students-progress${supervisorId ? `?supervisorId=${supervisorId}` : ''}`),
     unlockCourse: (userId: string, courseId: string, extraDays: number = 7) =>
-        apiFetch(`/api/supervisors/students/${userId}/courses/${courseId}/unlock`, { method: 'POST', body: JSON.stringify({ extraDays }) })
+        apiFetch(`/supervisors/students/${userId}/courses/${courseId}/unlock`, { method: 'POST', body: JSON.stringify({ extraDays }) })
 };

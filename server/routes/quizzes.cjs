@@ -11,6 +11,7 @@
 
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 
@@ -119,10 +120,10 @@ router.post('/results', authenticateToken, (req, res) => {
         // SECURITY: Check enrollment deadline
         const quiz = db.prepare('SELECT courseId FROM quizzes WHERE id = ?').get(quizId);
         if (quiz && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-            const enrollment = db.prepare('SELECT deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, quiz.courseId);
+            const enrollment = db.prepare('SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, quiz.courseId);
             if (enrollment) {
                 let locked = enrollment.is_locked;
-                if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline)) {
+                if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
                     db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
                     locked = 1;
                 }
@@ -135,7 +136,7 @@ router.post('/results', authenticateToken, (req, res) => {
         db.prepare(`
             INSERT INTO quiz_results (id, userId, quizId, score, total, percentage, completedAt)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run('res_' + Date.now(), userId, quizId, score, total, percentage, new Date().toISOString());
+        `).run('res_' + crypto.randomUUID(), userId, quizId, score, total, percentage, new Date().toISOString());
 
         res.status(201).json({ success: true });
     } catch (e) {
