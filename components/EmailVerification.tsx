@@ -72,7 +72,7 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
         setError('');
 
         try {
-            const { success: verifySuccess, error: vError } = await api.verifyOtp(email, code);
+            const { success: verifySuccess, error: vError, pendingApproval } = await api.verifyOtp(email, code);
 
             if (vError) {
                 throw new Error(language === 'ar' ? vError.message || 'فشل التحقق' : vError.message || 'Verification failed');
@@ -85,7 +85,18 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
             localStorage.removeItem('pendingVerificationEmail');
             setSuccess(true);
 
-            // Wait for animation then proceed
+            // If pending admin approval, do NOT proceed to dashboard
+            if (pendingApproval) {
+                // Clear any stored auth data to prevent auto-login
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('mastaba_currentUser');
+                sessionStorage.removeItem('authToken');
+                sessionStorage.removeItem('mastaba_currentUser');
+                // Stay on the success screen — user must wait for admin approval
+                return;
+            }
+
+            // Only redirect to dashboard if user is fully approved
             setTimeout(() => {
                 onSuccess();
             }, 1500);
@@ -124,24 +135,37 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
     };
 
     if (success) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="glass-panel w-full max-w-md p-8 rounded-[2.5rem] text-center animate-fade-in border border-white/20 shadow-2xl">
-                    <div className="w-20 h-20 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
-                        <CheckCircle2 className="w-10 h-10 text-emerald-400" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">
-                        {language === 'ar' ? 'تم التحقق بنجاح!' : 'Verification Successful!'}
-                    </h2>
-                    <p className="text-gray-400">
-                        {language === 'ar'
-                            ? 'جاري تحويلك إلى لوحة التحكم...'
-                            : 'Redirecting to dashboard...'}
-                    </p>
-                </div>
-            </div>
-        );
-    }
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="glass-panel w-full max-w-md p-8 rounded-[2.5rem] text-center animate-fade-in border border-white/20 shadow-2xl">
+          <div className="w-20 h-20 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
+            <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            {language === 'ar' ? 'تم التسجيل بنجاح!' : 'Registration Successful!'}
+          </h2>
+          <p className="text-gray-300 text-sm leading-relaxed mb-4">
+            {language === 'ar'
+              ? 'تم التحقق من بريدك الإلكتروني بنجاح. طلب انتسابك الآن بانتظار موافقة المسؤولين.'
+              : 'Your email has been verified. Your registration is now pending admin approval.'}
+          </p>
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+            <p className="text-amber-300 text-sm">
+              {language === 'ar'
+                ? '⏳ سيتم إبلاغك عبر البريد الإلكتروني عند الموافقة على طلب انتسابك.'
+                : '⏳ You will be notified via email once your registration is approved.'}
+            </p>
+          </div>
+          <button
+            onClick={onBack}
+            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all"
+          >
+            {language === 'ar' ? 'العودة للصفحة الرئيسية' : 'Back to Home'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4">

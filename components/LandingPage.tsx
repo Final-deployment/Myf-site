@@ -13,8 +13,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   const { theme, toggleTheme } = useTheme();
 
   const themeClasses = theme === 'day'
-    ? 'bg-[url("https://github.com/NinjaWorld1234/Files/blob/main/muslim_youth_forum_landing_page.png?raw=true")] bg-cover bg-center bg-fixed'
-    : 'bg-[url("https://github.com/NinjaWorld1234/Files/blob/main/Dark.png?raw=true")] bg-cover bg-center bg-fixed';
+    ? 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/muslim_youth_forum_landing_page.png")] bg-cover bg-center bg-fixed'
+    : 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Dark.png")] bg-cover bg-center bg-fixed';
 
   return (
     <div className={`font-sans text-white min-h-screen w-full relative flex flex-col ${themeClasses}`}>
@@ -24,7 +24,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
         {/* Right: Brand Name (First in RTL) */}
         <div className="flex items-center gap-3 text-white">
           <img
-            src="https://github.com/NinjaWorld1234/Files/blob/main/myf%20LOGO.jpg?raw=true"
+            src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg"
             alt="Muslim Youth Forum Logo"
             className="w-10 h-10 rounded-full border-2 border-white/20 shadow-md object-cover"
           />
@@ -83,7 +83,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           {/* Logo Container */}
           <div className="logo-box overflow-hidden bg-[#033a2c] relative rounded-full">
             <img
-              src="https://github.com/NinjaWorld1234/Files/blob/main/myf%20LOGO.jpg?raw=true"
+              src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg"
               alt="Muslim Youth Forum Logo"
               className="w-full h-full object-cover transform scale-110"
             />
@@ -146,22 +146,33 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           />
         </svg>
         {/* Footer Content */}
-        <div className="relative bg-white/[0.03] backdrop-blur-md px-6 py-4 border-t border-white/10">
-          <div className="flex flex-col-reverse md:flex-row justify-between items-center gap-4 w-full text-xs text-white/60">
-            {/* Right side (Start in RTL): Copyright */}
-            <div>Muslim Youth Forum © 2024</div>
-            {/* Left side (End in RTL): Social Icons */}
-            <div className="flex items-center gap-3">
-              <a className="bg-white/10 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition text-white" href="#">
-                <i className="fab fa-youtube"></i>
+        <div className="relative bg-white/[0.03] backdrop-blur-md px-6 py-5 border-t border-white/10">
+          <div className="flex flex-col-reverse md:flex-row justify-between items-center gap-4 w-full">
+            {/* Copyright - Right side */}
+            <div className="text-sm text-white/40">Muslim Youth Forum © 2026</div>
+            {/* Social Icons - Centered */}
+            <div className="flex items-start justify-center gap-8">
+              <a className="flex flex-col items-center gap-1.5 group" href="https://www.facebook.com/MYF.PAL" target="_blank" rel="noopener noreferrer" title="ملتقى الشباب المسلم - فيسبوك">
+                <div className="bg-[#1877F2] w-9 h-9 flex items-center justify-center rounded-full group-hover:brightness-125 transition-all group-hover:scale-110 shadow-lg shadow-[#1877F2]/30">
+                  <i className="fab fa-facebook-f text-white text-sm"></i>
+                </div>
+                <span className="text-[10px] text-white/50 group-hover:text-white/80 transition text-center leading-tight">ملتقى الشباب المسلم</span>
               </a>
-              <a className="bg-white/10 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition text-white" href="#">
-                <i className="fas fa-camera"></i>
+              <a className="flex flex-col items-center gap-1.5 group" href="https://www.facebook.com/ihdina.islam" target="_blank" rel="noopener noreferrer" title="مبادرة على هدي الحبيب - فيسبوك">
+                <div className="bg-[#1877F2] w-9 h-9 flex items-center justify-center rounded-full group-hover:brightness-125 transition-all group-hover:scale-110 shadow-lg shadow-[#1877F2]/30">
+                  <i className="fab fa-facebook-f text-white text-sm"></i>
+                </div>
+                <span className="text-[10px] text-white/50 group-hover:text-white/80 transition text-center leading-tight">على هدي الحبيب</span>
               </a>
-              <a className="bg-white/10 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition text-white" href="#">
-                <i className="fas fa-globe"></i>
+              <a className="flex flex-col items-center gap-1.5 group" href="https://t.me/Majalis_al_Noor" target="_blank" rel="noopener noreferrer" title="مجالس النور - تيلغرام">
+                <div className="bg-[#26A5E4] w-9 h-9 flex items-center justify-center rounded-full group-hover:brightness-125 transition-all group-hover:scale-110 shadow-lg shadow-[#26A5E4]/30">
+                  <i className="fab fa-telegram-plane text-white text-sm"></i>
+                </div>
+                <span className="text-[10px] text-white/50 group-hover:text-white/80 transition text-center leading-tight">مجالس النور</span>
               </a>
             </div>
+            {/* Spacer for centering on desktop */}
+            <div className="hidden md:block text-xs text-transparent select-none">Muslim Youth Forum © 2026</div>
           </div>
         </div>
       </footer>

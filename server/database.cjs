@@ -51,6 +51,9 @@ function initDatabase() {
   try { db.prepare('ALTER TABLE users ADD COLUMN supervisor_capacity INTEGER DEFAULT 10').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE users ADD COLUMN supervisor_priority INTEGER DEFAULT 0').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE users ADD COLUMN is_tester INTEGER DEFAULT 0').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0').run(); } catch (e) { }
+  // Auto-approve all existing users and all non-student roles
+  try { db.prepare("UPDATE users SET approved = 1 WHERE approved = 0 AND (role != 'student' OR emailVerified = 1)").run(); } catch (e) { }
 
   // --- Courses Table ---
   db.exec(`

@@ -4,7 +4,7 @@
  */
 
 import React, { memo, useCallback, useMemo } from 'react';
-import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, LucideIcon } from 'lucide-react';
+import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, UserPlus, LucideIcon } from 'lucide-react';
 import { UserRole } from '../types';
 import { useLanguage } from './LanguageContext';
 
@@ -24,6 +24,7 @@ interface SidebarProps {
   role: UserRole;
   /** Number of unread messages */
   unreadMessagesCount?: number;
+  pendingStudentsCount?: number;
 }
 
 /**
@@ -100,7 +101,7 @@ NavItem.displayName = 'NavItem';
  * @param props - Sidebar props
  * @returns Sidebar component
  */
-const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPreload, onLogout, role, unreadMessagesCount = 0 }) => {
+const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPreload, onLogout, role, unreadMessagesCount = 0, pendingStudentsCount = 0 }) => {
   const { t, language } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
@@ -124,6 +125,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
     { id: 'dashboard', icon: LayoutDashboard, label: t('admin.dashboard') },
     { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
     { id: 'students', icon: Users, label: t('admin.students') },
+    { id: 'pending-students', icon: UserPlus, label: 'طلبات الانتساب', badgeCount: pendingStudentsCount },
     { id: 'audio-courses', icon: Mic2, label: t('admin.audioCourses') },
     { id: 'reports', icon: BarChart3, label: t('admin.reports') },
     { id: 'library', label: t('admin.library'), icon: BookOpen },
@@ -131,7 +133,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
     { id: 'quizzes', icon: ClipboardList, label: t('admin.quizManagement') },
     { id: 'activity-log', icon: Activity, label: t('admin.activityLog') },
     { id: 'certificates', icon: Award, label: t('admin.certificatesAdmin') },
-  ], [t, unreadMessagesCount]);
+  ], [t, unreadMessagesCount, pendingStudentsCount]);
 
   /** Supervisor navigation menu items */
   const supervisorItems: MenuItem[] = useMemo(() => [

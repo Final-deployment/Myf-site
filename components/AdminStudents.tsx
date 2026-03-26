@@ -118,6 +118,7 @@ const StudentRow = memo<{
                 </div>
             </td>
             <td className="py-4 px-6 text-white">المستوى {student.level}</td>
+            <td className="py-4 px-6 text-white">{student.country || student.location || '-'}</td>
             <td className="py-4 px-6">
                 <div className="flex flex-col gap-1 max-w-[200px]">
                     <span className="text-white text-sm line-clamp-1" title={student.activeCourses || 'لا يوجد'}>
@@ -852,6 +853,7 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
                                     <th className="py-4 px-6">الطالب</th>
                                     <th className="py-4 px-6">تاريخ الانضمام</th>
                                     <th className="py-4 px-6">المستوى</th>
+                                    <th className="py-4 px-6">البلد</th>
                                     <th className="py-4 px-6">التقدم</th>
                                     <th className="py-4 px-6">المشرف</th>
                                     <th className="py-4 px-6">الحالة</th>
@@ -893,7 +895,7 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
                                 })}
                                 {paginatedItems.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="py-12 text-center text-gray-500">
+                                        <td colSpan={8} className="py-12 text-center text-gray-500">
                                             لا يوجد طلاب مطابقين للبحث
                                         </td>
                                     </tr>

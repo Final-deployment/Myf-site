@@ -172,6 +172,18 @@ app.get('/api/health', (req, res) => {
 // ============================================================================
 
 // ============================================================================
+// TEMPORARY FIX ENDPOINT
+// ============================================================================
+app.get('/api/admin/fix-locked-courses', (req, res) => {
+    try {
+        const result = db.prepare('UPDATE enrollments SET is_locked = 0 WHERE (progress >= 100 OR completed = 1) AND is_locked = 1').run();
+        res.json({ success: true, changes: result.changes, message: 'Unlocked completed courses successfully.' });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ============================================================================
 // Centralized API Routes
 // ============================================================================
 const apiRoutes = require('./server/routes/index.cjs');

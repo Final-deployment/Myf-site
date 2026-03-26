@@ -10,6 +10,7 @@ import { useAuth } from './AuthContext';
 import { useTheme } from './ThemeContext';
 import { useToast } from './Toast';
 import { sanitizeHTML, sanitizeEmail } from '../utils/sanitize';
+import { getAuthToken } from '../services/api/auth';
 
 import AdminBackupSettings from './AdminBackupSettings';
 
@@ -244,7 +245,7 @@ const Settings: React.FC = memo(() => {
 
       setPasswordLoading(true);
       try {
-         const token = localStorage.getItem('authToken');
+         const token = getAuthToken();
          const response = await fetch('/api/change-password', {
             method: 'POST',
             headers: {

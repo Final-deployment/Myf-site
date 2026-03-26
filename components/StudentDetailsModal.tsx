@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, BookOpen, Award, Activity, Calendar, MapPin, Phone, UserCheck, History, ListFilter } from 'lucide-react';
+import { X, Mail, BookOpen, Award, Activity, Calendar, MapPin, Phone, UserCheck, History, ListFilter, ClipboardList, CheckCircle } from 'lucide-react';
 import { User, Course, Certificate } from '../types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
@@ -149,7 +149,73 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                 </div>
                                 <p className="text-white">{details?.user?.supervisorName || 'لا يوجد'}</p>
                             </div>
+                            {details?.user?.age && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <Calendar className="w-4 h-4" />
+                                        <span className="text-xs">العمر</span>
+                                    </div>
+                                    <p className="text-white">{details.user.age} سنة</p>
+                                </div>
+                            )}
+                            {details?.user?.gender && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <UserCheck className="w-4 h-4" />
+                                        <span className="text-xs">الجنس</span>
+                                    </div>
+                                    <p className="text-white">{details.user.gender === 'male' ? 'ذكر' : details.user.gender === 'female' ? 'أنثى' : details.user.gender}</p>
+                                </div>
+                            )}
+                            {details?.user?.educationLevel && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <BookOpen className="w-4 h-4" />
+                                        <span className="text-xs">المستوى التعليمي</span>
+                                    </div>
+                                    <p className="text-white">{details.user.educationLevel}</p>
+                                </div>
+                            )}
+                            {details?.user?.nameEn && details.user.nameEn !== details.user.name && (
+                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 text-gray-400 mb-2">
+                                        <Mail className="w-4 h-4" />
+                                        <span className="text-xs">الاسم بالإنجليزية</span>
+                                    </div>
+                                    <p className="text-white">{details.user.nameEn}</p>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Academic Summary (Students only) */}
+                        {details?.user?.role === 'student' && details?.academicSummary && (
+                            <div>
+                                <h4 className="flex items-center gap-2 text-lg font-bold text-white mb-4">
+                                    <Activity className="w-5 h-5 text-blue-400" />
+                                    الملخص الأكاديمي
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div className="bg-gradient-to-br from-emerald-600/10 to-emerald-800/10 p-4 rounded-xl border border-emerald-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">المساقات المسجلة</p>
+                                        <p className="text-2xl font-bold text-emerald-400">{details.academicSummary.enrolledCourses}</p>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-blue-600/10 to-blue-800/10 p-4 rounded-xl border border-blue-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">المساقات المكتملة</p>
+                                        <p className="text-2xl font-bold text-blue-400">{details.academicSummary.completedCourses}</p>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-amber-600/10 to-amber-800/10 p-4 rounded-xl border border-amber-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">المساقات المتبقية</p>
+                                        <p className="text-2xl font-bold text-amber-400">{details.academicSummary.remainingCourses}</p>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-purple-600/10 to-purple-800/10 p-4 rounded-xl border border-purple-500/20">
+                                        <p className="text-gray-400 text-xs mb-1">معدل الاختبارات</p>
+                                        <p className={`text-2xl font-bold ${details.academicSummary.avgQuizScore >= 70 ? 'text-emerald-400' : details.academicSummary.avgQuizScore > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                                            {details.academicSummary.avgQuizScore > 0 ? `${details.academicSummary.avgQuizScore}%` : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Supervisor Info */}
                         {details?.user?.role === 'supervisor' && (
@@ -258,6 +324,48 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                 )}
                             </div>
                         </div>
+
+                        {/* Quiz Results */}
+                        {details?.quizResults?.length > 0 && (
+                            <div>
+                                <h4 className="flex items-center gap-2 text-lg font-bold text-white mb-4">
+                                    <ClipboardList className="w-5 h-5 text-purple-400" />
+                                    نتائج الاختبارات ({details.quizResults.length})
+                                </h4>
+                                <div className="space-y-3">
+                                    {details.quizResults.map((qr: any, idx: number) => {
+                                        const passed = qr.percentage >= (qr.passing_score || 70);
+                                        return (
+                                            <div key={idx} className={`bg-white/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 border ${passed ? 'border-emerald-500/20' : 'border-red-500/20'}`}>
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-white text-sm">{qr.courseTitle || 'اختبار عام'}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">{qr.quizTitle}</p>
+                                                    {qr.completedAt && (
+                                                        <p className="text-xs text-gray-500 mt-0.5">{new Date(qr.completedAt).toLocaleDateString('ar-EG')}</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-3 min-w-[140px]">
+                                                        <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${passed ? 'bg-emerald-500' : 'bg-red-500'}`}
+                                                                style={{ width: `${qr.percentage}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className={`text-sm font-bold ${passed ? 'text-emerald-400' : 'text-red-400'}`}>{qr.percentage}%</span>
+                                                    </div>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                        {passed ? <CheckCircle className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                        {passed ? 'ناجح' : 'راسب'}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400">{qr.score}/{qr.total}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Extension Archive */}
                         <div>

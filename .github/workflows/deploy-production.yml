@@ -37,7 +37,8 @@ jobs:
           package-lock.json \
           Dockerfile \
           nginx_app.conf \
-          deploy.sh
+          deploy.sh \
+          fix_progress.cjs
 
     - name: Copy deployment package to VPS
       uses: appleboy/scp-action@v0.1.7
@@ -57,6 +58,5 @@ jobs:
         command_timeout: 5m
         script: |
           cd /var/www/apps/scientific-bench
-          unzip -o deploy_production_latest.zip deploy.sh
           chmod +x deploy.sh
           ./deploy.sh

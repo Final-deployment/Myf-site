@@ -50,6 +50,14 @@ export const authApi = {
                     };
                     throw authError;
                 }
+                if (errorData.pendingApproval) {
+                    const authError: AuthError & { pendingApproval: boolean } = {
+                        message: errorData.error || 'Account pending approval',
+                        messageAr: errorData.errorAr,
+                        pendingApproval: true
+                    };
+                    throw authError;
+                }
                 return null;
             }
 
@@ -73,6 +81,7 @@ export const authApi = {
             return null;
         } catch (error: unknown) {
             if ((error as AuthError).needsVerification) throw error;
+            if ((error as any).pendingApproval) throw error;
             return null;
         }
     },
@@ -95,7 +104,7 @@ export const authApi = {
         }
     },
 
-    verifyOtp: async (email: string, token: string): Promise<{ success: boolean; user: User | null; error: any | null }> => {
+    verifyOtp: async (email: string, token: string): Promise<{ success: boolean; user: User | null; error: any | null; pendingApproval?: boolean }> => {
         try {
             const response = await fetch(getApiUrl('/verify-email'), {
                 method: 'POST',
@@ -104,6 +113,11 @@ export const authApi = {
             });
             const data = await response.json();
             if (!response.ok) return { success: false, user: null, error: data.errorAr || data.error };
+
+            // If pending approval, do NOT save user data or token — just return success
+            if (data.pendingApproval) {
+                return { success: true, user: null, error: null, pendingApproval: true };
+            }
 
             const user = {
                 ...data.user,

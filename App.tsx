@@ -64,12 +64,14 @@ const ROUTE_IMPORTS = {
   'admin-activity-log': () => import('./components/AdminActivityLog'),
   'admin-certificates': () => import('./components/AdminCertificateManagement'),
   'admin-backup': () => import('./components/AdminBackupSettings'),
+  'admin-pending-students': () => import('./components/AdminPendingStudents'),
 
   // Auth
   landing: () => import('./components/LandingPage'),
   auth: () => import('./components/Auth'),
   registration: () => import('./components/RegistrationForm'),
   'email-verification': () => import('./components/EmailVerification'),
+  'forgot-password': () => import('./components/ForgotPassword'),
 };
 
 // Student Components
@@ -99,6 +101,7 @@ const AdminQuizManagement = lazy(ROUTE_IMPORTS['admin-quizzes']);
 const AdminActivityLog = lazy(ROUTE_IMPORTS['admin-activity-log']);
 const AdminCertificateManagement = lazy(ROUTE_IMPORTS['admin-certificates']);
 const AdminBackupSettings = lazy(ROUTE_IMPORTS['admin-backup']);
+const AdminPendingStudents = lazy(ROUTE_IMPORTS['admin-pending-students']);
 
 // Supervisor Components
 const SupervisorDashboard = lazy(() => import('./components/SupervisorDashboard'));
@@ -109,6 +112,7 @@ const LandingPage = lazy(ROUTE_IMPORTS.landing);
 const Auth = lazy(ROUTE_IMPORTS.auth);
 const RegistrationForm = lazy(ROUTE_IMPORTS.registration);
 const EmailVerification = lazy(ROUTE_IMPORTS['email-verification']);
+const ForgotPassword = lazy(ROUTE_IMPORTS['forgot-password']);
 
 // ============================================================================
 // Types
@@ -260,11 +264,18 @@ const AppContent: React.FC = () => {
               onToggleView={(view) => navigate(view === 'login' ? '/login' : '/signup')}
               onBack={() => navigate('/')}
               onLoginSuccess={() => navigate('/dashboard')}
+              onForgotPassword={() => navigate('/forgot-password')}
               onVerificationRequired={(email) => {
                 setPendingEmail(email);
                 navigate('/verify');
               }}
             />
+          </PublicRoute>
+        } />
+
+        <Route path="/forgot-password" element={
+          <PublicRoute>
+            <ForgotPassword onBack={() => navigate('/login')} />
           </PublicRoute>
         } />
 
@@ -335,6 +346,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingStudentsCount, setPendingStudentsCount] = useState(0);
 
   // Correctly derive active tab and role prefix
   const pathSegments = pathname.split('/').filter(Boolean);
@@ -397,13 +409,37 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
+  // Poll for pending students count (admin only)
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'admin') return;
+    const fetchPending = async () => {
+      try {
+        const { getAuthToken } = await import('./services/api/auth');
+        const token = getAuthToken();
+        if (!token) return;
+        const response = await fetch('/api/pending-students', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPendingStudentsCount(Array.isArray(data) ? data.length : 0);
+        }
+      } catch (error) {
+        console.error('Failed to fetch pending students count', error);
+      }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user?.role]);
+
   // ========================================================================
   // Main App View
   // ========================================================================
   // Dynamic theme classes
   const themeClasses = isDark
-    ? 'bg-[url("https://github.com/NinjaWorld1234/Files/blob/main/Dark.png?raw=true")] bg-cover bg-center bg-fixed'
-    : 'bg-[url("https://github.com/NinjaWorld1234/Files/blob/main/muslim_youth_forum_landing_page.png?raw=true")] bg-cover bg-center bg-fixed';
+    ? 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Dark.png")] bg-cover bg-center bg-fixed'
+    : 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/muslim_youth_forum_landing_page.png")] bg-cover bg-center bg-fixed';
 
   return (
     <div className={`flex h-screen relative overflow-hidden ${themeClasses}`}>
@@ -422,6 +458,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
         onLogout={handleLogout}
         role={user?.role || 'student'}
         unreadMessagesCount={unreadCount}
+        pendingStudentsCount={pendingStudentsCount}
       />
 
       {/* Main Content */}
@@ -474,6 +511,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 <Route path="/admin/activity-log" element={<AdminRoute><AdminActivityLog /></AdminRoute>} />
                 <Route path="/admin/certificates" element={<AdminRoute><AdminCertificateManagement /></AdminRoute>} />
                 <Route path="/admin/messages" element={<AdminRoute><MessagingSystem /></AdminRoute>} />
+                <Route path="/admin/pending-students" element={<AdminRoute><AdminPendingStudents /></AdminRoute>} />
 
                 {/* Supervisor Routes */}
                 <Route path="/supervisor" element={<SupervisorRoute><SupervisorDashboard onOpenChat={handleOpenChat} /></SupervisorRoute>} />

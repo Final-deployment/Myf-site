@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Eye, EyeOff, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from './AuthContext';
 import { useToast } from './Toast';
@@ -10,9 +10,10 @@ interface AuthProps {
   onBack: () => void;
   onToggleView: (view: 'login' | 'signup') => void;
   onVerificationRequired?: (email: string) => void;
+  onForgotPassword?: () => void;
 }
 
-const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onToggleView, onVerificationRequired }) => {
+const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onToggleView, onVerificationRequired, onForgotPassword }) => {
   const { login } = useAuth();
   const toast = useToast();
   const [showPassword, setShowPassword] = useState(false);
@@ -20,6 +21,7 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPendingApproval, setShowPendingApproval] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,9 +40,11 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
         }
       } catch (err: unknown) {
         setIsLoading(false);
-        const error = err as { needsVerification?: boolean; email?: string; messageAr?: string };
+        const error = err as { needsVerification?: boolean; pendingApproval?: boolean; email?: string; messageAr?: string };
         if (error.needsVerification && onVerificationRequired) {
           onVerificationRequired(error.email || email);
+        } else if (error.pendingApproval) {
+          setShowPendingApproval(true);
         } else {
           toast.error(error.messageAr || 'حدث خطأ أثناء تسجيل الدخول');
         }
@@ -55,6 +59,54 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
       }, 1500);
     }
   };
+
+  // ====== Pending Approval Screen ======
+  if (showPendingApproval) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="glass-panel w-full max-w-md p-8 rounded-[2.5rem] relative overflow-hidden animate-fade-in border border-white/20 shadow-2xl text-center">
+          {/* Animated Icon */}
+          <div className="mx-auto w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center mb-6 animate-pulse">
+            <Clock className="w-10 h-10 text-amber-400" />
+          </div>
+
+          <h2 className="text-2xl font-bold text-white mb-3">
+            حسابك بانتظار الموافقة
+          </h2>
+
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 mb-6">
+            <div className="flex items-start gap-3 text-right">
+              <ShieldCheck className="w-6 h-6 text-amber-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-amber-200 text-sm leading-relaxed">
+                  تم تقديم طلب انتسابك بنجاح وهو الآن قيد المراجعة من قبل المسؤولين.
+                </p>
+                <p className="text-amber-200/70 text-sm mt-2 leading-relaxed">
+                  سيتم إبلاغك عبر البريد الإلكتروني فور الموافقة على طلبك.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-gray-400 text-xs mb-6">
+            <Mail className="w-4 h-4" />
+            <span>{email}</span>
+          </div>
+
+          <button
+            onClick={() => {
+              setShowPendingApproval(false);
+              onBack();
+            }}
+            className="w-full py-3.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium transition-all flex items-center justify-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span>العودة للصفحة الرئيسية</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -145,7 +197,13 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
                 </div>
                 <span>تذكرني</span>
               </label>
-              <a href="#" className="text-gold-500 hover:text-gold-400">نسيت كلمة المرور؟</a>
+              <button 
+                type="button"
+                onClick={onForgotPassword}
+                className="text-gold-500 hover:text-gold-400"
+              >
+                نسيت كلمة المرور؟
+              </button>
             </div>
           )}
 

@@ -277,7 +277,8 @@ router.get('/:id/details', authenticateToken, (req, res) => {
 
     try {
         const userData = db.prepare(`
-            SELECT id, name, email, role, avatar, status, joinDate, points, level, whatsapp, country,
+            SELECT id, name, nameEn, email, role, avatar, status, joinDate, points, level, whatsapp, country,
+                   age, gender, educationLevel,
                    supervisor_capacity as supervisorCapacity, 
                    supervisor_priority as supervisorPriority,
                    supervisor_id as supervisorId
@@ -319,6 +320,21 @@ router.get('/:id/details', authenticateToken, (req, res) => {
             WHERE e.user_id = ?
         `).all(id);
 
+        // Get quiz results grouped by course
+        const quizResults = db.prepare(`
+            SELECT qr.quizId, qr.score, qr.total, qr.percentage, qr.completedAt,
+                   q.title as quizTitle, q.courseId, q.passing_score,
+                   c.title as courseTitle
+            FROM quiz_results qr
+            JOIN quizzes q ON qr.quizId = q.id
+            LEFT JOIN courses c ON q.courseId = c.id
+            WHERE qr.userId = ?
+            ORDER BY qr.completedAt DESC
+        `).all(id);
+
+        // Get total courses count
+        const totalCourses = db.prepare('SELECT COUNT(*) as count FROM courses WHERE status = ?').get('published');
+
         // Get certificates
         const certificates = db.prepare(`
             SELECT cert.id, c.title as courseTitle, cert.issue_date as issueDate 
@@ -338,7 +354,24 @@ router.get('/:id/details', authenticateToken, (req, res) => {
             ORDER BY ea.extended_at DESC
         `).all(id);
 
-        res.json({ user, enrollments, certificates, extensions });
+        // Calculate academic summary
+        const completedCourses = enrollments.filter(e => e.progress >= 100).length;
+        const totalQuizzes = quizResults.length;
+        const avgScore = totalQuizzes > 0 
+            ? Math.round(quizResults.reduce((sum, qr) => sum + (qr.percentage || 0), 0) / totalQuizzes) 
+            : 0;
+
+        const academicSummary = {
+            enrolledCourses: enrollments.length,
+            completedCourses,
+            remainingCourses: (totalCourses?.count || 0) - enrollments.length,
+            totalAvailableCourses: totalCourses?.count || 0,
+            totalQuizzes,
+            avgQuizScore: avgScore,
+            certificatesCount: certificates.length
+        };
+
+        res.json({ user, enrollments, quizResults, academicSummary, certificates, extensions });
     } catch (e) {
         console.error('[USER_DETAILS_ERROR]:', e.message);
         res.status(500).json({ error: 'Failed to fetch user details' });

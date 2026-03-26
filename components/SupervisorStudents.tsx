@@ -67,13 +67,19 @@ const StudentCard = memo<{
             </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+        <div className="grid grid-cols-3 gap-2 mb-6">
+            <div className="bg-white/5 p-2 rounded-xl border border-white/5 text-center">
                 <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">المستوى</p>
                 <p className="text-white font-bold">{student.level}</p>
             </div>
-            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">تاريخ الانضمام</p>
+            <div className="bg-white/5 p-2 rounded-xl border border-white/5 text-center">
+                <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">البلد</p>
+                <p className="text-white font-bold text-sm truncate w-full" title={student.country || student.location || '-'}>
+                    {student.country || student.location || '-'}
+                </p>
+            </div>
+            <div className="bg-white/5 p-2 rounded-xl border border-white/5 text-center">
+                <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">الانضمام</p>
                 <p className="text-white font-bold text-sm">{student.joinDate?.split('T')[0]}</p>
             </div>
         </div>
