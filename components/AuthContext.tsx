@@ -159,22 +159,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
      * Attempts to log in with email and password
      */
     const login = useCallback(async (email: string, password: string, rememberMe: boolean = false): Promise<boolean> => {
-        setIsLoading(true);
+        // Note: Don't set isLoading here - Auth.tsx manages its own loading state.
+        // Setting isLoading here causes AppContent to unmount Auth (showing full-screen spinner),
+        // which destroys Auth's local state (like showPendingApproval).
         try {
             const loggedUser = await api.login(email, password, rememberMe);
             if (loggedUser) {
                 setUser(loggedUser);
-                updateLastActivity(); // Start tracking activity
-                setIsLoading(false);
+                updateLastActivity();
                 return true;
             }
-            setIsLoading(false);
             return false;
         } catch (error: unknown) {
-            setIsLoading(false);
-            const authError = error as { needsVerification?: boolean };
-            if (authError.needsVerification) {
-                // Re-throw to be caught by the component
+            const authError = error as { needsVerification?: boolean; pendingApproval?: boolean };
+            if (authError.needsVerification || authError.pendingApproval) {
                 throw error;
             }
             return false;
