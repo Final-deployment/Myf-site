@@ -30,7 +30,9 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
     // Attempt Login
     if (initialView === 'login') {
       try {
+
         const success = await login(email, password, rememberMe);
+
         if (success) {
           onLoginSuccess();
         } else {
@@ -39,11 +41,14 @@ const Auth: React.FC<AuthProps> = ({ initialView, onLoginSuccess, onBack, onTogg
           toast.error('بيانات الدخول غير صحيحة');
         }
       } catch (err: unknown) {
+
         setIsLoading(false);
         const error = err as { needsVerification?: boolean; pendingApproval?: boolean; email?: string; messageAr?: string };
+
         if (error.needsVerification && onVerificationRequired) {
           onVerificationRequired(error.email || email);
         } else if (error.pendingApproval) {
+
           setShowPendingApproval(true);
         } else {
           toast.error(error.messageAr || 'حدث خطأ أثناء تسجيل الدخول');

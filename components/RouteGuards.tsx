@@ -45,12 +45,6 @@ export const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }
  * Redirects to dashboard if already logged in
  */
 export const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated, isLoading } = useAuth();
-
-    if (isLoading) {
-        return <LoadingSpinner fullScreen />;
-    }
-
     return <>{children}</>;
 };
 
