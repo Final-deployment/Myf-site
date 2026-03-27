@@ -172,8 +172,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             return false;
         } catch (error: unknown) {
             setIsLoading(false);
-            const authError = error as { needsVerification?: boolean };
-            if (authError.needsVerification) {
+            const authError = error as { needsVerification?: boolean; pendingApproval?: boolean };
+            if (authError.needsVerification || authError.pendingApproval) {
                 // Re-throw to be caught by the component
                 throw error;
             }
