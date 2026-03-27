@@ -192,4 +192,38 @@ router.get('/results/:userId', authenticateToken, (req, res) => {
     }
 });
 
+// ============================================================================
+// Fix/correct quiz result (Admin Only)
+// ============================================================================
+router.patch('/results/:resultId', authenticateToken, requireAdmin, (req, res) => {
+    const { resultId } = req.params;
+    const { score, total, percentage } = req.body;
+
+    if (score === undefined || total === undefined || percentage === undefined) {
+        return res.status(400).json({ error: 'Missing required fields: score, total, percentage' });
+    }
+
+    // Validate: score must not exceed total
+    if (score > total || score < 0 || total < 1) {
+        return res.status(400).json({ error: 'Invalid values: score must be between 0 and total' });
+    }
+
+    try {
+        const existing = db.prepare('SELECT id FROM quiz_results WHERE id = ?').get(resultId);
+        if (!existing) {
+            return res.status(404).json({ error: 'Quiz result not found' });
+        }
+
+        db.prepare(`
+            UPDATE quiz_results SET score = ?, total = ?, percentage = ? WHERE id = ?
+        `).run(score, total, percentage, resultId);
+
+        console.log(`[QUIZ_RESULT_FIXED] Admin ${req.user.id} corrected result ${resultId}: ${score}/${total} (${percentage}%)`);
+        res.json({ success: true, message: `Result corrected to ${score}/${total} (${percentage}%)` });
+    } catch (e) {
+        console.error('[QUIZ_RESULT_FIX_ERROR]:', e.message);
+        res.status(500).json({ error: 'Failed to fix quiz result' });
+    }
+});
+
 module.exports = router;
