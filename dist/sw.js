@@ -86,7 +86,7 @@ define(['./workbox-959db468'], (function (workbox) { 'use strict';
     "revision": "5932d0db1f4fed350839a43f9b7d8694"
   }, {
     "url": "index.html",
-    "revision": "83c40171bf3ae1f67470aab22b21c785"
+    "revision": "bcee7a92360b44b91b73a8223efa126b"
   }, {
     "url": "certificate-frame.png",
     "revision": "cd05bcfcc901fda7560fa3777acf23c1"
@@ -148,202 +148,202 @@ define(['./workbox-959db468'], (function (workbox) { 'use strict';
     "url": "assets/workbox-window.prod.es5-BIl4cyR9.js",
     "revision": null
   }, {
-    "url": "assets/video-W3B8S2d4.js",
+    "url": "assets/video-B_lrjOhk.js",
     "revision": null
   }, {
-    "url": "assets/user-x-CAeiJ99F.js",
+    "url": "assets/user-x-DQnjnKG4.js",
     "revision": null
   }, {
-    "url": "assets/user-check-BHXm-DOk.js",
+    "url": "assets/user-check-CFt2Au6h.js",
     "revision": null
   }, {
-    "url": "assets/usePagination-DJx5E68K.js",
+    "url": "assets/usePagination-BMXuS1hg.js",
     "revision": null
   }, {
-    "url": "assets/useDebounce-Cceufa1Z.js",
+    "url": "assets/useDebounce-zAu2-_5E.js",
     "revision": null
   }, {
-    "url": "assets/upload-Bt-bd7md.js",
+    "url": "assets/upload-K5gbpwRK.js",
     "revision": null
   }, {
-    "url": "assets/target-1rB4ZFHK.js",
+    "url": "assets/target-BQHC0-Xh.js",
     "revision": null
   }, {
-    "url": "assets/SupervisorStudents-DzXP_IhI.js",
+    "url": "assets/SupervisorStudents-BLG53ZFv.js",
     "revision": null
   }, {
-    "url": "assets/SupervisorDashboard-fMSWbcI4.js",
+    "url": "assets/SupervisorDashboard-BVgrinGP.js",
     "revision": null
   }, {
-    "url": "assets/StudentDetailsModal-BIlpXHra.js",
+    "url": "assets/StudentDetailsModal-BatSneRO.js",
     "revision": null
   }, {
-    "url": "assets/StudentCertificates-BC24xRgo.js",
+    "url": "assets/StudentCertificates-D4-CZt2S.js",
     "revision": null
   }, {
-    "url": "assets/star-CuY_sbXR.js",
+    "url": "assets/star-Dh3lfsv4.js",
     "revision": null
   }, {
-    "url": "assets/square-pen-C3OJ--St.js",
+    "url": "assets/square-pen-58Njk32W.js",
     "revision": null
   }, {
-    "url": "assets/Settings-BZCYK_nG.js",
+    "url": "assets/Settings-DPHOjKC9.js",
     "revision": null
   }, {
-    "url": "assets/Search-CWCuINpY.js",
+    "url": "assets/Search-DlWELll_.js",
     "revision": null
   }, {
-    "url": "assets/save-Di_5igjM.js",
+    "url": "assets/save-Djgh6y3y.js",
     "revision": null
   }, {
     "url": "assets/sanitize-CRr1UQdy.js",
     "revision": null
   }, {
-    "url": "assets/RegistrationForm-Ci59Evlv.js",
+    "url": "assets/RegistrationForm-DgkAVcPF.js",
     "revision": null
   }, {
-    "url": "assets/RatingBox-3TWFAMgP.js",
+    "url": "assets/RatingBox-BDM89EXa.js",
     "revision": null
   }, {
-    "url": "assets/Quiz-Dnw5svsu.js",
+    "url": "assets/Quiz-BbjBhelY.js",
     "revision": null
   }, {
     "url": "assets/purify.es-B9ZVCkUG.js",
     "revision": null
   }, {
-    "url": "assets/Profile-WDSzwCM_.js",
+    "url": "assets/Profile-CWce_pOL.js",
     "revision": null
   }, {
-    "url": "assets/Player-DLlKneim.js",
+    "url": "assets/Player-B4Gm3euY.js",
     "revision": null
   }, {
-    "url": "assets/play-BovQLOPG.js",
+    "url": "assets/play-icWqNP5H.js",
     "revision": null
   }, {
-    "url": "assets/PieChart-C4m8-MNe.js",
+    "url": "assets/PieChart-C_EbWF_w.js",
     "revision": null
   }, {
-    "url": "assets/phone-DLqumhV4.js",
+    "url": "assets/phone-Zbz9WxSw.js",
     "revision": null
   }, {
-    "url": "assets/PersonalProgress-4zBBxAVE.js",
+    "url": "assets/PersonalProgress-Ca-_tM0k.js",
     "revision": null
   }, {
-    "url": "assets/Notifications-9rLuETHy.js",
+    "url": "assets/Notifications-Cdlo6o7Y.js",
     "revision": null
   }, {
-    "url": "assets/notificationManager-BVODi4Lt.js",
+    "url": "assets/notificationManager-Bx_tC5Vo.js",
     "revision": null
   }, {
-    "url": "assets/MessagingSystem-DAxPnTK_.js",
+    "url": "assets/MessagingSystem-0eCid442.js",
     "revision": null
   }, {
-    "url": "assets/map-pin-CQ4acKUl.js",
+    "url": "assets/map-pin-zbzkQHfq.js",
     "revision": null
   }, {
-    "url": "assets/mail-4AABrfI0.js",
+    "url": "assets/mail-BKDhZ_C_.js",
     "revision": null
   }, {
-    "url": "assets/loader-BpXg-nIW.js",
+    "url": "assets/loader-B_UnBAzz.js",
     "revision": null
   }, {
-    "url": "assets/Library-DW7eWXfm.js",
+    "url": "assets/Library-ClOTmGpv.js",
     "revision": null
   }, {
-    "url": "assets/LandingPage-DlKYMXR8.js",
+    "url": "assets/LandingPage-BKrdUsRA.js",
     "revision": null
   }, {
-    "url": "assets/jspdf.es.min-C4ngQmGD.js",
+    "url": "assets/jspdf.es.min-C-l5BLca.js",
     "revision": null
   }, {
-    "url": "assets/index.es-C6NljqPx.js",
+    "url": "assets/index.es-Q4nIVV2i.js",
     "revision": null
   }, {
     "url": "assets/index-xiRdh3gV.css",
     "revision": null
   }, {
-    "url": "assets/index-Dya5SHxa.js",
+    "url": "assets/index-j8_06SQO.js",
     "revision": null
   }, {
-    "url": "assets/index-BM4gIbWo.js",
+    "url": "assets/index-D3LUFzbw.js",
     "revision": null
   }, {
     "url": "assets/html2canvas.esm-QH1iLAAe.js",
     "revision": null
   }, {
-    "url": "assets/globe-Co_dGnIn.js",
+    "url": "assets/globe-CtXZVJo3.js",
     "revision": null
   }, {
-    "url": "assets/funnel-BfrifVzt.js",
+    "url": "assets/funnel-BVwGrvgC.js",
     "revision": null
   }, {
-    "url": "assets/ForgotPassword-B5C7ZO5a.js",
+    "url": "assets/ForgotPassword-CNbzHlTD.js",
     "revision": null
   }, {
-    "url": "assets/file-text-D8X9ftGU.js",
+    "url": "assets/file-text-BpCoazEA.js",
     "revision": null
   }, {
-    "url": "assets/Favorites-C4pFv7d4.js",
+    "url": "assets/Favorites-CS06WnnP.js",
     "revision": null
   }, {
-    "url": "assets/eye-off-ie537S9s.js",
+    "url": "assets/eye-off-BpTp80Dh.js",
     "revision": null
   }, {
-    "url": "assets/eye-CUBlUkAe.js",
+    "url": "assets/eye-CxXo4OPn.js",
     "revision": null
   }, {
-    "url": "assets/EmailVerification-C805-e5A.js",
+    "url": "assets/EmailVerification-DhLqjM0a.js",
     "revision": null
   }, {
-    "url": "assets/Dashboard-C2oHQZNW.js",
+    "url": "assets/Dashboard-C-2w5E3j.js",
     "revision": null
   }, {
-    "url": "assets/DailyTracking-BkeSeD9v.js",
+    "url": "assets/DailyTracking-Cft13uEC.js",
     "revision": null
   }, {
-    "url": "assets/clock-H_otdCyr.js",
+    "url": "assets/clock-BGFqLO_C.js",
     "revision": null
   }, {
-    "url": "assets/circle-check-BpnNaQuQ.js",
+    "url": "assets/circle-check-Da4ldwxQ.js",
     "revision": null
   }, {
-    "url": "assets/chevron-left-H8Q5xHMO.js",
+    "url": "assets/chevron-left-BXzvCRz5.js",
     "revision": null
   }, {
-    "url": "assets/Auth-BjWL9r4D.js",
+    "url": "assets/Auth-B-YLrznx.js",
     "revision": null
   }, {
-    "url": "assets/AdminStudents-BhaEYpHV.js",
+    "url": "assets/AdminStudents-Bwq7RRQe.js",
     "revision": null
   }, {
-    "url": "assets/AdminReports-CPH9SZ97.js",
+    "url": "assets/AdminReports-DJcla1Tz.js",
     "revision": null
   }, {
-    "url": "assets/AdminQuizManagement-DX7Z9tYq.js",
+    "url": "assets/AdminQuizManagement-BjlAVeaE.js",
     "revision": null
   }, {
-    "url": "assets/AdminPendingStudents-Ct82h9Fp.js",
+    "url": "assets/AdminPendingStudents-DszIJrXn.js",
     "revision": null
   }, {
-    "url": "assets/AdminLibrary-Be1S_WwA.js",
+    "url": "assets/AdminLibrary-f0dFVGOH.js",
     "revision": null
   }, {
-    "url": "assets/AdminDashboard-BhrfvLWd.js",
+    "url": "assets/AdminDashboard-vMiu5XQG.js",
     "revision": null
   }, {
-    "url": "assets/AdminCertificateManagement-nRUB64RK.js",
+    "url": "assets/AdminCertificateManagement-CJvCJ2zP.js",
     "revision": null
   }, {
-    "url": "assets/AdminBackupSettings-BeheE0sV.js",
+    "url": "assets/AdminBackupSettings-BynOQoVI.js",
     "revision": null
   }, {
-    "url": "assets/AdminAudioCourses-qeAEHpWT.js",
+    "url": "assets/AdminAudioCourses-BBkk_-JL.js",
     "revision": null
   }, {
-    "url": "assets/AdminAnnouncements-blZvR-Vp.js",
+    "url": "assets/AdminAnnouncements-DviNBamH.js",
     "revision": null
   }, {
-    "url": "assets/AdminActivityLog-Dfi3Dhg9.js",
+    "url": "assets/AdminActivityLog-D1ZMil7k.js",
     "revision": null
   }, {
     "url": "icons/icon-128x128.png",

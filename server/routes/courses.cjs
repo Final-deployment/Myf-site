@@ -352,7 +352,7 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
     }
 
     // S2: Backend validation — require meaningful watch time before marking complete
-    if (completed && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+    if (completed && episodeId !== 'FULL_COURSE' && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
         if (!watchedDuration || watchedDuration < 30) {
             return res.status(400).json({ error: 'لا يمكن إكمال الدرس بدون مشاهدة فعلية كافية' });
         }
@@ -377,20 +377,24 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
         );
 
         // Recalculate overall course progress
-        if (courseId && courseId !== 'default' && episodeId !== 'FULL_COURSE') {
-            const episodes = db.prepare('SELECT id FROM episodes WHERE courseId = ?').all(courseId);
-            if (episodes.length > 0) {
-                const epIds = episodes.map(e => e.id);
-                // Simple placeholder logic for SQLite
-                const completedCount = db.prepare(`
-                    SELECT COUNT(*) as count 
-                    FROM episode_progress ep
-                    INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id
-                    WHERE ep.user_id = ? AND ep.course_id = ? AND ep.completed = 1
-                `).get(req.user.id, courseId).count;
+        if (courseId && courseId !== 'default') {
+            if (episodeId === 'FULL_COURSE' && completed) {
+                db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(req.user.id, courseId);
+            } else if (episodeId !== 'FULL_COURSE') {
+                const episodes = db.prepare('SELECT id FROM episodes WHERE courseId = ?').all(courseId);
+                if (episodes.length > 0) {
+                    const epIds = episodes.map(e => e.id);
+                    // Simple placeholder logic for SQLite
+                    const completedCount = db.prepare(`
+                        SELECT COUNT(*) as count 
+                        FROM episode_progress ep
+                        INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id
+                        WHERE ep.user_id = ? AND ep.course_id = ? AND ep.completed = 1
+                    `).get(req.user.id, courseId).count;
 
-                const progress = Math.round((completedCount / episodes.length) * 100);
-                db.prepare('UPDATE enrollments SET progress = ?, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(progress, req.user.id, courseId);
+                    const progress = Math.round((completedCount / episodes.length) * 100);
+                    db.prepare('UPDATE enrollments SET progress = ?, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(progress, req.user.id, courseId);
+                }
             }
         }
 

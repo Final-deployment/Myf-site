@@ -1,0 +1,6 @@
+import{e as n}from"./index-D3LUFzbw.js";/**
+ * @license lucide-react v0.562.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const r=[["path",{d:"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",key:"1xq2db"}]],f=n("zap",r),s="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/notification.mp3";class c{constructor(){this.audio=new Audio(s),this.audio.load()}async requestPermission(){return"Notification"in window?Notification.permission==="granted"?!0:await Notification.requestPermission()==="granted":!1}playSound(){this.audio.currentTime=0,this.audio.play().catch(i=>console.warn("Audio play failed (user interaction needed first)",i))}async show(i,a,o="/icons/icon-192x192.png"){const t=await this.requestPermission();if(this.playSound(),t)try{navigator.serviceWorker&&navigator.serviceWorker.ready?(await navigator.serviceWorker.ready).showNotification(i,{body:a,icon:o,badge:o,vibrate:[200,100,200]}):new Notification(i,{body:a,icon:o})}catch(e){console.error("Notification trigger failed",e)}}}const l=new c;export{f as Z,l as n};

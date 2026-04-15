@@ -124,6 +124,21 @@ router.post('/', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'يجب إتمام المساق بنسبة 100% للحصول على الشهادة' });
         }
 
+        // Verify quizzes completion (Fix for Certificate Bypass Flaw)
+        const quizzesCount = db.prepare('SELECT COUNT(*) as count FROM quizzes WHERE courseId = ?').get(courseId).count;
+        if (quizzesCount > 0) {
+            const passedQuizzes = db.prepare(`
+                SELECT COUNT(DISTINCT q.id) as passedCount
+                FROM quizzes q
+                JOIN quiz_results qr ON q.id = qr.quizId
+                WHERE q.courseId = ? AND qr.userId = ? AND qr.percentage >= q.passing_score
+            `).get(courseId, user.id);
+            
+            if (passedQuizzes.passedCount < quizzesCount) {
+                return res.status(403).json({ error: 'يجب التخرج واجتياز جميع اختبارات المساق بنجاح قبل إصدار الشهادة' });
+            }
+        }
+
         // Lookup course title
         const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId);
         if (!course) {

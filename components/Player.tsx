@@ -560,7 +560,8 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                   const newTime = (newProgress / 100) * duration;
 
                   const isAdminOrSupervisor = user?.role === 'admin' || user?.role === 'supervisor' || !!user?.is_tester;
-                  if (isAdminOrSupervisor || newTime <= maxTimeReached || isCompleted || newTime < currentTime) {
+                  const isEpisodeFullyCompleted = (currentEpisode as any).completed;
+                  if (isAdminOrSupervisor || newTime <= maxTimeReached || isCompleted || isEpisodeFullyCompleted || newTime < currentTime) {
                     setProgress(newProgress);
                     if (videoRef.current && duration) {
                       videoRef.current.currentTime = newTime;
