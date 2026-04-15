@@ -174,6 +174,19 @@ function initDatabase() {
         )
     `);
 
+  // --- Push Subscriptions Table ---
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
   // Indexes for Episode Progress
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_progress_user_course ON episode_progress(user_id, course_id)'); } catch(e){}
 

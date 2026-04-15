@@ -257,13 +257,18 @@ export default function SupportChatBubble() {
             }, 300);
 
             const latestToken = (user as any)?.access_token || localStorage.getItem('token');
+            const endpoint = user ? '/api/social/upload-proxy' : '/api/social/public/upload-proxy';
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            
+            if (user && latestToken) {
+                headers['Authorization'] = `Bearer ${latestToken}`;
+            }
 
-            const res = await fetch('/api/social/upload-proxy', {
+            const res = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${latestToken}`
-                },
+                headers,
                 body: JSON.stringify({
                     fileName: file.name,
                     fileType: file.type,

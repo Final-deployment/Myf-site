@@ -13,6 +13,7 @@ import { sanitizeHTML, sanitizeEmail } from '../utils/sanitize';
 import { getAuthToken } from '../services/api/auth';
 
 import AdminBackupSettings from './AdminBackupSettings';
+import PushNotificationManager from './PushNotificationManager';
 
 /**
  * Settings nav item interface
@@ -170,6 +171,7 @@ const Settings: React.FC = memo(() => {
    const navItems: SettingsNavItem[] = useMemo(() => {
       const base = [
          { id: 'profile', label: t('settings.profile'), icon: User },
+         { id: 'notifications', label: 'الإشعارات (Push)', icon: Bell },
          { id: 'privacy', label: t('settings.privacy'), icon: Lock },
       ];
       if (user?.role === 'admin') {
@@ -422,6 +424,15 @@ const Settings: React.FC = memo(() => {
                         </div>
                      </section>
                   </>
+               )}
+
+               {activeSection === 'notifications' && (
+                  <section className="glass-panel p-8 rounded-3xl animate-slide-up" aria-label="الإشعارات (Push)">
+                     <h3 className="text-xl font-bold text-white mb-6 border-b border-white/10 pb-4">
+                        إعدادات الإشعارات
+                     </h3>
+                     <PushNotificationManager />
+                  </section>
                )}
 
                {activeSection === 'privacy' && (

@@ -88,6 +88,62 @@ router.get('/public/messages/:guestId', (req, res) => {
 });
 
 /**
+ * Server-side Proxy Upload (Public)
+ * Allows guests to upload files (with rate limiting). Limit 5MB.
+ */
+router.post('/public/upload-proxy', uploadLimiter, async (req, res) => {
+    try {
+        let fileName = req.query.fileName;
+        let fileType = req.headers['content-type'];
+        let buffer;
+
+        // Support both JSON (Base64) and raw binary
+        if (req.body && req.body.base64Data) {
+            console.log(`[PublicProxyUpload] Decoding Base64 for ${req.body.fileName}`);
+            fileName = req.body.fileName || fileName || `guest-upload-${Date.now()}`;
+            fileType = req.body.fileType || fileType || 'application/octet-stream';
+
+            const base64String = req.body.base64Data.replace(/^data:.*?;base64,/, '');
+            buffer = Buffer.from(base64String, 'base64');
+        } else if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+            console.log(`[PublicProxyUpload] Processing raw binary buffer`);
+            buffer = req.body;
+            fileName = fileName || `guest-upload-${Date.now()}`;
+        } else {
+            return res.status(400).json({ error: 'No file data received. Ensure Content-Type is application/octet-stream for raw, or send JSON with base64Data.' });
+        }
+
+        if (!buffer || buffer.length === 0) {
+            return res.status(400).json({ error: 'Empty file buffer' });
+        }
+
+        // Whitelist extensions
+        if (fileName) {
+            const ext = path.extname(fileName).toLowerCase().replace('.', '');
+            const allowedExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'mp3', 'mp4', 'webm', 'ogg', 'pdf', 'doc', 'docx'];
+            if (ext && !allowedExts.includes(ext)) {
+                return res.status(415).json({ error: `File type ${ext} not permitted.` });
+            }
+        }
+
+        // 10MB size limit check for public
+        const MAX_SIZE_MB = 10;
+        const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+        if (buffer.length > MAX_SIZE_BYTES) {
+            return res.status(413).json({ error: `حجم الملف للزوار يتجاوز الحد الأقصى وهو ${MAX_SIZE_MB} ميغابايت` });
+        }
+
+        console.log(`[PublicProxyUpload] Received ${buffer.length} bytes for ${fileName} (${fileType})`);
+        const publicUrl = await uploadBufferToR2(buffer, fileName, fileType);
+        console.log(`[PublicProxyUpload] Success. URL: ${publicUrl}`);
+        res.json({ publicUrl });
+    } catch (e) {
+        console.error('[PublicProxyUpload] Failed:', e);
+        res.status(500).json({ error: 'فشل في رفع الملف. حاول مرة أخرى.' });
+    }
+});
+
+/**
  * Server-side Proxy Upload (Protected)
  * Receives file bytes as application/octet-stream and uploads to R2
  */

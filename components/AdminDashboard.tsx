@@ -325,6 +325,69 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
             </section>
          </div>
 
+         {/* Push Notification Broadcast */}
+         <section className="mt-8 glass-panel p-6 rounded-3xl" aria-label="إرسال إشعارات للطلاب">
+            <div className="flex items-center gap-3 mb-4 border-b border-white/10 pb-4">
+               <div className="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center">
+                  <Bell className="w-5 h-5" />
+               </div>
+               <div>
+                  <h3 className="text-xl font-bold text-white">إرسال إشعارات (Push Broadcast)</h3>
+                  <p className="text-sm text-gray-400">إرسال رسالة تنبيه لجميع المشتركين في خدمة الإشعارات</p>
+               </div>
+            </div>
+            
+            <form onSubmit={async (e) => {
+               e.preventDefault();
+               const form = e.target as HTMLFormElement;
+               const title = (form.elements.namedItem('pushTitle') as HTMLInputElement).value;
+               const body = (form.elements.namedItem('pushBody') as HTMLTextAreaElement).value;
+               const submitBtn = document.getElementById('pushSubmitBtn') as HTMLButtonElement;
+               
+               if (!title || !body) return;
+               
+               const originalText = submitBtn.innerText;
+               submitBtn.disabled = true;
+               submitBtn.innerText = 'جاري الإرسال...';
+               
+               try {
+                  const token = localStorage.getItem('token');
+                  const res = await fetch('/api/notifications/send', {
+                     method: 'POST',
+                     headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                     },
+                     body: JSON.stringify({ title, body, url: '/' })
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                     alert(`تم الإرسال بنجاح لـ ${data.count || 0} مشترك!`);
+                     form.reset();
+                  } else {
+                     alert('حدث خطأ: ' + (data.error || 'غير معروف'));
+                  }
+               } catch(err) {
+                  alert('خطأ في الاتصال');
+               } finally {
+                  submitBtn.disabled = false;
+                  submitBtn.innerText = originalText;
+               }
+            }} className="space-y-4 max-w-2xl">
+               <div>
+                  <label className="block text-sm text-gray-400 mb-1">عنوان الإشعار</label>
+                  <input required name="pushTitle" type="text" className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors" placeholder="مثال: دورة جديدة متاحة!" />
+               </div>
+               <div>
+                  <label className="block text-sm text-gray-400 mb-1">نص الإشعار</label>
+                  <textarea required name="pushBody" rows={3} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors custom-scrollbar" placeholder="اكتب تفاصيل الرسالة هنا..."></textarea>
+               </div>
+               <button id="pushSubmitBtn" type="submit" className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors">
+                  إرسال للجميع
+               </button>
+            </form>
+         </section>
+
          {/* Rating Section */}
          <div className="mt-8">
             <RatingBox />
