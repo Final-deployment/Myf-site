@@ -217,12 +217,13 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
             streak,
             status,
             emailVerified: 1,
-            supervisor_id: supervisorId
+            supervisor_id: supervisorId,
+            approved: 1
         };
 
         db.prepare(`
-            INSERT INTO users (id, name, nameEn, email, password, role, avatar, joinDate, points, level, streak, status, emailVerified, supervisor_id) 
-            VALUES (@id, @name, @nameEn, @email, @password, @role, @avatar, @joinDate, @points, @level, @streak, @status, @emailVerified, @supervisor_id)
+            INSERT INTO users (id, name, nameEn, email, password, role, avatar, joinDate, points, level, streak, status, emailVerified, supervisor_id, approved) 
+            VALUES (@id, @name, @nameEn, @email, @password, @role, @avatar, @joinDate, @points, @level, @streak, @status, @emailVerified, @supervisor_id, @approved)
         `).run(newUser);
 
         const { password: _, ...userWithoutPass } = newUser;

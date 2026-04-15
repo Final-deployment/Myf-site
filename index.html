@@ -68,6 +68,37 @@
 
 <body
   class="bg-[#0f3d36] text-white min-h-screen font-sans overflow-auto md:overflow-hidden selection:bg-gold-500 selection:text-black bg-pattern-overlay bg-fixed">
+  
+  <!-- Cache Buster Script -->
+  <script>
+    (async function checkAppVersion() {
+      try {
+        const timestamp = new Date().getTime();
+        const response = await fetch('/version.json?t=' + timestamp, {
+          cache: 'no-store'
+        });
+        
+        const data = await response.json();
+        const latestVersion = data.version;
+        const currentVersion = localStorage.getItem('appVersion');
+
+        if (!currentVersion || currentVersion !== latestVersion) {
+          console.log("إجبار تحديث المتصفح وتنظيف الكاش الجذري...");
+          localStorage.setItem('appVersion', latestVersion);
+          
+          if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+          }
+
+          window.location.reload(true);
+        }
+      } catch (error) {
+        console.error("فشل في التحقق من التحديثات:", error);
+      }
+    })();
+  </script>
+
   <!-- Skip Link for Accessibility -->
   <a href="#main-content" class="skip-link">تخطي إلى المحتوى الرئيسي</a>
 
