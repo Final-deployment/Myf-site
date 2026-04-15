@@ -9,23 +9,24 @@ const { authenticateToken, optionalAuth, requireAdmin } = require('../middleware
 // SHARED: Check if a user has "passed" a specific course
 // ============================================================================
 function isCoursePassed(userId, courseId) {
-    // 1) Passed the quiz for this course
-    const passedQuiz = db.prepare(`
-        SELECT 1 FROM quiz_results qr
-        JOIN quizzes q ON qr.quizId = q.id
-        WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
-    `).get(userId, courseId);
-    if (passedQuiz) return true;
+    // 1) Check if quizzes exist for this course
+    const quizCount = db.prepare('SELECT COUNT(*) as c FROM quizzes WHERE courseId = ?').get(courseId).c;
 
-    // 2) No quizzes exist for this course, but 100% complete
-    const hasQuiz = db.prepare('SELECT 1 FROM quizzes WHERE courseId = ?').get(courseId);
-    if (!hasQuiz) {
-        const completed = db.prepare(
-            'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ? AND progress >= 100'
-        ).get(userId, courseId);
-        if (completed) return true;
+    if (quizCount > 0) {
+        // Must pass ALL quizzes, not just one
+        const passedCount = db.prepare(`
+            SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
+            JOIN quizzes q ON qr.quizId = q.id
+            WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+        `).get(userId, courseId).c;
+        return passedCount >= quizCount;
     }
-    return false;
+
+    // 2) No quizzes exist for this course — 100% progress or completed = passed
+    const completed = db.prepare(
+        'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ? AND (progress >= 100 OR completed = 1)'
+    ).get(userId, courseId);
+    return !!completed;
 }
 
 // ============================================================================
@@ -77,21 +78,28 @@ router.get('/', async (req, res) => {
         // Fetch all passed quizzes for this user to determine locking
         let passedCourseIds = new Set();
         if (userId) {
-            // 1) Courses where the student passed the quiz
-            const passedResults = db.prepare(`
-                SELECT DISTINCT q.courseId 
-                FROM quiz_results qr
-                JOIN quizzes q ON qr.quizId = q.id
-                WHERE qr.userId = ? AND qr.percentage >= q.passing_score
-            `).all(userId);
-            passedResults.forEach(r => passedCourseIds.add(String(r.courseId)));
+            // 1) Courses where the student passed ALL quizzes (Fix #10: not just any one)
+            const coursesWithQuizzes = db.prepare(`
+                SELECT courseId, COUNT(*) as quiz_count FROM quizzes GROUP BY courseId
+            `).all();
 
-            // 2) Courses that have NO quizzes but are completed (progress = 100%)
+            for (const cq of coursesWithQuizzes) {
+                const passedCount = db.prepare(`
+                    SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
+                    JOIN quizzes q ON qr.quizId = q.id
+                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+                `).get(userId, cq.courseId).c;
+                if (passedCount >= cq.quiz_count) {
+                    passedCourseIds.add(String(cq.courseId));
+                }
+            }
+
+            // 2) Courses that have NO quizzes but are completed (progress = 100% or completed = 1)
             //    These are considered "passed" automatically
             const completedNoQuiz = db.prepare(`
                 SELECT e.course_id 
                 FROM enrollments e
-                WHERE e.user_id = ? AND e.progress >= 100
+                WHERE e.user_id = ? AND (e.progress >= 100 OR e.completed = 1)
                 AND NOT EXISTS (SELECT 1 FROM quizzes q WHERE q.courseId = e.course_id)
             `).all(userId);
             completedNoQuiz.forEach(r => passedCourseIds.add(String(r.course_id)));
@@ -193,7 +201,8 @@ router.get('/', async (req, res) => {
                 isLockedByDeadline = !!enrollment.is_locked;
 
                 // Compute deadline lock status at read-time only (no DB write in GET — L1 fix)
-                if (!isLockedByDeadline && deadline && new Date() > new Date(deadline) && progress < 100) {
+                // Fix #5: Also check enrollment.completed — completed courses are never locked
+                if (!isLockedByDeadline && deadline && new Date() > new Date(deadline) && progress < 100 && !enrollment.completed) {
                     isLockedByDeadline = true;
                 }
 
@@ -311,13 +320,15 @@ router.post('/enroll', authenticateToken, (req, res) => {
         }
 
         // Insert enrollment
-        db.prepare(`
+        const insertResult = db.prepare(`
             INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
             VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
         `).run(userId, courseId, deadline);
 
-        // Update students_count in courses table
-        db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(courseId);
+        // Fix #9: Only increment students_count after successful INSERT
+        if (insertResult.changes > 0) {
+            db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(courseId);
+        }
 
         res.json({ success: true, message: 'Enrolled successfully' });
     } catch (e) {

@@ -333,11 +333,14 @@ router.post('/approve-student/:id', authenticateToken, requireAdmin, async (req,
                 const date = new Date();
                 date.setDate(date.getDate() + (fCourse.days_available || 30));
                 const deadline = date.toISOString();
-                db.prepare(`
+                const enrollResult = db.prepare(`
                     INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
                     VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
                 `).run(id, foundationalCourseId, deadline);
-                db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
+                // Fix #9: Only increment students_count after successful INSERT (not when IGNORE fires)
+                if (enrollResult.changes > 0) {
+                    db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
+                }
                 console.log(`[ADMIN] Auto-enrolled approved student ${id} in ${foundationalCourseId}`);
             }
         } catch (enrollErr) {

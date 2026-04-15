@@ -189,7 +189,10 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   /** Reset seek flag when episode changes */
   useEffect(() => {
     setHasSeeked(false);
-    setMaxTimeReached((currentEpisode as any).lastPosition || 0);
+    setMaxTimeReached(Math.max(
+      (currentEpisode as any).lastPosition || 0,
+      (currentEpisode as any).watchedDuration || 0
+    ));
     setProgress((currentEpisode as any).progress || 0); // Update progress state when episode changes
 
     // Update max reached index if we advanced
@@ -900,9 +903,9 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
         </div>
       )}
 
-      {/* Lock out overlay if deadline passed */}
-      {(((course as any).isLockedByDeadline && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester) || 
-        (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester)) && (
+      {/* Lock out overlay if deadline passed — Fix #5: never show for completed courses */}
+      {(((course as any).isLockedByDeadline && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && course.progress < 100) || 
+        (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && course.progress < 100 && !isCompleted)) && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-fade-in">
           <div className="bg-red-900/30 border border-red-500/50 p-8 rounded-3xl max-w-md text-center space-y-4 shadow-2xl">
             <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">

@@ -186,8 +186,8 @@ router.post('/master', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'Master certificate already exists' });
         }
 
-        // Validate all courses are completed (check quiz results)
-        const courses = db.prepare('SELECT id FROM courses').all();
+        // Fix #7: Only count published courses for master certificate eligibility
+        const courses = db.prepare("SELECT id FROM courses WHERE status = 'published'").all();
         const passedQuizzes = db.prepare(`
             SELECT DISTINCT q.courseId 
             FROM quiz_results qr
