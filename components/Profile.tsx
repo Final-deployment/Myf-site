@@ -18,72 +18,7 @@ interface ProfileData {
     bio: string;
 }
 
-/**
- * Stat item interface
- */
-interface StatItem {
-    label: string;
-    value: string;
-    icon: LucideIcon;
-    color: string;
-}
 
-/**
- * Achievement item interface
- */
-interface AchievementItem {
-    title: string;
-    date: string;
-    icon: string;
-}
-
-/**
- * Stat card component
- */
-const StatCard = memo<{ stat: StatItem }>(({ stat }) => (
-    <div
-        className="glass-panel p-5 rounded-2xl"
-        role="article"
-        aria-label={`${stat.label}: ${stat.value}`}
-    >
-        <div className="flex items-center gap-4">
-            <div
-                className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center`}
-                aria-hidden="true"
-            >
-                <stat.icon className="w-6 h-6 text-white" />
-            </div>
-            <div>
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-gray-400 text-sm">{stat.label}</p>
-            </div>
-        </div>
-    </div>
-));
-StatCard.displayName = 'StatCard';
-
-/**
- * Achievement card component
- */
-const AchievementCard = memo<{ achievement: AchievementItem }>(({ achievement }) => (
-    <div
-        className="flex items-center gap-4 p-4 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
-        role="article"
-        aria-label={`Achievement: ${achievement.title}`}
-    >
-        <div
-            className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 flex items-center justify-center text-2xl"
-            aria-hidden="true"
-        >
-            {achievement.icon}
-        </div>
-        <div>
-            <h4 className="text-white font-medium">{achievement.title}</h4>
-            <p className="text-gray-400 text-sm">{achievement.date}</p>
-        </div>
-    </div>
-));
-AchievementCard.displayName = 'AchievementCard';
 
 /**
  * Profile form field component
@@ -96,7 +31,8 @@ const FormField = memo<{
     onChange: (value: string) => void;
     type?: string;
     id: string;
-}>(({ icon: Icon, label, value, isEditing, onChange, type = 'text', id }) => {
+    maxLength?: number;
+}>(({ icon: Icon, label, value, isEditing, onChange, type = 'text', id, maxLength }) => {
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         onChange(e.target.value);
     }, [onChange]);
@@ -112,6 +48,7 @@ const FormField = memo<{
                     id={id}
                     type={type}
                     value={value}
+                    maxLength={maxLength}
                     onChange={handleChange}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                     aria-label={label}
@@ -204,21 +141,7 @@ const Profile: React.FC = memo(() => {
         bio: profileData.bio
     }), [authUser, profileData]);
 
-    /** User statistics */
-    const stats: StatItem[] = useMemo(() => [
-        { label: 'الدورات المكتملة', value: '12', icon: BookOpen, color: 'from-emerald-500 to-teal-600' },
-        { label: 'ساعات التعلم', value: '156', icon: Clock, color: 'from-blue-500 to-cyan-600' },
-        { label: 'الشهادات', value: '8', icon: Award, color: 'from-amber-500 to-orange-600' },
-        { label: 'الأهداف المحققة', value: '24', icon: Target, color: 'from-purple-500 to-pink-600' },
-    ], []);
 
-    /** User achievements */
-    const achievements: AchievementItem[] = useMemo(() => [
-        { title: 'ختم جزء عم', date: '2024-03-15', icon: '🏆' },
-        { title: 'أول 100 ساعة تعلم', date: '2024-02-20', icon: '⭐' },
-        { title: 'سلسلة 30 يوم متتالية', date: '2024-01-30', icon: '🔥' },
-        { title: 'إتمام أول دورة', date: '2024-01-20', icon: '📚' },
-    ], []);
 
     return (
         <div
@@ -285,6 +208,7 @@ const Profile: React.FC = memo(() => {
                                 isEditing={isEditing}
                                 onChange={(v) => handleChange('email', v)}
                                 type="email"
+                                maxLength={100}
                             />
 
                             <FormField
@@ -295,6 +219,7 @@ const Profile: React.FC = memo(() => {
                                 isEditing={isEditing}
                                 onChange={(v) => handleChange('phone', v)}
                                 type="tel"
+                                maxLength={20}
                             />
 
                             <FormField
@@ -304,6 +229,7 @@ const Profile: React.FC = memo(() => {
                                 value={user.location}
                                 isEditing={isEditing}
                                 onChange={(v) => handleChange('location', v)}
+                                maxLength={50}
                             />
 
                             <div className="space-y-2">
@@ -321,6 +247,7 @@ const Profile: React.FC = memo(() => {
                                 <textarea
                                     id="bio"
                                     value={user.bio}
+                                    maxLength={500}
                                     onChange={(e) => handleChange('bio', e.target.value)}
                                     rows={3}
                                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 resize-none"
@@ -346,30 +273,7 @@ const Profile: React.FC = memo(() => {
                 </div>
             </section>
 
-            {/* Stats & Achievements (Hidden for Admins/Supervisors) */}
-            {authUser?.role !== 'admin' && authUser?.role !== 'supervisor' && (
-                <>
-                    {/* Stats */}
-                    <section
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-                aria-label="إحصائيات المستخدم"
-            >
-                {stats.map((stat, idx) => (
-                    <StatCard key={idx} stat={stat} />
-                ))}
-            </section>
 
-            {/* Achievements */}
-            <section className="glass-panel p-6 rounded-2xl" aria-label="الإنجازات">
-                <h3 className="text-xl font-bold text-white mb-6">الإنجازات</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {achievements.map((achievement, idx) => (
-                        <AchievementCard key={idx} achievement={achievement} />
-                    ))}
-                </div>
-            </section>
-                </>
-            )}
         </div>
     );
 });

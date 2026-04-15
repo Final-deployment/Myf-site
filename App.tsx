@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { LanguageProvider } from './components/LanguageContext';
 import { ThemeProvider, useTheme } from './components/ThemeContext';
 import { AuthProvider, useAuth } from './components/AuthContext';
@@ -21,6 +21,7 @@ import RouteErrorBoundary from './components/RouteErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import { SkeletonDashboard } from './components/Skeleton';
 import InstallPrompt from './components/InstallPrompt';
+import AppUpdater from './components/AppUpdater';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import CoursesGrid from './components/CoursesGrid';
@@ -41,7 +42,6 @@ const ROUTE_IMPORTS = {
   dashboard: () => import('./components/Dashboard'),
   player: () => import('./components/Player'),
   quiz: () => import('./components/Quiz'),
-  community: () => import('./components/Community'),
   library: () => import('./components/Library'),
   settings: () => import('./components/Settings'),
   profile: () => import('./components/Profile'),
@@ -78,7 +78,6 @@ const ROUTE_IMPORTS = {
 const Dashboard = lazy(ROUTE_IMPORTS.dashboard);
 const Player = lazy(ROUTE_IMPORTS.player);
 const Quiz = lazy(ROUTE_IMPORTS.quiz);
-const Community = lazy(ROUTE_IMPORTS.community);
 const Library = lazy(ROUTE_IMPORTS.library);
 const Settings = lazy(ROUTE_IMPORTS.settings);
 const Profile = lazy(ROUTE_IMPORTS.profile);
@@ -259,10 +258,7 @@ const AppContent: React.FC = () => {
 
         <Route path="/login" element={
           <PublicRoute>
-            <Auth
-              initialView="login"
-              onToggleView={(view) => navigate(view === 'login' ? '/login' : '/signup')}
-              onBack={() => navigate('/')}
+              <Auth
               onLoginSuccess={() => navigate('/dashboard')}
               onForgotPassword={() => navigate('/forgot-password')}
               onVerificationRequired={(email) => {
@@ -302,7 +298,7 @@ const AppContent: React.FC = () => {
               localStorage.removeItem('pendingVerificationEmail');
               localStorage.removeItem('authToken');
               setPendingEmail('');
-              navigate('/signup');
+              navigate('/');
             }}
           />
         } />
@@ -312,6 +308,7 @@ const AppContent: React.FC = () => {
           <ProtectedRoute>
             <AppLayout
               activeCourse={activeCourse}
+              setActiveCourse={setActiveCourse}
               handlePlayCourse={handlePlayCourse}
               handleBackToDashboard={handleBackToDashboard}
               handleOpenChat={handleOpenChat}
@@ -321,13 +318,70 @@ const AppContent: React.FC = () => {
         } />
       </Routes>
       <SupportChatBubble />
-      <InstallPrompt />
     </>
   );
 };
 
+// ============================================================================
+// Player Route Wrapper (handles direct URL / refresh)
+// ============================================================================
+
+/**
+ * Wraps the Player component to handle direct URL access.
+ * If activeCourse is null (e.g., page refresh), fetches the course from API.
+ */
+const PlayerRouteWrapper: React.FC<{
+  activeCourse: Course | null;
+  onBack: () => void;
+  onPlayCourse: (course: Course) => void;
+  setActiveCourse: (course: Course | null) => void;
+}> = ({ activeCourse, onBack, onPlayCourse, setActiveCourse }) => {
+  const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(!activeCourse);
+  const [course, setCourse] = React.useState<Course | null>(activeCourse);
+
+  React.useEffect(() => {
+    if (activeCourse) {
+      setCourse(activeCourse);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch course from API when accessed directly
+    if (courseId) {
+      const fetchCourse = async () => {
+        try {
+          const { api } = await import('./services/api');
+          const allCourses = await api.getCourses();
+          const found = allCourses.find((c: any) => String(c.id) === String(courseId));
+          if (found) {
+            setCourse(found);
+            setActiveCourse(found);
+          } else {
+            navigate('/dashboard', { replace: true });
+          }
+        } catch {
+          navigate('/dashboard', { replace: true });
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchCourse();
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [courseId, activeCourse, navigate, setActiveCourse]);
+
+  if (loading) return <LoadingSpinner fullScreen message="جاري تحميل المحتوى..." />;
+  if (!course) return null;
+
+  return <Player course={course} onBack={onBack} onPlayCourse={onPlayCourse} />;
+};
+
 interface AppLayoutProps {
   activeCourse: Course | null;
+  setActiveCourse: (course: Course | null) => void;
   handlePlayCourse: (course: Course) => void;
   handleBackToDashboard: () => void;
   handleOpenChat: (userId: string) => void;
@@ -336,6 +390,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({
   activeCourse,
+  setActiveCourse,
   handlePlayCourse,
   handleBackToDashboard,
   handleOpenChat,
@@ -389,7 +444,30 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   };
 
   const preloadRoute = (tab: string) => {
-    // Optional: Add preloading logic here if needed
+    // Map sidebar tab IDs to their ROUTE_IMPORTS keys
+    const keyMap: Record<string, string> = {
+      'dashboard': user?.role === 'admin' ? 'admin-dashboard' : user?.role === 'supervisor' ? 'dashboard' : 'dashboard',
+      'students': user?.role === 'admin' ? 'admin-students' : 'dashboard',
+      'audio-courses': 'admin-audio-courses',
+      'reports': 'admin-reports',
+      'library': user?.role === 'admin' ? 'admin-library' : 'library',
+      'announcements': 'admin-announcements',
+      'quizzes': 'admin-quizzes',
+      'certificates': user?.role === 'admin' ? 'admin-certificates' : 'certificates',
+      'messages': 'messages',
+      'courses': 'dashboard',
+      'profile': 'profile',
+      'settings': 'settings',
+      'search': 'search',
+      'favorites': 'favorites',
+      'progress': 'progress',
+      'notifications': 'notifications',
+      'daily-tracking': 'daily-tracking',
+      'pending-students': 'admin-pending-students',
+    };
+    const importKey = keyMap[tab] || tab;
+    const importFn = (ROUTE_IMPORTS as Record<string, (() => Promise<any>) | undefined>)[importKey];
+    if (importFn) importFn();
   };
 
   // Poll for unread messages (duplicated from AppContent or moved here)
@@ -432,6 +510,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     const interval = setInterval(fetchPending, 30000);
     return () => clearInterval(interval);
   }, [isAuthenticated, user?.role]);
+
+  // ========================================================================
+  // Scroll to top on route change
+  // ========================================================================
+  useEffect(() => {
+    const mainContent = document.getElementById('main-content');
+    if (mainContent) mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [pathname]);
 
   // ========================================================================
   // Main App View
@@ -497,7 +583,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 <Route path="/messages" element={<MessagingSystem initialSelectedUserId={selectedConversationId} />} />
 
                 <Route path="/player/:courseId" element={
-                  activeCourse ? <Player course={activeCourse} onBack={handleBackToDashboard} onPlayCourse={handlePlayCourse} /> : <Navigate to="/dashboard" />
+                  <PlayerRouteWrapper
+                    activeCourse={activeCourse}
+                    onBack={handleBackToDashboard}
+                    onPlayCourse={handlePlayCourse}
+                    setActiveCourse={setActiveCourse}
+                  />
                 } />
 
                 {/* Admin Routes */}
@@ -545,6 +636,8 @@ const App: React.FC = () => {
         <ThemeProvider>
           <AuthProvider>
             <ToastProvider>
+              <InstallPrompt />
+              <AppUpdater />
               <AppContent />
             </ToastProvider>
           </AuthProvider>

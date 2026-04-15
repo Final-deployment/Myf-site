@@ -9,17 +9,14 @@ const Notifications: React.FC = () => {
     const [notificationList, setNotificationList] = useState([
         { id: 1, type: 'course', title: 'دورة جديدة متاحة', message: 'تم إضافة دورة "شرح كتاب التوحيد" للمنصة', time: 'منذ 5 دقائق', read: false, icon: BookOpen },
         { id: 2, type: 'achievement', title: 'إنجاز جديد! 🎉', message: 'لقد أكملت 100 ساعة من التعلم', time: 'منذ ساعة', read: false, icon: Award },
-        { id: 3, type: 'community', title: 'رد جديد على تعليقك', message: 'رد الشيخ أحمد على سؤالك في المجتمع', time: 'منذ 3 ساعات', read: false, icon: MessageSquare },
         { id: 4, type: 'reminder', title: 'تذكير: وقت الورد اليومي', message: 'لا تنس قراءة وردك اليومي من القرآن', time: 'منذ 5 ساعات', read: true, icon: Calendar },
         { id: 5, type: 'course', title: 'تم تحديث الدورة', message: 'تمت إضافة حلقات جديدة لدورة "تفسير جزء عم"', time: 'منذ يوم', read: true, icon: BookOpen },
-        { id: 6, type: 'community', title: 'متابع جديد', message: 'بدأ أحمد محمد بمتابعتك', time: 'منذ يومين', read: true, icon: Users },
         { id: 7, type: 'achievement', title: 'شهادة جاهزة للتحميل', message: 'شهادة إتمام دورة "فقه الصلاة" جاهزة', time: 'منذ 3 أيام', read: true, icon: Award },
     ]);
 
     const typeColors: Record<string, { bg: string; text: string; iconBg: string }> = {
         course: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', iconBg: 'from-emerald-500 to-teal-600' },
         achievement: { bg: 'bg-amber-500/10', text: 'text-amber-400', iconBg: 'from-amber-500 to-orange-600' },
-        community: { bg: 'bg-blue-500/10', text: 'text-blue-400', iconBg: 'from-blue-500 to-cyan-600' },
         reminder: { bg: 'bg-purple-500/10', text: 'text-purple-400', iconBg: 'from-purple-500 to-pink-600' },
     };
 
@@ -84,7 +81,7 @@ const Notifications: React.FC = () => {
                         إعدادات الإشعارات
                     </h3>
                     <div className="space-y-3">
-                        {['إشعارات الدورات الجديدة', 'إشعارات المجتمع والردود', 'التذكيرات اليومية', 'تحديثات المنصة'].map((setting, idx) => (
+                        {['إشعارات الدورات الجديدة', 'التذكيرات اليومية', 'تحديثات المنصة'].map((setting, idx) => (
                             <label key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer">
                                 <span className="text-gray-300">{setting}</span>
                                 <input type="checkbox" defaultChecked className="accent-emerald-500 w-5 h-5" />
@@ -101,7 +98,6 @@ const Notifications: React.FC = () => {
                     { id: 'unread', label: 'غير مقروءة' },
                     { id: 'course', label: 'الدورات' },
                     { id: 'achievement', label: 'الإنجازات' },
-                    { id: 'community', label: 'المجتمع' },
                     { id: 'reminder', label: 'التذكيرات' },
                 ].map((f) => (
                     <button

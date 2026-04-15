@@ -118,6 +118,12 @@ router.post('/', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'Certificate already exists for this course' });
         }
 
+        // Verify course completion
+        const enrollment = db.prepare('SELECT progress, completed FROM enrollments WHERE user_id = ? AND course_id = ?').get(user.id, courseId);
+        if (!enrollment || (enrollment.progress < 100 && !enrollment.completed)) {
+            return res.status(403).json({ error: 'يجب إتمام المساق بنسبة 100% للحصول على الشهادة' });
+        }
+
         // Lookup course title
         const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId);
         if (!course) {

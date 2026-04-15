@@ -50,6 +50,10 @@ router.post('/promote', isAdmin, (req, res) => {
         return res.status(403).json({ error: 'لا يمكن تغيير رتبة حساب مدير الدعم الفني' });
     }
     try {
+        const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'المستخدم غير موجود' });
+        }
         db.prepare(`
             UPDATE users 
             SET role = 'supervisor', 
@@ -97,8 +101,13 @@ router.post('/assign', isAdmin, (req, res) => {
         console.log('[SV_ASSIGN] Request:', { studentId, supervisorId });
     }
     try {
+        const student = db.prepare('SELECT role FROM users WHERE id = ?').get(studentId);
+        if(!student || student.role !== 'student') {
+            return res.status(400).json({ error: 'يمكن ربط حسابات الطلاب فقط بالمشرفين' });
+        }
+        
         // supervisorId can be null to assign to Admin
-        const info = db.prepare('UPDATE users SET supervisor_id = ? WHERE id = ?').run(supervisorId || null, studentId);
+        const info = db.prepare('UPDATE users SET supervisor_id = ? WHERE id = ? AND role = "student"').run(supervisorId || null, studentId);
         if (process.env.NODE_ENV !== 'production') {
             console.log('[SV_ASSIGN] Result:', info);
         }
@@ -172,15 +181,16 @@ router.get('/students-progress', (req, res) => {
         let studentsQuery = `
             SELECT u.id, u.name, u.email 
             FROM users u
+            WHERE u.role = 'student'
         `;
         const params = [];
 
         if (supervisorId) {
-            studentsQuery += ` WHERE u.supervisor_id = ?`;
+            studentsQuery += ` AND u.supervisor_id = ?`;
             params.push(supervisorId);
         } else if (req.user.role === 'admin' && req.query.supervisorId) {
             // SECURITY: Only admins can filter by arbitrary supervisorId
-            studentsQuery += ` WHERE u.supervisor_id = ?`;
+            studentsQuery += ` AND u.supervisor_id = ?`;
             params.push(req.query.supervisorId);
         }
 

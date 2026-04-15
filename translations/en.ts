@@ -25,7 +25,7 @@ export const en = {
         myCourses: 'My Courses',
         library: 'Library',
         certificates: 'Certificates',
-        community: 'Community',
+
         profile: 'Profile',
         dailyTracking: 'Daily Tracking',
         notifications: 'Notifications',
@@ -42,7 +42,7 @@ export const en = {
         students: 'Students',
         audioCourses: 'Audio Courses',
         reports: 'Reports',
-        contentManagement: 'Content Management',
+        library: 'Library',
         announcements: 'Announcements',
         quizManagement: 'Quiz Management',
         activityLog: 'Activity Log',
@@ -71,6 +71,16 @@ export const en = {
         totalHours: 'Total Hours',
         totalListeners: 'Total Listeners',
         clickToAdd: 'Click here to create a new audio course',
+
+        // Library specific
+        addBook: 'Add Book',
+        editBook: 'Edit Book',
+        deleteBook: 'Delete Book',
+        bookTitle: 'Book Title',
+        bookPath: 'File Path (inside Books folder)',
+        linkedCourse: 'Linked Course',
+        noCourse: 'Not Linked',
+        selectCourse: 'Select a course...',
     },
 
     // Common
@@ -113,12 +123,18 @@ export const en = {
         latestAchievements: 'Latest Achievements',
         viewAll: 'View All',
         continueLearning: 'Continue Learning',
+        availableCourses: 'Some courses available on Al-Mastaba',
         fullLibrary: 'Full Library',
         courseProgress: 'Course Progress',
         completed: 'Completed',
         liveEvent: 'Live',
         fiqhCouncil: 'Maliki Fiqh Council',
         sheikhName: 'Sheikh Abdullah Bin Bayyah',
+        complaintsBox: 'Suggestions & Complaints Box',
+        complaintsPlaceholder: 'Write your complaint or suggestion here (only the manager will see it)...',
+        sendComplaint: 'Send Complaint',
+        complaintSuccess: 'Your complaint has been sent successfully. Thank you.',
+        complaintError: 'Failed to send complaint. Please try again.'
     },
 
     // Settings
@@ -155,23 +171,7 @@ export const en = {
         next: 'Next',
         finish: 'Finish',
     },
-    // Community
-    community: {
-        title: 'Community',
-        subtitle: 'Connect with students and share knowledge',
-        newPost: 'New Post',
-        comments: 'comments',
-        trendingTopics: 'Trending Topics',
-        rulesTitle: 'Community Rules',
-        rulesText: 'Please adhere to Islamic etiquette and avoid fruitless arguments. This space is for sharing beneficial knowledge.',
-        readRules: 'Read Full Rules',
-        topics: {
-            fiqhPrayer: 'Fiqh of Prayer',
-            ramadan: 'Ramadan 1445',
-            tafsir: 'Tafsir',
-            seerah: 'Seerah',
-        },
-    },
+
     // Library
     library: {
         title: 'Digital Library',

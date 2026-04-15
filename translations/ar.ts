@@ -25,7 +25,7 @@ export const ar = {
         myCourses: 'دوراتي',
         library: 'المكتبة',
         certificates: 'الشهادات',
-        community: 'المجتمع',
+
         profile: 'الملف الشخصي',
         dailyTracking: 'المتابعة اليومية',
         notifications: 'الإشعارات',
@@ -171,23 +171,7 @@ export const ar = {
         next: 'التالي',
         finish: 'إنهاء',
     },
-    // Community
-    community: {
-        title: 'المجتمع',
-        subtitle: 'تواصل مع طلاب العلم وشارك الفائدة',
-        newPost: 'مشاركة جديدة',
-        comments: 'تعليقات',
-        trendingTopics: 'المواضيع الشائعة',
-        rulesTitle: 'قوانين المجتمع',
-        rulesText: 'يرجى الالتزام بآداب الحوار الإسلامي وتجنب الجدال العقيم. هذا المكان مخصص لتبادل العلم النافع.',
-        readRules: 'قراءة اللائحة كاملة',
-        topics: {
-            fiqhPrayer: 'فقه الصلاة',
-            ramadan: 'رمضان 1445',
-            tafsir: 'تفسير',
-            seerah: 'سيرة',
-        },
-    },
+
     // Library
     library: {
         title: 'المكتبة الرقمية',

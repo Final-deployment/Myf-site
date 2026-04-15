@@ -533,6 +533,7 @@ export default function SupportChatBubble() {
                         {!user && !guestId && messages.length === 0 && (
                             <input
                                 type="text"
+                                maxLength={50}
                                 value={guestName}
                                 onChange={(e) => setGuestName(e.target.value)}
                                 placeholder="الاسم الكريم (مطلوب)"
@@ -591,6 +592,7 @@ export default function SupportChatBubble() {
                                 <div className="flex-1 relative">
                                     <textarea
                                         value={newMessage}
+                                        maxLength={3000}
                                         onChange={(e) => setNewMessage(e.target.value)}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && !e.shiftKey) {

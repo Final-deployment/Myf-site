@@ -42,7 +42,7 @@ async function main() {
   
   // 1. تسجيل الدخول
   console.log('1. جاري تسجيل الدخول كأدمن...');
-  const loginRes = await fetch(`${PROD_URL}/auth/login`, {
+  const loginRes = await fetch(`${PROD_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD })
@@ -54,7 +54,7 @@ async function main() {
   }
   
   const loginData = await loginRes.json();
-  const token = loginData.token;
+  const token = loginData.accessToken;
   console.log('✅ تم تسجيل الدخول بنجاح\n');
   
   // 2. جلب نتائج الاختبارات للتحقق

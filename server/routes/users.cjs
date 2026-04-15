@@ -30,13 +30,52 @@ const ALLOWED_UPDATE_FIELDS = [
 // ============================================================================
 router.get('/', authenticateToken, requireAdmin, (req, res) => {
     try {
-        const users = db.prepare(`
+        const page = parseInt(req.query.page);
+        const limit = parseInt(req.query.limit) || 50;
+        const search = req.query.search ? req.query.search.toLowerCase() : '';
+        const roleFilter = req.query.role || '';
+
+        let baseQuery = `
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status,
             u.supervisor_capacity as supervisorCapacity, u.supervisor_priority as supervisorPriority, u.supervisor_id as supervisorId,
             (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
             FROM users u
-        `).all();
+            WHERE 1=1
+        `;
+
+        const params = [];
+        if (search) {
+            baseQuery += ` AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`);
+        }
+        if (roleFilter) {
+            baseQuery += ` AND u.role = ?`;
+            params.push(roleFilter);
+        }
+
+        if (!isNaN(page) && page > 0) {
+            // Paginated Response
+            const countQuery = `SELECT COUNT(*) as total FROM users u WHERE 1=1 ` + 
+                (search ? ` AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)` : '') +
+                (roleFilter ? ` AND u.role = ?` : '');
+            
+            const total = db.prepare(countQuery).get(...params).total;
+            const totalPages = Math.ceil(total / limit);
+            const offset = (page - 1) * limit;
+
+            baseQuery += ` ORDER BY u.joinDate DESC LIMIT ? OFFSET ?`;
+            params.push(limit, offset);
+
+            const users = db.prepare(baseQuery).all(...params);
+            return res.json({
+                data: users,
+                pagination: { total, page, limit, totalPages }
+            });
+        }
+
+        // Backward compatibility: Unpaginated
+        const users = db.prepare(baseQuery).all(...params);
         res.json(users);
     } catch (e) {
         console.error('[USERS_GET_ALL_ERROR]:', e.message);
@@ -49,7 +88,11 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
 // ============================================================================
 router.get('/students', authenticateToken, requireAdminOrSupervisor, (req, res) => {
     try {
-        let query = `
+        const page = parseInt(req.query.page);
+        const limit = parseInt(req.query.limit) || 50;
+        const search = req.query.search ? req.query.search.toLowerCase() : '';
+
+        let baseQuery = `
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status, u.supervisor_id as supervisorId,
             (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
@@ -57,14 +100,37 @@ router.get('/students', authenticateToken, requireAdminOrSupervisor, (req, res) 
             WHERE u.role = 'student'
         `;
 
-        // Supervisors can only see their assigned students
+        const params = [];
         if (req.user.role === 'supervisor') {
-            query += ` AND u.supervisor_id = ?`;
-            const students = db.prepare(query).all(req.user.id);
-            return res.json(students);
+            baseQuery += ` AND u.supervisor_id = ?`;
+            params.push(req.user.id);
+        }
+        if (search) {
+            baseQuery += ` AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`);
         }
 
-        const students = db.prepare(query).all();
+        if (!isNaN(page) && page > 0) {
+            let countQuery = `SELECT COUNT(*) as total FROM users u WHERE u.role = 'student'`;
+            if (req.user.role === 'supervisor') countQuery += ` AND u.supervisor_id = ?`;
+            if (search) countQuery += ` AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)`;
+
+            const total = db.prepare(countQuery).get(...params).total;
+            const totalPages = Math.ceil(total / limit);
+            const offset = (page - 1) * limit;
+
+            baseQuery += ` ORDER BY u.joinDate DESC LIMIT ? OFFSET ?`;
+            params.push(limit, offset);
+
+            const students = db.prepare(baseQuery).all(...params);
+            return res.json({
+                data: students,
+                pagination: { total, page, limit, totalPages }
+            });
+        }
+
+        // Backward compatibility
+        const students = db.prepare(baseQuery).all(...params);
         res.json(students);
     } catch (e) {
         console.error('[USERS_GET_STUDENTS_ERROR]:', e.message);
@@ -107,7 +173,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'User already exists' });
         }
 
-        const hashedPassword = bcrypt.hashSync(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // Find available supervisor for students
         let supervisorId = null;
@@ -212,7 +278,10 @@ router.put('/:id', authenticateToken, requireOwnerOrAdmin, (req, res) => {
         }
 
         // Build parameterized query
-        const fields = Object.keys(safeUpdates).map(k => `${k} = ?`).join(', ');
+        const fields = Object.keys(safeUpdates).map(k => {
+            if (!/^[a-zA-Z_]+$/.test(k)) throw new Error('Invalid field name');
+            return `${k} = ?`;
+        }).join(', ');
         const values = Object.values(safeUpdates);
 
         const result = db.prepare(`UPDATE users SET ${fields} WHERE id = ?`).run(...values, id);
@@ -246,6 +315,25 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     }
 
     try {
+        try {
+            db.transaction(() => {
+                const cleanup = [
+                    { t: 'enrollments', c: 'user_id' },
+                    { t: 'episode_progress', c: 'user_id' },
+                    { t: 'quiz_results', c: 'userId' },
+                    { t: 'certificates', c: 'user_id' },
+                    { t: 'favorites', c: 'userId' },
+                    { t: 'ratings', c: 'userId' },
+                    { t: 'messages', c: 'senderId' },
+                    { t: 'messages', c: 'receiverId' },
+                    { t: 'system_activity_logs', c: 'userId' }
+                ];
+                for (let {t, c} of cleanup) {
+                    try { db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id); } catch(ex) {}
+                }
+            })();
+        } catch(e) { console.error('[USER_CLEANUP_WARN]:', e.message); }
+
         const result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
 
         if (result.changes === 0) {
@@ -289,11 +377,13 @@ router.get('/:id/details', authenticateToken, (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
+
+
         const user = { ...userData };
 
         // Supervisors can only view their assigned students
         if (isSupervisor && !isOwner && user.supervisorId !== req.user.id) {
-            return res.status(403).json({ error: 'Access denied. Student not assigned to you.' });
+            return res.status(403).json({ error: 'هذا الأمر من صلاحيات مشرف آخر أو من صلاحيات الإدارة وليس من صلاحياتك' });
         }
 
         // Get supervisor name if applicable
@@ -389,7 +479,7 @@ router.put('/:userId/enrollment/:courseId/unlock', authenticateToken, requireAdm
         if (req.user.role === 'supervisor') {
             const student = db.prepare('SELECT supervisor_id FROM users WHERE id = ?').get(userId);
             if (!student || student.supervisor_id !== req.user.id) {
-                return res.status(403).json({ error: 'Access denied. Student not assigned to you.' });
+                return res.status(403).json({ error: 'هذا الأمر من صلاحيات مشرف آخر أو من صلاحيات الإدارة وليس من صلاحياتك' });
             }
         }
 

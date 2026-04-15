@@ -214,6 +214,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, onSuccess }
                                 <div className="relative">
                                     <input
                                         type="text"
+                                        maxLength={50}
                                         value={formData.name}
                                         onChange={(e) => updateField('name', e.target.value)}
                                         placeholder={language === 'ar' ? 'أحمد محمد' : 'Ahmed Mohamed'}
@@ -231,6 +232,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, onSuccess }
                                 <div className="relative">
                                     <input
                                         type="email"
+                                        maxLength={100}
                                         value={formData.email}
                                         onChange={(e) => updateField('email', e.target.value)}
                                         placeholder="name@example.com"
@@ -248,6 +250,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, onSuccess }
                                 <div className="relative">
                                     <input
                                         type="tel"
+                                        maxLength={20}
                                         value={formData.whatsapp}
                                         onChange={(e) => updateField('whatsapp', e.target.value)}
                                         placeholder="+966 5XX XXX XXXX"
@@ -373,6 +376,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, onSuccess }
                                 <div className="relative">
                                     <input
                                         type="password"
+                                        maxLength={50}
                                         value={formData.password}
                                         onChange={(e) => updateField('password', e.target.value)}
                                         placeholder="••••••••"
@@ -390,6 +394,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, onSuccess }
                                 <div className="relative">
                                     <input
                                         type="password"
+                                        maxLength={50}
                                         value={formData.confirmPassword}
                                         onChange={(e) => updateField('confirmPassword', e.target.value)}
                                         placeholder="••••••••"

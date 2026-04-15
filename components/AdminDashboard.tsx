@@ -5,8 +5,6 @@
 
 import React, { memo, useCallback, useMemo } from 'react';
 import { Users, Mic2, TrendingUp, Download, Calendar, Activity, Bell, Play, LucideIcon } from 'lucide-react';
-import { RECENT_ACTIVITY } from '../constants';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../services/api';
 import RatingBox from './RatingBox';
 
@@ -80,7 +78,7 @@ const StatCard = memo<StatCardProps>(({ label, value, icon: Icon, color, trend, 
                </div>
             )}
 
-            <div className="flex justify-between items-start relative z-10">
+            <div className="flex justify-between items-start relative z-10 w-full">
                <div>
                   <p className={`${classes.text} text-[10px] font-bold uppercase tracking-wider mb-1`}>{label}</p>
                   <h3 className="text-3xl font-extrabold text-white">{value}</h3>
@@ -89,15 +87,6 @@ const StatCard = memo<StatCardProps>(({ label, value, icon: Icon, color, trend, 
                   <Icon className="w-5 h-5 -rotate-3" />
                </div>
             </div>
-            {trend && (
-               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5 relative z-10">
-                  <span className={`${classes.bg} ${classes.text.replace('300', '400')} text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1`}>
-                     <TrendingUp className="w-2.5 h-2.5" aria-hidden="true" />
-                     {trend}
-                  </span>
-                  <span className="text-[10px] text-gray-500">{trendText}</span>
-               </div>
-            )}
          </div>
       </article>
    );
@@ -162,26 +151,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
    React.useEffect(() => {
       const fetchStats = async () => {
          try {
-            const [users, courses] = await Promise.all([
-               api.getUsers(),
-               api.getCourses()
-            ]);
-
-            const totalStudents = Array.isArray(users) ? users.filter(u => u.role === 'student').length : 0;
-            const activeCourses = Array.isArray(courses) ? courses.filter(c => c.status === 'published').length : 0;
-
-            // Calculate completion rate based on course progress
-            const studentsWithProgress = Array.isArray(users) ? users.filter(u => u.role === 'student') : [];
-            const avgCompletion = studentsWithProgress.length > 0
-               ? Math.round(studentsWithProgress.reduce((acc, u) => acc + (u.level || 1) * 10, 0) / studentsWithProgress.length)
-               : 0;
-
-            setStats({
-               totalStudents,
-               activeCourses,
-               completionRate: Math.min(avgCompletion, 100),
-               isLoading: false
-            });
+            const apiStats = await api.getDashboardStats();
+            if (apiStats) {
+                setStats({
+                   totalStudents: apiStats.totalStudents,
+                   activeCourses: apiStats.activeCourses,
+                   completionRate: apiStats.completionRate,
+                   isLoading: false
+                });
+            } else {
+                // Fallback stats if endpoint fails
+                setStats(prev => ({ ...prev, isLoading: false }));
+            }
          } catch (error) {
             console.error('Failed to fetch stats:', error);
             setStats(prev => ({ ...prev, isLoading: false }));
@@ -191,15 +172,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
       fetchStats();
    }, []);
 
-   /** Chart data for weekly engagement */
-   const chartData = useMemo(() => [
-      { name: 'Week 1', hours: 400 },
-      { name: 'Week 2', hours: 600 },
-      { name: 'Week 3', hours: 1400 },
-      { name: 'Week 4', hours: 2405 },
-      { name: 'Week 5', hours: 2100 },
-      { name: 'Week 6', hours: 3200 },
-   ], []);
+   // Removing fake chart data
 
    /** Handle navigation to different tabs */
    const handleNavigate = useCallback((tab: string) => {
@@ -218,7 +191,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
             generatedAt: new Date().toISOString(),
             usersCount: Array.isArray(users) ? users.length : 0,
             coursesCount: Array.isArray(courses) ? courses.length : 0,
-            recentActivity: RECENT_ACTIVITY,
             stats: {
                completionRate: `${stats.completionRate}%`,
                activeCourses: stats.activeCourses,
@@ -290,8 +262,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                value={stats.isLoading ? '...' : `${stats.completionRate}%`}
                icon={TrendingUp}
                color="orange"
-               trend="+5.6%"
-               trendText="مقارنة بالشهر الماضي"
                onClick={() => handleNavigate('reports')}
             />
             <StatCard
@@ -308,82 +278,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                value={stats.isLoading ? '...' : stats.activeCourses.toString()}
                icon={Mic2}
                color="blue"
-               trend="+2"
-               trendText="دورات جديدة"
                onClick={() => handleNavigate('audio-courses')}
             />
             <StatCard
                label="إجمالي الطلاب"
                value={stats.isLoading ? '...' : stats.totalStudents.toLocaleString()}
                icon={Users}
-               color="blue" // changed from emerald to alternate colors nicely
-               trend="+12%"
-               trendText="زيادة ثابتة"
+               color="blue"
                onClick={() => handleNavigate('students')}
             />
          </section>
 
          {/* Charts & Lists */}
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main Chart */}
             <section
                onClick={() => handleNavigate('reports')}
-               className="lg:col-span-2 glass-panel p-6 rounded-3xl relative border-t-2 border-emerald-500/10 cursor-pointer group hover:bg-white/5 transition-colors"
+               className="lg:col-span-2 glass-panel p-10 rounded-3xl relative border-t-2 border-emerald-500/10 flex items-center justify-center flex-col cursor-pointer group hover:bg-white/5 transition-colors"
                role="button"
                tabIndex={0}
                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleNavigate('reports')}
-               aria-label="تحليل تفاعل الطلاب - اضغط للتفاصيل"
             >
-               <div className="corner-ornament-complex corner-tr" aria-hidden="true"></div>
-               <div className="flex justify-between items-center mb-6">
-                  <div>
-                     <h3 className="text-lg font-bold text-white mb-1 group-hover:text-emerald-400 transition-colors">تحليل تفاعل الطلاب</h3>
-                     <p className="text-[10px] text-gray-400">ساعات الاستماع والمشاهدة الأسبوعية</p>
-                  </div>
-                  <div className="text-right">
-                     <span className="text-2xl font-bold text-white block">2,405</span>
-                     <span className="text-emerald-400 text-[10px] font-bold">إجمالي الساعات</span>
-                  </div>
-               </div>
-               <div className="h-64 w-full" aria-label="رسم بياني لتفاعل الطلاب">
-                  <ResponsiveContainer width="100%" height="100%">
-                     <AreaChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                        <defs>
-                           <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                           </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff08" />
-                        <XAxis
-                           dataKey="name"
-                           stroke="#6b7280"
-                           tick={{ fill: '#9ca3af', fontSize: 9 }}
-                           axisLine={false}
-                           tickLine={false}
-                           dy={10}
-                        />
-                        <YAxis
-                           stroke="#6b7280"
-                           tick={{ fill: '#9ca3af', fontSize: 9 }}
-                           axisLine={false}
-                           tickLine={false}
-                        />
-                        <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#10b981' }} />
-                        <Area
-                           type="monotone"
-                           dataKey="hours"
-                           stroke="#10b981"
-                           strokeWidth={3}
-                           fillOpacity={1}
-                           fill="url(#colorHours)"
-                        />
-                     </AreaChart>
-                  </ResponsiveContainer>
-               </div>
+                <div className="w-16 h-16 bg-white/5 flex items-center justify-center rounded-full mb-4 group-hover:bg-emerald-500/10 transition-colors">
+                    <Activity className="w-8 h-8 text-gray-500 group-hover:text-emerald-500 transition-colors" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-400 group-hover:text-white transition-colors">مساحة المخططات والتحليل البياني</h3>
+                <p className="text-sm text-gray-500 mt-2 text-center max-w-sm">سيتم إضافة إحصاءات ومخططات قريباً تعتمد على تفاعل الطلاب وتقدمهم الفعلي.</p>
             </section>
-
-            {/* Recent Activity */}
             <section className="glass-panel p-6 rounded-3xl flex flex-col relative overflow-hidden" aria-label="النشاط المباشر">
                <div className="mashrabiya-pattern absolute inset-0 opacity-5 pointer-events-none" aria-hidden="true"></div>
 
@@ -391,14 +311,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                   <h3 className="text-base font-bold text-white">النشاط المباشر</h3>
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-label="نشط الآن"></div>
                </div>
-               <div className="space-y-1 flex-1 overflow-y-auto custom-scrollbar pr-2 relative z-10" role="feed" aria-label="قائمة الأنشطة الأخيرة">
-                  {(RECENT_ACTIVITY as unknown as ActivityItem[]).map((activity, idx) => (
-                     <ActivityItemCard
-                        key={activity.id}
-                        activity={activity}
-                        isLast={idx === RECENT_ACTIVITY.length - 1}
-                     />
-                  ))}
+               <div className="space-y-1 flex-1 overflow-y-auto custom-scrollbar pr-2 relative z-10 flex flex-col items-center justify-center text-center opacity-50 py-10" role="feed" aria-label="قائمة الأنشطة الأخيرة">
+                  <Activity className="w-8 h-8 text-gray-500 mb-2" />
+                  <p className="text-sm">لا توجد أنشطة مسجلة حالياً</p>
                </div>
                <button
                   onClick={() => handleNavigate('activity-log')}

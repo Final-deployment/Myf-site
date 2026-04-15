@@ -9,9 +9,7 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
-  tls: {
-    rejectUnauthorized: false
-  },
+  // Removed rejectUnauthorized: false to enforce secure TLS
   // CRITICAL: Add timeouts to prevent server hanging on SMTP issues
   connectionTimeout: 10000, // 10 seconds to establish connection
   greetingTimeout: 10000,   // 10 seconds for greeting
@@ -22,6 +20,10 @@ const transporter = nodemailer.createTransport({
 if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
   console.warn('[EMAIL] SMTP credentials not configured. Email sending will fail/simulate.');
 }
+
+const escapeHtml = (unsafe) => {
+    return String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+};
 
 /**
  * Generate a 6-digit OTP code
@@ -57,7 +59,7 @@ async function sendVerificationEmail(email, name, otp) {
           </div>
           
           <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 30px; text-align: center;">
-            <h2 style="color: #ffffff; margin: 0 0 20px 0;">أهلاً ${name}!</h2>
+            <h2 style="color: #ffffff; margin: 0 0 20px 0;">أهلاً ${escapeHtml(name)}!</h2>
             <p style="color: #d1fae5; font-size: 16px; line-height: 1.6;">
               شكراً لتسجيلك في المصطبة العلمية. لإكمال التسجيل، يرجى إدخال رمز التحقق التالي:
             </p>
@@ -89,15 +91,15 @@ async function sendVerificationEmail(email, name, otp) {
 }
 
 /**
- * Send password to user's email (Forgot Password)
+ * Send password reset OTP email
  * @param {string} email - Recipient email
  * @param {string} name - Recipient name
- * @param {string} newPassword - The new generated password
+ * @param {string} otp - 6-digit OTP code for resetting password
  */
-async function sendPasswordEmail(email, name, newPassword) {
+async function sendPasswordResetOtpEmail(email, name, otp) {
   try {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log(`[EMAIL SIMULATION] Would send new password to ${email}`);
+      console.log(`[EMAIL SIMULATION] Would send password reset OTP ${otp} to ${email}`);
       return { success: true, data: { simulated: true } };
     }
 
@@ -105,7 +107,7 @@ async function sendPasswordEmail(email, name, newPassword) {
     const info = await transporter.sendMail({
       from: `"${fromName}" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: 'استعادة كلمة المرور - المصطبة العلمية',
+      subject: 'رمز استعادة كلمة المرور - المصطبة العلمية',
       html: `
         <div dir="rtl" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #064e3b 0%, #022c22 100%); border-radius: 16px;">
           <div style="text-align: center; margin-bottom: 30px;">
@@ -114,17 +116,17 @@ async function sendPasswordEmail(email, name, newPassword) {
           </div>
           
           <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 30px; text-align: center;">
-            <h2 style="color: #ffffff; margin: 0 0 20px 0;">أهلاً ${name}!</h2>
+            <h2 style="color: #ffffff; margin: 0 0 20px 0;">أهلاً ${escapeHtml(name)}!</h2>
             <p style="color: #d1fae5; font-size: 16px; line-height: 1.6;">
-              تم إعادة تعيين كلمة المرور الخاصة بك. يمكنك استخدام كلمة المرور الجديدة التالية لتسجيل الدخول:
+              لقد طلبت إعادة تعيين كلمة المرور لحسابك. استخدم رمز التحقق التالي لتعيين كلمة مرور جديدة:
             </p>
             
             <div style="background: #064e3b; border: 2px solid #d4a045; border-radius: 12px; padding: 20px; margin: 30px 0;">
-              <span style="font-size: 28px; font-weight: bold; color: #d4a045; letter-spacing: 4px;">${newPassword}</span>
+              <span style="font-size: 32px; font-weight: bold; color: #d4a045; letter-spacing: 8px;">${otp}</span>
             </div>
             
             <p style="color: #fbbf24; font-size: 14px; font-weight: bold;">
-              ⚠️ ننصحك بشدة بتغيير كلمة المرور فور تسجيل الدخول من خلال الإعدادات.
+              ⚠️ الرمز صالح لمدة 30 دقيقة فقط، إذا لم تطلب هذا الرمز يرجى تجاهل هذه الرسالة.
             </p>
           </div>
           
@@ -170,7 +172,7 @@ async function sendApprovalNotificationEmail(email, name) {
           
           <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 30px; text-align: center;">
             <div style="font-size: 50px; margin-bottom: 15px;">🎉</div>
-            <h2 style="color: #ffffff; margin: 0 0 20px 0;">مبارك ${name}!</h2>
+            <h2 style="color: #ffffff; margin: 0 0 20px 0;">مبارك ${escapeHtml(name)}!</h2>
             <p style="color: #d1fae5; font-size: 16px; line-height: 1.8;">
               تمت الموافقة على طلب انتسابك في المصطبة العلمية.<br/>
               يمكنك الآن تسجيل الدخول والبدء في رحلتك التعليمية.
@@ -222,13 +224,13 @@ async function sendRejectionNotificationEmail(email, name, reason) {
           </div>
           
           <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 30px; text-align: center;">
-            <h2 style="color: #ffffff; margin: 0 0 20px 0;">عزيزي/عزيزتي ${name}</h2>
+            <h2 style="color: #ffffff; margin: 0 0 20px 0;">عزيزي/عزيزتي ${escapeHtml(name)}</h2>
             <p style="color: #d1fae5; font-size: 16px; line-height: 1.8;">
               نأسف لإبلاغك بأنه لم تتم الموافقة على طلب انتسابك في الوقت الحالي.
             </p>
             ${reason ? `
             <div style="background: #064e3b; border: 2px solid #f59e0b; border-radius: 12px; padding: 15px; margin: 25px 0;">
-              <p style="color: #fbbf24; font-size: 14px; margin: 0;">السبب: ${reason}</p>
+              <p style="color: #fbbf24; font-size: 14px; margin: 0;">السبب: ${escapeHtml(reason)}</p>
             </div>
             ` : ''}
             <p style="color: #a7f3d0; font-size: 14px;">
@@ -254,7 +256,7 @@ async function sendRejectionNotificationEmail(email, name, reason) {
 module.exports = {
   generateOTP,
   sendVerificationEmail,
-  sendPasswordEmail,
+  sendPasswordResetOtpEmail,
   sendApprovalNotificationEmail,
   sendRejectionNotificationEmail
 };

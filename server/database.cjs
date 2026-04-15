@@ -13,6 +13,10 @@ const dbPath = path.join(dataDir, 'db.sqlite');
 const db = new Database(dbPath);
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
+// Enable Foreign Keys for ON DELETE CASCADE
+db.pragma('foreign_keys = ON');
+// Wait up to 5 seconds when DB is busy instead of failing immediately (SQLITE_BUSY fix)
+db.pragma('busy_timeout = 5000');
 
 function initDatabase() {
   console.log('Initializing SQLite database...');
@@ -54,6 +58,9 @@ function initDatabase() {
   try { db.prepare('ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0').run(); } catch (e) { }
   // Auto-approve all existing users and all non-student roles
   try { db.prepare("UPDATE users SET approved = 1 WHERE approved = 0 AND (role != 'student' OR emailVerified = 1)").run(); } catch (e) { }
+
+  // Indexes for Users
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)'); } catch(e){}
 
   // --- Courses Table ---
   db.exec(`
@@ -135,6 +142,10 @@ function initDatabase() {
   try { db.prepare('ALTER TABLE enrollments ADD COLUMN deadline TEXT').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE enrollments ADD COLUMN is_locked INTEGER DEFAULT 0').run(); } catch (e) { }
 
+  // Indexes for Enrollments
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_enrollments_user ON enrollments(user_id)'); } catch(e){}
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id)'); } catch(e){}
+
   // --- Episode Progress Table ---
   db.exec(`
         CREATE TABLE IF NOT EXISTS episode_progress (
@@ -159,10 +170,12 @@ function initDatabase() {
             extended_by TEXT NOT NULL,
             extended_at TEXT DEFAULT CURRENT_TIMESTAMP,
             days_added INTEGER DEFAULT 2,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY(course_id) REFERENCES courses(id) ON DELETE CASCADE
         )
     `);
+
+  // Indexes for Episode Progress
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_episode_progress_user_course ON episode_progress(user_id, course_id)'); } catch(e){}
 
   // --- Certificates Table ---
   db.exec(`
@@ -272,7 +285,6 @@ function initDatabase() {
   try { db.prepare('ALTER TABLE books ADD COLUMN courseId TEXT').run(); } catch (e) { }
 
 
-  db.exec(`CREATE TABLE IF NOT EXISTS community_posts (id TEXT PRIMARY KEY, userId TEXT, content TEXT, timestamp TEXT)`);
 
   // --- Other Tables ---
   db.exec(`CREATE TABLE IF NOT EXISTS announcements (id TEXT PRIMARY KEY, title TEXT, content TEXT, type TEXT, date TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);

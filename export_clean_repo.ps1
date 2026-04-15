@@ -42,6 +42,7 @@ $IncludeFiles = @(
     "constants.ts",
     ".env.clean",
     "vite-env.d.ts",
+    "types.ts",
     ".gitignore",
     ".dockerignore",
     "docker-compose.yml",

@@ -150,6 +150,36 @@ export const authApi = {
         }
     },
 
+    forgotPassword: async (email: string): Promise<{ success: boolean; error: any | null }> => {
+        try {
+            const response = await fetch(getApiUrl('/forgot-password'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await response.json();
+            if (!response.ok) return { success: false, error: data.errorAr || data.error };
+            return { success: true, error: null };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    resetPassword: async (email: string, otp: string, newPassword: string): Promise<{ success: boolean; error: any | null }> => {
+        try {
+            const response = await fetch(getApiUrl('/reset-password'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, otp, newPassword })
+            });
+            const data = await response.json();
+            if (!response.ok) return { success: false, error: data.errorAr || data.error };
+            return { success: true, error: null };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
     getCurrentUser: (): User | null => {
         try {
             const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser') || sessionStorage.getItem(STORAGE_PREFIX + 'currentUser');

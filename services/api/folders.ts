@@ -33,5 +33,19 @@ export const foldersApi = {
         });
         if (!response.ok) throw new Error('Failed to delete folder');
         return await response.json();
+    },
+
+    updateFolder: async (id: string, data: { name?: string, thumbnail?: string, order_index?: number }): Promise<{ success: boolean }> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/folders/${id}`), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error('Failed to update folder');
+        return await response.json();
     }
 };

@@ -1,25 +1,76 @@
 /**
- * Content Service (Announcements & Library)
+ * Content Service (Library Books & Announcements)
  */
-import type { Announcement, LibraryResource } from '../../types';
+import type { Announcement } from '../../types';
 import { getAuthToken } from './auth';
 import { getApiUrl } from './config';
 
 export const contentApi = {
-    getLibraryResources: async (): Promise<LibraryResource[]> => {
-        const response = await fetch(getApiUrl('/books'));
-        return response.ok ? await response.json() : [];
-    },
+    // ==================== Books ====================
 
     getBooks: async (): Promise<any[]> => {
-        const response = await fetch(getApiUrl('/books'));
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/books'), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         return response.ok ? await response.json() : [];
     },
 
     getBookByCourseId: async (courseId: string): Promise<any> => {
-        const response = await fetch(getApiUrl(`/books/course/${courseId}`));
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/books/course/${courseId}`), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         return response.ok ? await response.json() : null;
     },
+
+    addBook: async (data: { title: string; path: string; courseId?: string }): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/books'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: 'فشل إضافة الكتاب' }));
+            throw new Error(err.error || 'فشل إضافة الكتاب');
+        }
+        return await response.json();
+    },
+
+    updateBook: async (id: string, data: { title: string; path: string; courseId?: string }): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/books/${id}`), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: 'فشل تحديث الكتاب' }));
+            throw new Error(err.error || 'فشل تحديث الكتاب');
+        }
+        return await response.json();
+    },
+
+    deleteBook: async (id: string): Promise<void> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/books/${id}`), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: 'فشل حذف الكتاب' }));
+            throw new Error(err.error || 'فشل حذف الكتاب');
+        }
+    },
+
+    // ==================== Announcements ====================
 
     getAnnouncements: async (): Promise<Announcement[]> => {
         const token = getAuthToken();
@@ -41,8 +92,8 @@ export const contentApi = {
             body: JSON.stringify(data)
         });
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to add announcement');
+            const err = await response.json().catch(() => ({ error: 'فشل إضافة الإعلان' }));
+            throw new Error(err.error || 'فشل إضافة الإعلان');
         }
         return await response.json();
     },
@@ -58,8 +109,8 @@ export const contentApi = {
             body: JSON.stringify(data)
         });
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to update announcement');
+            const err = await response.json().catch(() => ({ error: 'فشل تحديث الإعلان' }));
+            throw new Error(err.error || 'فشل تحديث الإعلان');
         }
         return await response.json();
     },
@@ -71,8 +122,8 @@ export const contentApi = {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to delete announcement');
+            const err = await response.json().catch(() => ({ error: 'فشل حذف الإعلان' }));
+            throw new Error(err.error || 'فشل حذف الإعلان');
         }
     }
 };

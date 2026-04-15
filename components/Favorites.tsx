@@ -20,13 +20,13 @@ const Favorites: React.FC = () => {
             setIsLoading(true);
             try {
                 // Fetch favorites
-                const favs = await api.users.getFavorites(user.id);
+                const favs = await api.getFavorites(user.id);
 
                 // For a complete implementation, we'd fetch the source items (courses, etc.)
                 // But for now, let's create a display-ready object by mapping or fetching more
                 // Metadata from current DB in frontend (Courses, resources)
-                const courses = await api.courses.getCourses();
-                const resources = await api.content.getResources(); // Assuming this returns documents and audios
+                const courses = await api.getCourses();
+                const resources = await api.getBooks(); // Library books
 
                 const merged = favs.map((f: any) => {
                     let sourceItem: any = null;

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Book, Trash2, Edit, Search, Plus, Save, X, Link, Eye, Globe, FileSearch } from 'lucide-react';
+import { Upload, Book as BookIcon, Trash2, Edit, Search, Plus, Save, X, Link, Globe, FileSearch } from 'lucide-react';
 import { useLanguage } from '../components/LanguageContext';
 import { useToast } from '../components/Toast';
+import { api } from '../services/api';
 
-interface Book {
+interface BookItem {
     id: string;
     title: string;
     path: string; // Filename in /Books folder
@@ -19,15 +20,15 @@ interface Course {
 
 const AdminLibrary: React.FC = () => {
     const { t } = useLanguage();
-    const { success, error } = useToast();
-    const [books, setBooks] = useState<Book[]>([]);
+    const { success, error: showError } = useToast();
+    const [books, setBooks] = useState<BookItem[]>([]);
     const [courses, setCourses] = useState<Course[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingBook, setEditingBook] = useState<Book | null>(null);
+    const [editingBook, setEditingBook] = useState<BookItem | null>(null);
     const [formData, setFormData] = useState({ title: '', path: '', courseId: '' });
 
     // R2 Browser State
@@ -44,14 +45,11 @@ const AdminLibrary: React.FC = () => {
 
     const fetchBooks = async () => {
         try {
-            const res = await fetch('/api/books');
-            if (res.ok) {
-                const data = await res.json();
-                setBooks(data);
-            }
-        } catch (error) {
-            console.error('Error fetching books:', error);
-            error('فشل تحميل الكتب');
+            const data = await api.getBooks();
+            setBooks(data);
+        } catch (err: any) {
+            console.error('Error fetching books:', err);
+            showError('فشل تحميل الكتب');
         } finally {
             setIsLoading(false);
         }
@@ -59,27 +57,21 @@ const AdminLibrary: React.FC = () => {
 
     const fetchCourses = async () => {
         try {
-            const res = await fetch('/api/courses');
-            if (res.ok) {
-                const data = await res.json();
-                setCourses(data);
-            }
-        } catch (error) {
-            console.error('Error fetching courses:', error);
+            const data = await api.getCourses();
+            setCourses(data);
+        } catch (err) {
+            console.error('Error fetching courses:', err);
         }
     };
 
     const fetchR2Files = async () => {
         setIsLoadingR2(true);
         try {
-            const res = await fetch('/api/r2/files?prefix=Books/');
-            if (res.ok) {
-                const data = await res.json();
-                setR2Files(data.files || []);
-            }
-        } catch (error) {
-            console.error('Error fetching R2 files:', error);
-            error('فشل استعراض الملفات');
+            const data = await api.r2.listFiles('Books/');
+            setR2Files(data.files || []);
+        } catch (err: any) {
+            console.error('Error fetching R2 files:', err);
+            showError('فشل استعراض الملفات');
         } finally {
             setIsLoadingR2(false);
         }
@@ -105,33 +97,23 @@ const AdminLibrary: React.FC = () => {
 
         // Simple validation
         if (!formData.title || !formData.path) {
-            error('يرجى تعبئة العنوان ومسار الملف');
+            showError('يرجى تعبئة العنوان ومسار الملف');
             return;
         }
 
-        const endpoint = editingBook
-            ? `/api/books/${editingBook.id}`
-            : '/api/books';
-
-        const method = editingBook ? 'PUT' : 'POST';
-
         try {
-            const res = await fetch(endpoint, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-
-            if (res.ok) {
-                success(editingBook ? 'تم تحديث الكتاب بنجاح' : 'تم إضافة الكتاب بنجاح');
-                fetchBooks();
-                closeModal();
+            if (editingBook) {
+                await api.updateBook(editingBook.id, formData);
+                success('تم تحديث الكتاب بنجاح');
             } else {
-                error('حدث خطأ أثناء الحفظ');
+                await api.addBook(formData);
+                success('تم إضافة الكتاب بنجاح');
             }
-        } catch (error) {
-            console.error('Error saving book:', error);
-            error('فشل الاتصال الخادم');
+            fetchBooks();
+            closeModal();
+        } catch (err: any) {
+            console.error('Error saving book:', err);
+            showError(err.message || 'فشل الحفظ');
         }
     };
 
@@ -139,20 +121,16 @@ const AdminLibrary: React.FC = () => {
         if (!confirm('هل أنت متأكد من حذف هذا الكتاب من المكتبة؟')) return;
 
         try {
-            const res = await fetch(`/api/books/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                success('تم حذف الكتاب بنجاح');
-                setBooks(books.filter(b => b.id !== id));
-            } else {
-                error('فشل الحذف');
-            }
-        } catch (error) {
-            console.error('Error deleting book:', error);
-            error('حدث خطأ');
+            await api.deleteBook(id);
+            success('تم حذف الكتاب بنجاح');
+            setBooks(books.filter(b => b.id !== id));
+        } catch (err: any) {
+            console.error('Error deleting book:', err);
+            showError(err.message || 'حدث خطأ أثناء الحذف');
         }
     };
 
-    const openModal = (book?: Book) => {
+    const openModal = (book?: BookItem) => {
         if (book) {
             setEditingBook(book);
             setFormData({
@@ -227,15 +205,19 @@ const AdminLibrary: React.FC = () => {
                                     <td className="py-4 px-6">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                                                <Book className="w-5 h-5" />
+                                                <BookIcon className="w-5 h-5" />
                                             </div>
                                             <span className="text-white font-medium">{book.title}</span>
                                         </div>
                                     </td>
                                     <td className="py-4 px-6 text-gray-400 font-mono text-sm" dir="ltr">
-                                        <a href={book.url || `https://pub-7ec5f52937cb4e729e07ecf35b1cf007.r2.dev/Books/${book.path}`} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400">
-                                            {book.path}
-                                        </a>
+                                        {book.url ? (
+                                            <a href={book.url} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 truncate max-w-[200px] inline-block">
+                                                {book.path}
+                                            </a>
+                                        ) : (
+                                            <span>{book.path}</span>
+                                        )}
                                     </td>
                                     <td className="py-4 px-6">
                                         {book.courseTitle ? (

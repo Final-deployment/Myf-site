@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Course, CourseFolder } from '../types';
 import { api } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
-import { Folder, ChevronRight, Plus, X, Image as ImageIcon, LayoutGrid, ArrowRight, Lock, Book, Award } from 'lucide-react';
+import { Folder, ChevronRight, Plus, X, Image as ImageIcon, LayoutGrid, ArrowRight, Lock, Book, Award, Trash2, Pencil, AlertTriangle } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { QuizResult } from '../types';
 
@@ -21,6 +21,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
     const isAdmin = user?.role === 'admin';
     const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
     const [quizzes, setQuizzes] = useState<any[]>([]);
+    const [confirmEnroll, setConfirmEnroll] = useState<Course | null>(null);
 
     // Add Folder Form State
     const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
@@ -63,18 +64,6 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
         loadData();
     }, []);
 
-    const handleEnroll = async (courseId: string) => {
-        setEnrollingId(courseId);
-        try {
-            await api.enroll(courseId);
-            await loadData();
-        } catch (err: any) {
-            alert(err.message || 'فشل التسجيل في الدورة');
-        } finally {
-            setEnrollingId(null);
-        }
-    };
-
     const handleCreateFolder = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -93,7 +82,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
     // (In folder view, we show all folders that contain any courses)
     // Actually, user wants "Folders for general course names".
 
-    const visibleFolders = selectedFolderId ? [] : folders;
+    const visibleFolders = selectedFolderId ? [] : (isAdmin ? folders : folders.filter(f => courses.some(c => c.folderId === f.id)));
 
     // Courses to show in current view
     const visibleCourses = selectedFolderId
@@ -198,6 +187,37 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         <ChevronRight className="w-5 h-5 text-white" />
                                     </div>
                                 </div>
+
+                                {/* Admin folder controls */}
+                                {isAdmin && (
+                                    <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-10">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const newName = prompt('أدخل الاسم الجديد للمجلد:', folder.name);
+                                                if (newName && newName.trim()) {
+                                                    api.updateFolder(folder.id, { name: newName.trim() }).then(() => loadData()).catch(() => alert('فشل تحديث المجلد'));
+                                                }
+                                            }}
+                                            className="w-8 h-8 rounded-full bg-blue-500/80 hover:bg-blue-400 flex items-center justify-center backdrop-blur-md shadow-lg transition-all"
+                                            title="تعديل الاسم"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5 text-white" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`هل أنت متأكد من حذف مجلد "${folder.name}"؟ \nسيتم نقل المساقات المرتبطة به ولن تُحذف.`)) {
+                                                    api.deleteFolder(folder.id).then(() => loadData()).catch(() => alert('فشل حذف المجلد'));
+                                                }
+                                            }}
+                                            className="w-8 h-8 rounded-full bg-red-500/80 hover:bg-red-400 flex items-center justify-center backdrop-blur-md shadow-lg transition-all"
+                                            title="حذف المجلد"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5 text-white" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
@@ -381,16 +401,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                             if (isEnrolled) {
                                                 onPlayCourse(course);
                                             } else {
-                                                // Auto-enroll and open
-                                                try {
-                                                    await api.enroll(course.id);
-                                                    const updatedCourses = await api.getCourses();
-                                                    const updated = updatedCourses.find((c: any) => String(c.id) === String(course.id));
-                                                    if (updated) onPlayCourse(updated);
-                                                    else onPlayCourse(course);
-                                                } catch (err: any) {
-                                                    alert(err.message || 'فشل التسجيل في الدورة');
-                                                }
+                                                setConfirmEnroll(course);
                                             }
                                         }}
                                     >
@@ -483,20 +494,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                             </button>
                                         ) : (
                                             <button
-                                                onClick={async () => {
-                                                    setEnrollingId(course.id);
-                                                    try {
-                                                        await api.enroll(course.id);
-                                                        const updatedCourses = await api.getCourses();
-                                                        const updated = updatedCourses.find((c: any) => String(c.id) === String(course.id));
-                                                        if (updated) onPlayCourse(updated);
-                                                        else onPlayCourse(course);
-                                                    } catch (err: any) {
-                                                        alert(err.message || 'فشل التسجيل في الدورة');
-                                                    } finally {
-                                                        setEnrollingId(null);
-                                                    }
-                                                }}
+                                                onClick={() => setConfirmEnroll(course)}
                                                 className="w-full py-4 bg-white/5 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-xl font-bold text-sm transition-all border border-white/10 hover:border-emerald-500 flex items-center justify-center gap-2"
                                             >
                                                 تسجيل مجاني
@@ -562,6 +560,74 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+            {/* Enrollment Confirmation Modal (U3) */}
+            {confirmEnroll && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-fade-in">
+                    <div className="glass-panel w-full max-w-md border border-white/10 overflow-hidden rounded-3xl">
+                        <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-amber-400" />
+                                تأكيد التسجيل
+                            </h3>
+                            <button onClick={() => setConfirmEnroll(null)} className="text-gray-400 hover:text-white">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-white text-lg font-bold text-center">{confirmEnroll.title}</p>
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 space-y-3">
+                                <p className="text-amber-200 text-sm font-bold text-center">⚠️ تنبيه مهم قبل التسجيل</p>
+                                <p className="text-amber-100/80 text-sm leading-relaxed text-center">
+                                    سيبدأ العد التنازلي فور تسجيلك. إذا لم تنهِ المساق خلال الفترة المحددة سيتم إغلاقه تلقائياً.
+                                </p>
+                                <div className="grid grid-cols-3 gap-3 mt-3">
+                                    <div className="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+                                        <p className="text-2xl font-bold text-amber-400">{(confirmEnroll as any).daysAvailable || 30}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">يوم متاح</p>
+                                    </div>
+                                    <div className="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+                                        <p className="text-2xl font-bold text-emerald-400">{confirmEnroll.lessonsCount || 0}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">درس</p>
+                                    </div>
+                                    <div className="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+                                        <p className="text-2xl font-bold text-violet-400">{confirmEnroll.duration || '-'}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">مدة المساق</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="pt-2 flex gap-3">
+                                <button
+                                    onClick={async () => {
+                                        const course = confirmEnroll;
+                                        setConfirmEnroll(null);
+                                        setEnrollingId(course.id);
+                                        try {
+                                            await api.enroll(course.id);
+                                            const updatedCourses = await api.getCourses();
+                                            const updated = updatedCourses.find((c: any) => String(c.id) === String(course.id));
+                                            if (updated) onPlayCourse(updated);
+                                            else onPlayCourse(course);
+                                        } catch (err: any) {
+                                            alert(err.message || 'فشل التسجيل في الدورة');
+                                        } finally {
+                                            setEnrollingId(null);
+                                        }
+                                    }}
+                                    className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold shadow-lg shadow-emerald-900/20 transition-all"
+                                >
+                                    نعم، سجّلني
+                                </button>
+                                <button
+                                    onClick={() => setConfirmEnroll(null)}
+                                    className="px-6 py-4 bg-white/5 text-gray-300 rounded-2xl hover:bg-white/10 transition-all"
+                                >
+                                    إلغاء
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

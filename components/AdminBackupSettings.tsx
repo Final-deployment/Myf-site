@@ -13,25 +13,48 @@ const AdminBackupSettings: React.FC = () => {
     });
 
     const fetchBackups = async (cloudEnabled: boolean) => {
-        if (!cloudEnabled) {
-            setBackups([]);
-            return;
-        }
         setIsLoading(true);
         try {
-            const data = await api.r2.listFiles('backups/');
-            const mappedBackups = (data.files || []).map(f => ({
-                id: f.id || f.fullName,
-                name: f.name || f.fullName.split('/').pop(),
-                date: new Date(f.lastModified || Date.now()).toLocaleString('en-CA'),
-                size: ((f.size || 0) / 1024 / 1024).toFixed(2) + ' MB',
+            // 1. Fetch Local Backups (always available)
+            const localData = await api.getLocalBackups();
+            const mappedLocal = (localData.files || []).map(f => ({
+                id: f.id,
+                name: f.name,
+                date: new Date(f.date).toLocaleString('en-CA'),
+                size: (f.size / 1024 / 1024).toFixed(2) + ' MB',
                 status: 'success',
-                type: 'cloud',
-                url: f.url
-            })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setBackups(mappedBackups);
+                type: f.type,
+                url: null // null so it triggers backend trigger to download
+            }));
+
+            // 2. Fetch Cloud Backups (if enabled)
+            let mappedCloud = [];
+            if (cloudEnabled) {
+                try {
+                    const data = await api.r2.listFiles('backups/');
+                    mappedCloud = (data.files || []).map(f => ({
+                        id: f.id || f.fullName,
+                        name: f.name || f.fullName.split('/').pop(),
+                        date: new Date(f.lastModified || Date.now()).toLocaleString('en-CA'),
+                        size: ((f.size || 0) / 1024 / 1024).toFixed(2) + ' MB',
+                        status: 'success',
+                        type: 'cloud',
+                        url: f.url
+                    }));
+                } catch (ce) {
+                    console.error('Failed to fetch R2 backups', ce);
+                }
+            }
+            
+            // Merge and sort
+            const unifiedBackups = [...mappedLocal, ...mappedCloud].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            // Remove duplicates by name (if cloud and local have same file)
+            const uniqueBackups = Array.from(new Map(unifiedBackups.map(item => [item.name, item])).values());
+            
+            setBackups(uniqueBackups);
         } catch (e) {
-            console.error('Failed to fetch R2 backups', e);
+            console.error('Failed to fetch backups', e);
         } finally {
             setIsLoading(false);
         }
@@ -78,18 +101,8 @@ const AdminBackupSettings: React.FC = () => {
     const handleCreateBackup = async () => {
         try {
             await api.downloadBackup();
-
-            // Add visual feedback
-            const newBackup = {
-                id: Date.now(),
-                name: 'نسخة محلية (Database)',
-                date: new Date().toLocaleString('en-CA'),
-                size: 'Unknown',
-                status: 'success',
-                type: 'manual'
-            };
-            setBackups([newBackup, ...backups]);
-            alert('تم تحميل النسخة الاحتياطية بنجاح');
+            // Automatically refresh the backup list so the admin sees the new file
+            await fetchBackups(settings.cloudStorage);
         } catch (e) {
             alert('فشل إنشاء النسخة الاحتياطية');
             console.error(e);
@@ -127,13 +140,14 @@ const AdminBackupSettings: React.FC = () => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (confirm('هل أنت متأكد من استعادة هذه النسخة؟ سيتم فقدان التغييرات غير المحفوظة.')) {
+        if (confirm('تنبيه خطير ⚠️: هل أنت متأكد من مسح البيانات الحالية واستعادة هذه النسخة بشكل كامل؟ العملية لا يمكن التراجع عنها!')) {
             try {
-                await api.restoreBackup(file);
-                alert('تم استعادة النسخة الاحتياطية بنجاح! سيتم إعادة تحميل الصفحة.');
+                // We show an alert so they don't panic while it's uploading
+                const res = await api.restoreBackup(file);
+                alert(res.message || 'تمت الاستعادة بنجاح. سنقوم بتحديث الصفحة.');
                 window.location.reload();
-            } catch (error) {
-                alert('فشل استعادة النسخة الاحتياطية');
+            } catch (error: any) {
+                alert(error.message || 'فشل استعادة النسخة الاحتياطية');
                 console.error(error);
             }
         }
@@ -148,11 +162,20 @@ const AdminBackupSettings: React.FC = () => {
         { label: 'التخزين السحابي', value: settings.cloudStorage ? 'سحابي (R2)' : 'محلي فقط', icon: Cloud, color: settings.cloudStorage ? 'from-blue-400 to-indigo-500' : 'from-amber-500 to-orange-600' },
     ];
 
-    const handleDownloadIndividual = (backup: any) => {
-        if (backup.url) {
-            window.open(backup.url, '_blank');
-        } else {
-            handleCreateBackup();
+    const handleDownloadIndividual = async (backup: any) => {
+        try {
+            if (backup.url) {
+                // Cloud backup
+                window.open(backup.url, '_blank');
+            } else if (backup.name) {
+                // Local backup
+                await api.downloadLocalBackup(backup.name);
+            } else {
+                handleCreateBackup();
+            }
+        } catch (e) {
+            console.error(e);
+            alert('فشل تحميل النسخة المحددة');
         }
     };
 
@@ -280,8 +303,7 @@ const AdminBackupSettings: React.FC = () => {
                             </div>
                         ) : backups.length === 0 ? (
                             <div className="text-center py-10 text-gray-500">
-                                <p>لا توجد نسخ احتياطية حالياً</p>
-                                {!settings.cloudStorage && <p className="text-xs mt-1">قم بتفعيل التخزين السحابي لرؤية النسخ السحابية</p>}
+                                <p>لا توجد نسخ احتياطية حالياً، انقر على تحميل محلي لأخذ نسخة.</p>
                             </div>
                         ) : (
                             backups.map((backup) => (

@@ -24,6 +24,12 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose, courseName }) => 
   const [userAnswers, setUserAnswers] = useState<number[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [corrections, setCorrections] = useState<Array<{
+    questionIndex: number;
+    questionText: string;
+    userAnswerText: string;
+    correctAnswerText: string;
+  }>>([]);
 
   if (!quiz.questions || quiz.questions.length === 0) {
     return (
@@ -49,37 +55,29 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose, courseName }) => 
       setCurrentQuestionIdx(nextIdx);
       setSelectedOption(newAnswers[nextIdx] !== undefined ? newAnswers[nextIdx] : null);
     } else {
-      let finalScore = 0;
-      newAnswers.forEach((ans, idx) => {
-        if (ans !== undefined && ans === quiz.questions[idx].correctAnswer) {
-          finalScore++;
-        }
-      });
-      setScore(finalScore);
-      finishQuiz(finalScore);
+      // S2: Send answers to server for scoring — no local calculation
+      finishQuiz(newAnswers);
     }
   };
 
-  const finishQuiz = async (finalScore: number) => {
+  const finishQuiz = async (answers: number[]) => {
     setIsSaving(true);
     try {
-      await api.quizResults.save(quiz.id, finalScore, totalQuestions);
+      const result = await api.quizResults.save(quiz.id, answers);
+      setScore(result.score);
+      setCorrections(result.corrections || []);
       setIsSubmitted(true);
 
-      const percentage = (finalScore / totalQuestions) * 100;
-      if (percentage >= passingScore) {
+      if (result.passed) {
         setShowRatingModal(true);
         onSuccess();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Quiz save error:', error);
+      alert(error.message || 'حدث خطأ أثناء حفظ نتيجة الاختبار');
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleDownloadCertificate = () => {
-    alert("جاري تحميل الشهادة... (Simulation)");
   };
 
   const handlePrevious = () => {
@@ -109,25 +107,21 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose, courseName }) => 
           </div>
 
           <div className="space-y-6">
-            {quiz.questions.map((q, idx) => {
-              const userAnswer = userAnswers[idx];
-              const isWrong = userAnswer !== q.correctAnswer;
-
-              if (!isWrong) return null;
-
-              return (
-                <div key={idx} className="glass-panel p-6 rounded-2xl border-l-4 border-red-500 bg-red-500/5">
-                  <p className="text-white font-medium mb-4">{idx + 1}. {q.text}</p>
-                  <div className="space-y-2">
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-red-400 flex items-center gap-3">
-                      <X className="w-4 h-4" />
-                      <span>إجابتك: {q.options[userAnswer]}</span>
-                    </div>
+            {corrections.map((c, idx) => (
+              <div key={idx} className="glass-panel p-6 rounded-2xl border-l-4 border-red-500 bg-red-500/5">
+                <p className="text-white font-medium mb-4">{c.questionIndex + 1}. {c.questionText}</p>
+                <div className="space-y-2">
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-red-400 flex items-center gap-3">
+                    <X className="w-4 h-4" />
+                    <span>إجابتك: {c.userAnswerText}</span>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-2">الإجابة التي اخترتها خاطئة. يرجى مراجعة الدرس المتعلق بهذا السؤال.</p>
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-3">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>الإجابة الصحيحة: {c.correctAnswerText}</span>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
 
           <button
@@ -199,6 +193,7 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose, courseName }) => 
                   setScore(0);
                   setSelectedOption(null);
                   setUserAnswers([]);
+                  setCorrections([]);
                 }}
                 className="flex-1 py-4 rounded-xl border border-white/10 text-white hover:bg-white/5 transition-colors font-bold"
               >
@@ -293,7 +288,7 @@ const Quiz: React.FC<QuizProps> = ({ quiz, onSuccess, onClose, courseName }) => 
               >
                 <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center flex-shrink-0 text-xs font-bold ${selectedOption === idx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 text-gray-500'
                   }`}>
-                  {String.fromCharCode(1571 + idx)}
+                  {['أ', 'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح'][idx] || (idx + 1)}
                 </div>
                 <span className={`text-lg ${selectedOption === idx ? 'text-white font-medium' : 'text-gray-300'}`}>
                   {option}

@@ -84,18 +84,12 @@ const StudentCard = memo<{
             </div>
         </div>
 
-        <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">التقدم الدراسي</span>
-                <span className="text-emerald-400 font-bold">{student.completedLessons || 0} درس</span>
+        <div className="space-y-3 mt-4">
+            <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-emerald-500" />
+                <span className="text-emerald-400 font-bold text-sm">{student.completedLessons || 0} درس منجز</span>
             </div>
-            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                    className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
-                    style={{ width: `${Math.min((student.completedLessons || 0) * 5, 100)}%` }}
-                />
-            </div>
-            <p className="text-[11px] text-gray-500 line-clamp-1 italic">
+            <p className="text-[11px] text-gray-500 line-clamp-2 italic border-t border-white/5 pt-2">
                 {student.activeCourses ? `يدرس حالياً: ${student.activeCourses}` : 'لا توجد دورات نشطة'}
             </p>
         </div>

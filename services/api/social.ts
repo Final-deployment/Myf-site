@@ -1,15 +1,11 @@
 /**
  * Social Service (Community & Messaging)
  */
-import type { Post, User } from '../../types';
+import type { User } from '../../types';
 import { getAuthToken } from './auth';
 import { getApiUrl } from './config';
 
 export const socialApi = {
-    getCommunityPosts: async (): Promise<Post[]> => {
-        const response = await fetch(getApiUrl('/community/posts'));
-        return response.ok ? await response.json() : [];
-    },
 
     getMessages: async (): Promise<any[]> => {
         const token = getAuthToken();

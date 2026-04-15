@@ -59,28 +59,18 @@ const AdminReports: React.FC = () => {
             .slice(0, 5)
             .map(c => ({
                 name: c.title,
-                students: c.studentsCount || 0,
-                growth: Math.floor(Math.random() * 20) - 5 // Mock growth
+                students: c.studentsCount || 0
             }));
     }, [courses]);
 
     // KPIs array (depends on completionRate)
     const kpis = [
-        { label: 'معدل إكمال الدورات', value: `${completionRate}%`, change: '+5%', trend: 'up' as const, icon: TrendingUp },
-        { label: 'متوسط وقت الدراسة', value: '45 د', change: '+12%', trend: 'up' as const, icon: Clock },
-        { label: 'رضا الطلاب', value: '4.8/5', change: '+0.2', trend: 'up' as const, icon: Users },
-        { label: 'معدل التسرب', value: '2%', change: '-2%', trend: 'down' as const, icon: TrendingDown },
+        { label: 'معدل إكمال الدورات', value: `${completionRate}%`, icon: TrendingUp },
+        { label: 'معدل الحضور السنوي', value: '0%', icon: Clock },
     ];
 
-    // 4. Monthly Data (Mocked but scalable)
-    const baseCount = Math.max(users.length, 100);
     const monthlyData = [
-        { month: 'يناير', students: Math.max(0, baseCount - 50), courses: 5, hours: 450 },
-        { month: 'فبراير', students: Math.max(0, baseCount - 40), courses: 8, hours: 620 },
-        { month: 'مارس', students: Math.max(0, baseCount - 30), courses: 12, hours: 890 },
-        { month: 'أبريل', students: Math.max(0, baseCount - 20), courses: 15, hours: 1100 },
-        { month: 'مايو', students: Math.max(0, baseCount - 10), courses: 18, hours: 1450 },
-        { month: 'يونيو', students: baseCount, courses: courses.length || 20, hours: 1800 },
+        { month: 'الفترة الحالية', students: users.length, courses: courses.length, hours: 0 }
     ];
 
     // NOW the conditional return is safe - after all hooks
@@ -148,14 +138,8 @@ const AdminReports: React.FC = () => {
                 {kpis.map((kpi, idx) => (
                     <div key={idx} className="glass-panel p-5 rounded-2xl print:border print:border-gray-200 print:bg-white">
                         <div className="flex items-start justify-between mb-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${kpi.trend === 'up' ? 'bg-emerald-500/20' : 'bg-amber-500/20'
-                                }`}>
-                                <kpi.icon className={`w-5 h-5 ${kpi.trend === 'up' ? 'text-emerald-400' : 'text-amber-400'} print:text-black`} />
-                            </div>
-                            <div className={`flex items-center gap-1 text-sm font-medium ${kpi.trend === 'up' ? 'text-emerald-400' : 'text-amber-400'
-                                } print:text-black`}>
-                                {kpi.trend === 'up' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                                {kpi.change}
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-500/20">
+                                <kpi.icon className="w-5 h-5 text-emerald-400 print:text-black" />
                             </div>
                         </div>
                         <p className="text-2xl font-bold text-white mb-1 print:text-black">{kpi.value}</p>
@@ -256,13 +240,8 @@ const AdminReports: React.FC = () => {
                                 <div className="w-32 h-2 bg-white/10 rounded-full overflow-hidden print:bg-gray-200">
                                     <div
                                         className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
-                                        style={{ width: `${(course.students / (topCourses[0].students || 1)) * 100}%` }}
+                                        style={{ width: `${(course.students / (topCourses[0]?.students || 1)) * 100}%` }}
                                     />
-                                </div>
-                                <div className={`flex items-center gap-1 text-sm font-medium ${course.growth >= 0 ? 'text-emerald-400' : 'text-red-400'
-                                    }`}>
-                                    {course.growth >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                                    {Math.abs(course.growth)}%
                                 </div>
                             </div>
                         </div>

@@ -92,9 +92,7 @@ const AdminCertificateManagement: React.FC = () => {
     );
 
     const stats = [
-        { label: 'الشهادات الصادرة', value: certificates.length.toString(), icon: Award, color: 'from-emerald-500 to-teal-600' },
-        { label: 'بانتظار الإصدار', value: '0', icon: CheckCircle, color: 'from-amber-500 to-orange-600' }, // Mock
-        { label: 'الطلاب المؤهلين', value: '89', icon: Users, color: 'from-blue-500 to-cyan-600' }, // Mock
+        { label: 'الشهادات الصادرة الإجمالية', value: certificates.length.toString(), icon: Award, color: 'from-emerald-500 to-teal-600' }
     ];
 
     return (

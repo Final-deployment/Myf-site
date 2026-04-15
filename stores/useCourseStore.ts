@@ -78,11 +78,11 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     },
 
     toggleFavorite: (courseId) => {
-        const isFav = api.toggleFavorite(courseId);
+        // Local-only toggle — actual API call happens in Favorites.tsx with userId
         set((state) => ({
-            favorites: isFav
-                ? [...state.favorites, courseId]
-                : state.favorites.filter((id) => id !== courseId),
+            favorites: state.favorites.includes(courseId)
+                ? state.favorites.filter((id) => id !== courseId)
+                : [...state.favorites, courseId],
         }));
     },
 

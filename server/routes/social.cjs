@@ -4,6 +4,14 @@ const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { authenticateToken } = require('../middleware.cjs');
 const { deleteFile, generateDownloadUrl, uploadBufferToR2 } = require('../r2.cjs');
+const path = require('path');
+const rateLimit = require('express-rate-limit');
+
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 30, // Limit each IP to 30 uploads per hour
+    message: { error: 'تجاوزت الحد المسموح به لرفع الملفات، يرجى المحاولة لاحقاً' }
+});
 
 // --- PUBLIC ROUTES (No Auth Required) ---
 router.post('/public/messages', (req, res) => {
@@ -14,6 +22,12 @@ router.post('/public/messages', (req, res) => {
     }
     if (!guestName) {
         return res.status(400).json({ error: 'الاسم مطلوب' });
+    }
+    if (content && content.length > 3000) {
+        return res.status(400).json({ error: 'محتوى الرسالة طويل جداً (الحد الأقصى 3000 حرف)' });
+    }
+    if (guestName && guestName.length > 100) {
+        return res.status(400).json({ error: 'الاسم طويل جداً (الحد الأقصى 100 حرف)' });
     }
 
     try {
@@ -74,10 +88,10 @@ router.get('/public/messages/:guestId', (req, res) => {
 });
 
 /**
- * Server-side Proxy Upload (Public)
+ * Server-side Proxy Upload (Protected)
  * Receives file bytes as application/octet-stream and uploads to R2
  */
-router.post('/upload-proxy', async (req, res) => {
+router.post('/upload-proxy', authenticateToken, uploadLimiter, async (req, res) => {
     try {
         let fileName = req.query.fileName;
         let fileType = req.headers['content-type'];
@@ -106,6 +120,15 @@ router.post('/upload-proxy', async (req, res) => {
             return res.status(400).json({ error: 'Empty file buffer' });
         }
 
+        // Whitelist extensions
+        if (fileName) {
+            const ext = path.extname(fileName).toLowerCase().replace('.', '');
+            const allowedExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'mp3', 'mp4', 'webm', 'ogg', 'pdf', 'doc', 'docx'];
+            if (ext && !allowedExts.includes(ext)) {
+                return res.status(415).json({ error: `File type not permitted.` });
+            }
+        }
+
         // 20MB size limit check (20 * 1024 * 1024 bytes)
         const MAX_SIZE_MB = 20;
         const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
@@ -121,7 +144,7 @@ router.post('/upload-proxy', async (req, res) => {
         res.json({ publicUrl });
     } catch (e) {
         console.error('[ProxyUpload] Failed:', e);
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'فشل في رفع الملف. حاول مرة أخرى.' });
     }
 });
 
@@ -359,6 +382,10 @@ router.post('/messages', (req, res) => {
     const { receiverId, content, attachmentUrl, attachmentType, attachmentName, isComplaint } = req.body;
     const senderId = req.user.id;
     const senderRole = req.user.role;
+
+    if (content && content.length > 5000) {
+        return res.status(400).json({ error: 'محتوى الرسالة أطول من الحد الأقصى المسموح به' });
+    }
 
     try {
         let finalReceiverId = receiverId;

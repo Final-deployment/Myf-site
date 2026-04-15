@@ -6,6 +6,7 @@ import { User } from '../types';
 import { usePagination } from '../hooks/usePagination';
 import { useDebounce } from '../hooks/useDebounce';
 import StudentDetailsModal from './StudentDetailsModal';
+import { useNavigate } from 'react-router-dom';
 
 interface SupervisorDashboardProps {
     onOpenChat?: (userId: string) => void;
@@ -66,14 +67,9 @@ const StudentRow = memo<{
                 <span className="text-white text-sm line-clamp-1">
                     {student.activeCourses || 'لا يوجد'}
                 </span>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-emerald-500 rounded-full"
-                            style={{ width: `${Math.min((student.completedLessons || 0) * 5, 100)}%` }}
-                        />
-                    </div>
-                    <span className="text-[10px] text-gray-400">{student.completedLessons || 0} درس</span>
+                <div className="flex items-center gap-2 mt-1">
+                    <BookOpen className="w-4 h-4 text-emerald-500" />
+                    <span className="text-xs text-emerald-400 font-bold">{student.completedLessons || 0} درس منجز</span>
                 </div>
             </div>
         </td>
@@ -109,6 +105,7 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ onOpenChat })
     const [detailsModalOpen, setDetailsModalOpen] = useState(false);
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -160,10 +157,7 @@ const SupervisorDashboard: React.FC<SupervisorDashboardProps> = ({ onOpenChat })
                     <p className="text-gray-400">إدارة ومتابعة الطلاب المسندين إليك</p>
                 </div>
                 <button
-                    onClick={() => {
-                        const event = new CustomEvent('setActiveTab', { detail: 'students' });
-                        window.dispatchEvent(event);
-                    }}
+                    onClick={() => navigate('/supervisor/students')}
                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-2xl text-white font-bold shadow-lg shadow-emerald-600/20 transition-all transform hover:scale-105 flex items-center gap-2"
                 >
                     <Users className="w-5 h-5" />

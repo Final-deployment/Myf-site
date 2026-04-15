@@ -108,7 +108,7 @@ const AdminQuizManagement: React.FC = () => {
                 await api.updateQuiz(editingId, quizForm);
             } else {
                 await api.addQuiz({
-                    id: Date.now().toString(),
+                    id: 'quiz_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
                     title: quizForm.title || 'اختبار جديد',
                     titleEn: quizForm.title || 'New Quiz',
                     courseId: quizForm.courseId || '1',
@@ -131,8 +131,8 @@ const AdminQuizManagement: React.FC = () => {
     const stats = [
         { label: 'إجمالي الاختبارات', value: quizzes.length.toString(), icon: ClipboardList, color: 'from-emerald-500 to-teal-600' },
         { label: 'إجمالي الأسئلة', value: quizzes.reduce((acc, q) => acc + (q.questions?.length || 0), 0).toString(), icon: AlertCircle, color: 'from-blue-500 to-cyan-600' },
-        { label: 'معدل النجاح', value: '78%', icon: CheckCircle, color: 'from-violet-500 to-purple-600' },
-        { label: 'متوسط الوقت', value: '25 د', icon: Clock, color: 'from-amber-500 to-orange-600' },
+        { label: 'مساقات مشمولة', value: new Set(quizzes.map(q => q.courseId)).size.toString(), icon: CheckCircle, color: 'from-violet-500 to-purple-600' },
+        { label: 'متوسط الأسئلة/اختبار', value: quizzes.length > 0 ? Math.round(quizzes.reduce((acc, q) => acc + (q.questions?.length || 0), 0) / quizzes.length).toString() : '0', icon: BarChart, color: 'from-amber-500 to-orange-600' },
     ];
 
     return (
@@ -186,7 +186,7 @@ const AdminQuizManagement: React.FC = () => {
                                 <td className="py-4 px-6">
                                     <div>
                                         <p className="text-white font-medium">{quiz.title}</p>
-                                        <p className="text-gray-400 text-sm">Course ID: {quiz.courseId}</p>
+                                        <p className="text-gray-400 text-sm">{courses.find(c => c.id === quiz.courseId)?.title || quiz.courseId}</p>
                                     </div>
                                 </td>
                                 <td className="py-4 px-6 text-white">{quiz.questions?.length || 0}</td>

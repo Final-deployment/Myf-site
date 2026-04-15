@@ -420,27 +420,6 @@ export interface Badge {
   description: string;
 }
 
-/**
- * Community post interface
- */
-export interface Post {
-  /** Unique post identifier */
-  id: string;
-  /** Author name */
-  author: string;
-  /** Author's avatar URL */
-  authorAvatar: string;
-  /** Human-readable time string */
-  time: string;
-  /** Post content */
-  content: string;
-  /** Number of likes */
-  likes: number;
-  /** Number of comments */
-  comments: number;
-  /** Associated tags */
-  tags: string[];
-}
 
 // ============================================================================
 // Library Resources

@@ -42,6 +42,7 @@ const allowedOrigins = [
     'http://localhost:5175',
     'http://localhost:5176',
     'http://localhost:5177',
+    'http://localhost:5178',
     'https://localhost',           // Capacitor Android (androidScheme: 'https')
     'capacitor://localhost',       // Capacitor iOS
     'http://localhost',            // Capacitor fallback
@@ -88,47 +89,35 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // ============================================================================
-// SECURITY: Rate Limiting
+// SECURITY: Helmet & Rate Limiting
 // ============================================================================
-const rateLimitStore = new Map();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 1000; // Increased to 1000 for smoother development
+const helmet = require('helmet');
+app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP temporarily to avoid breaking React dev and images
+    crossOriginEmbedderPolicy: false
+}));
 
-const rateLimiter = (req, res, next) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
-    const now = Date.now();
+const rateLimit = require('express-rate-limit');
 
-    // Clean old entries
-    if (!rateLimitStore.has(ip)) {
-        rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    } else {
-        const entry = rateLimitStore.get(ip);
-        if (now > entry.resetTime) {
-            // Reset window
-            rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-        } else {
-            entry.count++;
-            if (entry.count > MAX_REQUESTS_PER_WINDOW) {
-                console.warn(`[RATE_LIMIT] Too many requests from IP: ${ip}`);
-                return res.status(429).json({
-                    error: 'Too many requests. Please try again later.',
-                    code: 'RATE_LIMIT_EXCEEDED',
-                    retryAfter: Math.ceil((entry.resetTime - now) / 1000)
-                });
-            }
-        }
-    }
-    next();
-};
+const globalRateLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 1000, // Limit each IP to 1000 requests per `window` (here, per 1 minute)
+    message: {
+        error: 'Too many requests. Please try again later.',
+        code: 'RATE_LIMIT_EXCEEDED'
+    },
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+});
 
 // Apply rate limiting to all routes
-app.use(rateLimiter);
+app.use(globalRateLimiter);
 
 // ============================================================================
 // Body Parsing Middleware
 // ============================================================================
-app.use(express.json({ limit: '100mb' }));
-app.use(express.raw({ type: ['application/octet-stream', 'audio/webm', 'audio/ogg', 'video/webm', 'video/mp4', 'image/*'], limit: '100mb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.raw({ type: ['application/octet-stream', 'audio/webm', 'audio/ogg', 'video/webm', 'video/mp4', 'image/*'], limit: '30mb' }));
 
 // ============================================================================
 // SECURITY: Enhanced Request Logger
@@ -172,14 +161,15 @@ app.get('/api/health', (req, res) => {
 // ============================================================================
 
 // ============================================================================
-// TEMPORARY FIX ENDPOINT
+// TEMPORARY FIX ENDPOINT (Secured)
 // ============================================================================
-app.get('/api/admin/fix-locked-courses', (req, res) => {
+app.post('/api/admin/fix-locked-courses', authenticateToken, requireAdmin, (req, res) => {
     try {
         const result = db.prepare('UPDATE enrollments SET is_locked = 0 WHERE (progress >= 100 OR completed = 1) AND is_locked = 1').run();
         res.json({ success: true, changes: result.changes, message: 'Unlocked completed courses successfully.' });
     } catch(e) {
-        res.status(500).json({ error: e.message });
+        console.error('[FIX_LOCKED_COURSES] Error:', e);
+        res.status(500).json({ error: 'Internal server error.' });
     }
 });
 
@@ -231,9 +221,10 @@ app.use((err, req, res, next) => {
     const timestamp = new Date().toISOString();
     console.error(`[ERROR] [${timestamp}] ${req.method} ${req.url}:`, err.message);
 
-    // Don't expose internal error details in production
     const statusCode = err.status || 500;
-    const message = process.env.NODE_ENV === 'production'
+    
+    // Always hide internal exception messages on 500 errors
+    const message = statusCode === 500
         ? 'Internal Server Error'
         : err.message;
 
@@ -247,13 +238,13 @@ app.use((err, req, res, next) => {
 // ============================================================================
 // Start Server
 // ============================================================================
-app.listen(PORT, () => {
-    console.log(`\n========================================`);
-    console.log(`  Al-Mastaba Server v2.0 (Secured)`);
-    console.log(`========================================`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log('\n========================================');
+    console.log('  Al-Mastaba Server v2.0 (Secured)');
+    console.log('========================================');
     console.log(`  Port: ${PORT}`);
     console.log(`  Database: SQLite (WAL Mode)`);
     console.log(`  CORS: Restricted to allowed origins`);
-    console.log(`  Rate Limit: ${MAX_REQUESTS_PER_WINDOW} req/min`);
-    console.log(`========================================\n`);
+    console.log(`  Rate Limit: 1000 req/min`);
+    console.log('========================================\n');
 });

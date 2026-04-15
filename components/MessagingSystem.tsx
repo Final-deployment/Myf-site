@@ -1004,6 +1004,7 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                                         {/* Text Input */}
                                         <input
                                             type="text"
+                                            maxLength={5000}
                                             value={chatInput}
                                             onChange={(e) => setChatInput(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}

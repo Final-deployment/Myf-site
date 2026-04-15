@@ -62,7 +62,15 @@ const Library: React.FC = () => {
          {isLoading ? (
             <div className="text-center py-20 text-gray-500">جاري التحميل...</div>
          ) : filteredBooks.length === 0 ? (
-            <div className="text-center py-20 text-gray-500">لا توجد كتب في المكتبة حالياً</div>
+            <div className="flex flex-col items-center justify-center py-20 px-4 mt-8 glass-panel rounded-3xl border border-white/5 border-dashed">
+               <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-inner border border-white/5">
+                  <BookOpen className="w-10 h-10 text-gray-500" />
+               </div>
+               <h3 className="text-xl font-bold text-white mb-2">لا توجد كتب</h3>
+               <p className="text-gray-400 text-center max-w-sm">
+                  {searchQuery ? 'لم يتم العثور على كتب تطابق بحثك. جرب كلمات مفتاحية أخرى.' : 'المكتبة فارغة حالياً. سيتم إضافة الكتب قريباً.'}
+               </p>
+            </div>
          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                {filteredBooks.map((book) => (

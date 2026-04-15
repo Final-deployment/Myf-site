@@ -7,6 +7,16 @@ import { getApiUrl } from './config';
 
 const STORAGE_PREFIX = 'mastaba_';
 
+export interface PaginatedResponse<T> {
+    data: T[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    }
+}
+
 export interface CreateUserInput {
     email: string;
     password?: string;
@@ -27,12 +37,20 @@ export interface CreateUserInput {
 }
 
 export const usersApi = {
-    getUsers: async (): Promise<User[]> => {
+    getUsers: async (page?: number, limit?: number, search?: string, role?: string): Promise<User[] | PaginatedResponse<User>> => {
         const token = getAuthToken();
-        const response = await fetch(getApiUrl('/users'), {
+        const queryParams = new URLSearchParams();
+        if (page) queryParams.append('page', page.toString());
+        if (limit) queryParams.append('limit', limit.toString());
+        if (search) queryParams.append('search', search);
+        if (role) queryParams.append('role', role);
+
+        const url = `${getApiUrl('/users')}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        
+        const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!response.ok) return [];
+        if (!response.ok) return page ? { data: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 1 } } : [];
         return await response.json();
     },
 
@@ -86,12 +104,19 @@ export const usersApi = {
         if (!response.ok) throw new Error('Failed to delete user');
     },
 
-    getStudents: async (): Promise<User[]> => {
+    getStudents: async (page?: number, limit?: number, search?: string): Promise<User[] | PaginatedResponse<User>> => {
         const token = getAuthToken();
-        const response = await fetch(getApiUrl('/users/students'), {
+        const queryParams = new URLSearchParams();
+        if (page) queryParams.append('page', page.toString());
+        if (limit) queryParams.append('limit', limit.toString());
+        if (search) queryParams.append('search', search);
+
+        const url = `${getApiUrl('/users/students')}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+        const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!response.ok) return [];
+        if (!response.ok) return page ? { data: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 1 } } : [];
         return await response.json();
     },
 

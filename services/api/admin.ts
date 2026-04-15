@@ -23,6 +23,15 @@ export const adminApi = {
         return response.ok ? await response.json() : [];
     },
 
+    getDashboardStats: async (): Promise<{ totalStudents: number; activeCourses: number; completionRate: number } | null> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/admin/stats/dashboard'), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) return null;
+        return await response.json();
+    },
+
     logAction: async (userId: string, userName: string, action: string, details: string): Promise<void> => {
         const token = getAuthToken();
         await fetch(getApiUrl('/system-activity-logs'), {
@@ -173,6 +182,23 @@ export const adminApi = {
         window.URL.revokeObjectURL(url);
     },
 
+    downloadLocalBackup: async (filename: string): Promise<void> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/admin/backup/download/${filename}`), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to download specific backup');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    },
+
     uploadCloudBackup: async (): Promise<{ url: string; key: string; size: number }> => {
         const token = getAuthToken();
         const response = await fetch(getApiUrl('/admin/backup/cloud'), {
@@ -183,10 +209,30 @@ export const adminApi = {
         return await response.json();
     },
 
-    restoreBackup: async (file: File): Promise<void> => {
-        // Implementation for restore would require multipart upload or similar
-        // For now, per backend, it's not fully implemented
-        throw new Error('Restore via API not yet implemented. Please replace db.sqlite manually.');
+    restoreBackup: async (file: File): Promise<{success: boolean, message?: string}> => {
+        const token = getAuthToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(getApiUrl('/admin/backup/restore'), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to restore backup');
+        return data;
+    },
+
+    getLocalBackups: async (): Promise<{ files: any[] }> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/admin/backup/local'), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch local backups');
+        return await response.json();
     },
 
     getBackupSettings: async (): Promise<any> => {

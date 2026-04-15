@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       proxy: {
         '/api': {
-          target: 'http://localhost:5000',
+          target: 'http://127.0.0.1:5001',
           changeOrigin: true,
           secure: false,
         }
@@ -21,19 +21,38 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt', // Changed to prompt to allow AppUpdater control
         includeAssets: ['icons/*.png'],
         manifest: {
           name: 'المصطبة العلمية',
           short_name: 'المصطبة',
           description: 'منصة معرفية شاملة للشباب المسلم للدورات الإسلامية الصوتية والمرئية',
-          theme_color: '#0a191f',
-          background_color: '#0a191f',
+          theme_color: '#0f3d36', // Aligned with the dark green theme
+          background_color: '#0f3d36',
           display: 'standalone',
-          orientation: 'any',
+          display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+          orientation: 'portrait-primary',
+          categories: ['education', 'lifestyle', 'productivity'],
           start_url: '/',
+          id: '/',
           lang: 'ar',
           dir: 'rtl',
+          shortcuts: [
+            {
+              name: 'مكتبة المصطبة',
+              short_name: 'المكتبة',
+              description: 'الوصول لمكتبة المصطبة العلمية',
+              url: '/library',
+              icons: [{ src: '/icons/icon-192x192.png', sizes: '192x192' }]
+            },
+            {
+              name: 'البحث الشامل',
+              short_name: 'البحث',
+              description: 'البحث عن الدورات والمحتوى',
+              url: '/search',
+              icons: [{ src: '/icons/icon-192x192.png', sizes: '192x192' }]
+            }
+          ],
           icons: [
             {
               src: '/icons/icon-192x192.png',

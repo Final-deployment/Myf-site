@@ -4,18 +4,36 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { db } = require('../database.cjs');
-const { generateOTP, sendVerificationEmail, sendPasswordEmail, sendApprovalNotificationEmail, sendRejectionNotificationEmail } = require('../email.cjs');
+const { generateOTP, sendVerificationEmail, sendPasswordResetOtpEmail, sendApprovalNotificationEmail, sendRejectionNotificationEmail } = require('../email.cjs');
+const rateLimit = require('express-rate-limit');
 
-const SECRET_KEY = process.env.SECRET_KEY || 'your-default-secret';
+const authLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 8, // Limit each IP to 8 requests per windowMs
+    message: { 
+        error: 'Too many requests from this IP, please try again after 5 minutes', 
+        errorAr: 'تجاوزت الحد المسموح به من المحاولات، يرجى المحاولة بعد 5 دقائق' 
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+
+let SECRET_KEY = process.env.SECRET_KEY;
+if (!SECRET_KEY) {
+    console.warn('\n[SECURITY WARNING] No SECRET_KEY found in environment variables!');
+    console.warn('Using a randomly generated transient key. All active sessions will be invalidated on server restart.\n');
+    SECRET_KEY = crypto.randomBytes(64).toString('hex');
+}
 
 // Login
-router.post('/login', (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
     const { email, password, rememberMe } = req.body;
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         if (!user) return res.status(400).json({ error: 'Cannot find user' });
 
-        const passwordMatch = bcrypt.compareSync(password, user.password);
+        const passwordMatch = await bcrypt.compare(password, user.password);
         if (passwordMatch) {
             if (user.role === 'student' && !user.emailVerified) {
                 return res.status(403).json({
@@ -45,12 +63,13 @@ router.post('/login', (req, res) => {
             res.status(403).json({ error: 'Invalid password' });
         }
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[LOGIN_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول' });
     }
 });
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
     const { email, password, name, nameEn, whatsapp, country, age, gender, educationLevel, role = 'student' } = req.body;
 
     // Password strength validation
@@ -63,7 +82,7 @@ router.post('/register', async (req, res) => {
         if (existing) return res.status(400).json({ error: 'User already exists' });
 
         const id = 'user_' + crypto.randomUUID();
-        const hashedPassword = bcrypt.hashSync(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
         const otp = generateOTP();
         const expiry = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
@@ -117,12 +136,17 @@ router.post('/register', async (req, res) => {
 
         res.status(201).json({ success: true, message: 'User registered. Please verify email.' });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[REGISTER_ERROR]:', e.message);
+        // Handle duplicate email from race condition (double-click)
+        if (e.message && e.message.includes('UNIQUE constraint')) {
+            return res.status(400).json({ error: 'هذا البريد الإلكتروني مسجل بالفعل', errorAr: 'هذا البريد الإلكتروني مسجل بالفعل' });
+        }
+        res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.', errorAr: 'حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.' });
     }
 });
 
 // Verify Email
-router.post('/verify-email', (req, res) => {
+router.post('/verify-email', authLimiter, (req, res) => {
     const { email, otp } = req.body;
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
@@ -147,12 +171,11 @@ router.post('/verify-email', (req, res) => {
         const { password: _, ...userWithoutPassword } = user;
         res.json({ success: true, user: { ...userWithoutPassword, emailVerified: true }, accessToken });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[VERIFY_EMAIL_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء التحقق من البريد' });
     }
 });
-
-// Resend OTP
-router.post('/resend-otp', async (req, res) => {
+router.post('/resend-otp', authLimiter, async (req, res) => {
     const { email } = req.body;
     try {
         const otp = generateOTP();
@@ -165,53 +188,80 @@ router.post('/resend-otp', async (req, res) => {
         await sendVerificationEmail(email, user.name, otp);
         res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[RESEND_OTP_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء إعادة إرسال الرمز' });
     }
 });
-
-// Import middleware
 const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 
-// Forgot Password (Public)
-router.post('/forgot-password', async (req, res) => {
+// Forgot Password (Public) - Generates OTP instead of overwriting password
+router.post('/forgot-password', authLimiter, async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required', errorAr: 'يرجى إدخال البريد الإلكتروني' });
 
     try {
-        const user = db.prepare('SELECT id, name, email, role FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+        const user = db.prepare('SELECT id, name, email FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         if (!user) {
             return res.status(404).json({ error: 'User not found', errorAr: 'لم يتم العثور على حساب بهذا البريد الإلكتروني' });
         }
 
-        // Generate a random 8-character password
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-        let newPassword = '';
-        for (let i = 0; i < 8; i++) {
-            newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
+        const otp = generateOTP();
+        const expiry = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+        db.prepare('UPDATE users SET verificationCode = ?, verificationExpiry = ? WHERE id = ?').run(otp, expiry, user.id);
 
-        // Hash and save the new password
-        const hashedPassword = bcrypt.hashSync(newPassword, 10);
-        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
-
-        // Send the new password via email
-        const emailResult = await sendPasswordEmail(user.email, user.name, newPassword);
+        const emailResult = await sendPasswordResetOtpEmail(user.email, user.name, otp);
 
         if (!emailResult.success) {
             console.error('[FORGOT_PASSWORD] Failed to send email:', emailResult.error);
             return res.status(500).json({ error: 'Failed to send email', errorAr: 'فشل في إرسال البريد الإلكتروني. حاول مرة أخرى.' });
         }
 
-        console.log(`[AUTH] Password reset for user ${user.id} (${user.email})`);
-        res.json({ success: true, message: 'New password sent to your email', messageAr: 'تم إرسال كلمة المرور الجديدة إلى بريدك الإلكتروني' });
+        console.log(`[AUTH] Password reset OTP sent for user ${user.id} (${user.email})`);
+        res.json({ success: true, message: 'OTP sent to your email', messageAr: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني' });
     } catch (e) {
         console.error('[FORGOT_PASSWORD_ERROR]:', e.message);
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: 'حدث خطأ. يرجى المحاولة مرة أخرى.' });
+    }
+});
+
+// Reset Password (Public) - Verify OTP and update password
+router.post('/reset-password', authLimiter, async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+        return res.status(400).json({ error: 'Missing required fields', errorAr: 'يرجى إملاء جميع الحقول المطلوبة' });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters', errorAr: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
+    }
+
+    try {
+        const user = db.prepare('SELECT id, verificationCode, verificationExpiry FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found', errorAr: 'لم يتم العثور على حساب بهذا البريد الإلكتروني' });
+        }
+
+        if (user.verificationCode !== otp) {
+            return res.status(400).json({ error: 'Invalid OTP', errorAr: 'الرمز المدخل غير صحيح' });
+        }
+
+        if (new Date(user.verificationExpiry) < new Date()) {
+            return res.status(400).json({ error: 'OTP expired', errorAr: 'انتهت صلاحية الرمز، يرجى طلب رمز جديد' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        db.prepare('UPDATE users SET password = ?, verificationCode = NULL, verificationExpiry = NULL WHERE id = ?').run(hashedPassword, user.id);
+
+        console.log(`[AUTH] Password reset successful for user ${user.id}`);
+        res.json({ success: true, message: 'Password updated successfully', messageAr: 'تم تعيين كلمة المرور الجديدة بنجاح' });
+    } catch (e) {
+        console.error('[RESET_PASSWORD_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ. يرجى المحاولة مرة أخرى.' });
     }
 });
 
 // Change Password
-router.post('/change-password', authenticateToken, (req, res) => {
+router.post('/change-password', authenticateToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user.id;
 
@@ -230,22 +280,21 @@ router.post('/change-password', authenticateToken, (req, res) => {
         if (!user) return res.status(404).json({ error: 'User not found' });
 
         // Verify current password
-        const passwordMatch = bcrypt.compareSync(currentPassword, user.password);
+        const passwordMatch = await bcrypt.compare(currentPassword, user.password);
         if (!passwordMatch) {
             return res.status(403).json({ error: 'Incorrect current password' });
         }
 
         // Hash new password and update
-        const hashedPassword = bcrypt.hashSync(newPassword, 10);
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
         db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, userId);
 
         res.json({ success: true, message: 'Password updated successfully' });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[CHANGE_PASSWORD_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تغيير كلمة المرور' });
     }
 });
-
-// ============================================================================
 // Admin: Pending Students Management
 // ============================================================================
 

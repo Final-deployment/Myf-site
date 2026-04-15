@@ -12,7 +12,7 @@ import LoadingSpinner from './LoadingSpinner';
  */
 interface SearchResult {
     id: string;
-    type: 'course' | 'audio' | 'document' | 'community';
+    type: 'course' | 'audio' | 'document';
     title: string;
     desc: string;
     instructor?: string;
@@ -83,12 +83,10 @@ const ResultCard = memo<{
                             {result.duration}
                         </span>
                     )}
-                    {result.members !== undefined && (
                         <span className="flex items-center gap-1">
                             <Users className="w-3 h-3" aria-hidden="true" />
-                            {result.members} {result.type === 'community' ? 'إعجاب' : 'عضو'}
+                            {result.members} عضو
                         </span>
-                    )}
                 </div>
             </div>
             <ArrowRight
@@ -158,7 +156,7 @@ const Search: React.FC = memo(() => {
     const { data: allResults, loading, execute: fetchResults } = useApi(api.search);
 
     useEffect(() => {
-        fetchResults(debouncedQuery, activeFilter);
+        fetchResults(debouncedQuery);
     }, [debouncedQuery, activeFilter, fetchResults]);
 
     // Pagination
@@ -179,7 +177,6 @@ const Search: React.FC = memo(() => {
         { id: 'course', label: 'دورات', icon: BookOpen },
         { id: 'audio', label: 'صوتيات', icon: Mic2 },
         { id: 'document', label: 'مستندات', icon: FileText },
-        { id: 'community', label: 'مجتمع', icon: Users },
     ], []);
 
     /** Type colors for result cards */
@@ -187,7 +184,6 @@ const Search: React.FC = memo(() => {
         course: 'from-emerald-500 to-teal-600',
         audio: 'from-violet-500 to-purple-600',
         document: 'from-amber-500 to-orange-600',
-        community: 'from-blue-500 to-cyan-600',
     }), []);
 
     /** Type icons for result cards */
@@ -195,7 +191,6 @@ const Search: React.FC = memo(() => {
         course: BookOpen,
         audio: Mic2,
         document: FileText,
-        community: Users,
     }), []);
 
     /** Handle search input change */

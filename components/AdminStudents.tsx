@@ -583,6 +583,12 @@ SupervisorSettingsModal.displayName = 'SupervisorSettingsModal';
 const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpenChat }) => {
     const [students, setStudents] = useState<User[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalStudents, setTotalStudents] = useState(0);
+    const limit = 20;
     // Filter State
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -603,13 +609,20 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
     const debouncedSearch = useDebounce(searchTerm, 300);
 
     /** Load students and supervisors from API */
-    /** Load students and supervisors from API */
     const loadData = useCallback(async () => {
-        // Load Students
         try {
-            const allUsers = await api.getUsers();
-            if (Array.isArray(allUsers)) {
-                setStudents(allUsers);
+            // Only fetch the specific page/search rather than the whole DB
+            const result = await api.getUsers(currentPage, limit, debouncedSearch, statusFilter === 'all' ? undefined : statusFilter);
+            
+            if (result && 'data' in result) {
+                setStudents(result.data);
+                setTotalPages(result.pagination.totalPages);
+                setTotalStudents(result.pagination.total);
+            } else if (Array.isArray(result)) {
+                // Fallback for unpaginated
+                setStudents(result);
+                setTotalPages(1);
+                setTotalStudents(result.length);
             }
         } catch (error) {
             console.error("Failed to load students", error);
@@ -624,27 +637,22 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
         } catch (error) {
             console.error("Failed to load supervisors", error);
         }
-    }, []);
+    }, [currentPage, limit, debouncedSearch, statusFilter]);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
 
-    /** Filter students based on search term and filters */
-    const filteredStudents = useMemo(() => {
-        const term = debouncedSearch.toLowerCase();
-        return students.filter(student => {
-            const matchesSearch = (student as User).name.toLowerCase().includes(term) ||
-                (student as User).email.toLowerCase().includes(term);
+    // Derived directly from the server response
+    const paginatedItems = students;
 
-            const matchesStatus = statusFilter === 'all' || student.status === statusFilter;
-
-            return matchesSearch && matchesStatus;
-        });
-    }, [students, debouncedSearch, statusFilter]);
-
-    /** Use pagination hook */
-    const { paginatedItems, currentPage, totalPages, nextPage, prevPage } = usePagination(filteredStudents, { itemsPerPage: 10 });
+    const nextPage = () => setCurrentPage(p => Math.min(totalPages, p + 1));
+    const prevPage = () => setCurrentPage(p => Math.max(1, p - 1));
+    
+    // Reset page on search or filter change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearch, statusFilter]);
 
     /** Handle add student */
     const handleAddStudent = useCallback(async (formData: NewStudentForm) => {
@@ -771,17 +779,18 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
 
     /** Statistics */
     const stats: StatItem[] = useMemo(() => {
-        const totalStudents = students.length;
+        // Use the globally fetched total from pagination, not the local array length!
+        const realCount = totalStudents;
         const totalLessons = students.reduce((acc, s: any) => acc + (s.completedLessons || 0), 0);
-        const avgProgress = totalStudents > 0 ? Math.round((totalLessons / (totalStudents * 20)) * 100) : 0; // Assuming 20 lessons average
+        const avgProgress = realCount > 0 ? Math.round((totalLessons / (students.length * 20)) * 100) : 0; // Using students.length here specifically to not show 0% progress because totalLessons is only for the 20 fetched.
 
         return [
-            { label: 'إجمالي الطلاب', value: totalStudents, icon: Users, color: 'from-emerald-500 to-teal-600' },
-            { label: 'الطلاب النشطين', value: students.filter(s => s.status === 'active').length, icon: UserCheck, color: 'from-blue-500 to-cyan-600' },
-            { label: 'دروس مكتملة', value: totalLessons, icon: BookOpen, color: 'from-amber-500 to-orange-600' },
-            { label: 'معدل الإنجاز', value: `${avgProgress}%`, icon: GraduationCap, color: 'from-purple-500 to-pink-600' },
+            { label: 'إجمالي الطلاب (المطابق)', value: realCount, icon: Users, color: 'from-emerald-500 to-teal-600' },
+            { label: 'نشطين (بالصفحة)', value: students.filter(s => s.status === 'active').length, icon: UserCheck, color: 'from-blue-500 to-cyan-600' },
+            { label: 'دروس مكتملة (بالصفحة)', value: totalLessons, icon: BookOpen, color: 'from-amber-500 to-orange-600' },
+            { label: 'معدل الإنجاز (بالصفحة)', value: `${avgProgress || 0}%`, icon: GraduationCap, color: 'from-purple-500 to-pink-600' },
         ];
-    }, [students]);
+    }, [students, totalStudents]);
 
     return (
         <div className="animate-fade-in space-y-6 relative" role="main" aria-label="إدارة الطلاب">
@@ -907,7 +916,7 @@ const AdminStudents: React.FC<AdminStudentsProps> = memo(({ setActiveTab, onOpen
                     {/* Pagination Footer */}
                     <div className="p-4 border-t border-white/5 bg-white/5 backdrop-blur-sm flex items-center justify-between">
                         <p className="text-sm text-gray-400">
-                            عرض {paginatedItems.length} من أصل {filteredStudents.length} طالب
+                            عرض {students.length} من أصل {totalStudents} طالب (صفحة {currentPage} من {totalPages})
                         </p>
                         <div className="flex gap-2">
                             <button

@@ -5,6 +5,51 @@ const { db } = require('../database.cjs');
 const { generateDownloadUrl } = require('../r2.cjs');
 const { authenticateToken, optionalAuth, requireAdmin } = require('../middleware.cjs');
 
+// ============================================================================
+// SHARED: Check if a user has "passed" a specific course
+// ============================================================================
+function isCoursePassed(userId, courseId) {
+    // 1) Passed the quiz for this course
+    const passedQuiz = db.prepare(`
+        SELECT 1 FROM quiz_results qr
+        JOIN quizzes q ON qr.quizId = q.id
+        WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+    `).get(userId, courseId);
+    if (passedQuiz) return true;
+
+    // 2) No quizzes exist for this course, but 100% complete
+    const hasQuiz = db.prepare('SELECT 1 FROM quizzes WHERE courseId = ?').get(courseId);
+    if (!hasQuiz) {
+        const completed = db.prepare(
+            'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ? AND progress >= 100'
+        ).get(userId, courseId);
+        if (completed) return true;
+    }
+    return false;
+}
+
+// ============================================================================
+// SHARED: Check prerequisite status for a course
+// Returns { unlocked: boolean, prerequisiteName?: string }
+// ============================================================================
+function checkCoursePrerequisite(userId, courseId) {
+    const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
+    if (!course) return { unlocked: false, prerequisiteName: null };
+
+    const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
+    const folderCourses = db.prepare(
+        'SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC'
+    ).all(currentFolderId);
+    const courseIndex = folderCourses.findIndex(c => String(c.id) === String(courseId));
+
+    // First course or only course — always unlocked
+    if (folderCourses.length <= 1 || courseIndex <= 0) return { unlocked: true };
+
+    const prevCourse = folderCourses[courseIndex - 1];
+    const passed = isCoursePassed(userId, prevCourse.id);
+    return { unlocked: passed, prerequisiteName: prevCourse.title };
+}
+
 // Get all courses (Optionally authenticated to get progress)
 router.get('/', async (req, res) => {
     try {
@@ -147,9 +192,8 @@ router.get('/', async (req, res) => {
                 deadline = enrollment.deadline;
                 isLockedByDeadline = !!enrollment.is_locked;
 
-                // Do not lock if course is already completed (100% progress)
+                // Compute deadline lock status at read-time only (no DB write in GET — L1 fix)
                 if (!isLockedByDeadline && deadline && new Date() > new Date(deadline) && progress < 100) {
-                    db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, c.id);
                     isLockedByDeadline = true;
                 }
 
@@ -218,8 +262,8 @@ router.get('/', async (req, res) => {
         });
         res.json(coursesWithExtra);
     } catch (e) {
-        console.error('Error fetching courses:', e);
-        res.status(500).json({ error: e.message });
+        console.error('[COURSES_GET_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تحميل المساقات' });
     }
 });
 
@@ -239,23 +283,17 @@ router.post('/enroll', authenticateToken, (req, res) => {
         const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
         if (!course) return res.status(404).json({ error: 'Course not found' });
 
+        // SECURITY: Verify user account is active (S5)
+        const userRecord = db.prepare('SELECT status FROM users WHERE id = ?').get(userId);
+        if (!userRecord || userRecord.status !== 'active') {
+            return res.status(403).json({ error: 'حسابك غير مفعّل. يرجى التواصل مع الإدارة.' });
+        }
+
         if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-
-            const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
-            const folderCourses = db.prepare('SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC').all(currentFolderId);
-            const courseIndex = folderCourses.findIndex(c => String(c.id) === String(courseId));
-
-            if (folderCourses.length > 1 && courseIndex > 0) {
-                const prevCourse = folderCourses[courseIndex - 1];
-                const passed = db.prepare(`
-                    SELECT 1 FROM quiz_results qr
-                    JOIN quizzes q ON qr.quizId = q.id
-                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
-                `).get(userId, prevCourse.id);
-
-                if (!passed) {
-                    return res.status(403).json({ error: `هذا المساق مغلق. يجب اجتياز مساق "${prevCourse.title}" أولاً` });
-                }
+            // Unified prerequisite check (S1)
+            const prereq = checkCoursePrerequisite(userId, courseId);
+            if (!prereq.unlocked) {
+                return res.status(403).json({ error: `هذا المساق مغلق. يجب اجتياز مساق "${prereq.prerequisiteName || 'السابق'}" أولاً` });
             }
         }
 
@@ -283,8 +321,8 @@ router.post('/enroll', authenticateToken, (req, res) => {
 
         res.json({ success: true, message: 'Enrolled successfully' });
     } catch (e) {
-        console.error('Enrollment error:', e);
-        res.status(500).json({ error: e.message });
+        console.error('[ENROLLMENT_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء التسجيل في المساق' });
     }
 });
 
@@ -292,29 +330,14 @@ router.post('/enroll', authenticateToken, (req, res) => {
 router.post('/episode-progress', authenticateToken, (req, res) => {
     const { courseId, episodeId, completed, lastPosition, watchedDuration } = req.body;
 
-    // SECURITY: Ensure course isn't locked
+    // SECURITY: Unified prerequisite + deadline check (S1)
     if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-        const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
-        if (course) {
-            const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
-            const folderCourses = db.prepare('SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC').all(currentFolderId);
-            const courseIndex = folderCourses.findIndex(c => String(c.id) === String(courseId));
-
-            if (folderCourses.length > 1 && courseIndex > 0) {
-                const prevCourse = folderCourses[courseIndex - 1];
-                const passed = db.prepare(`
-                    SELECT 1 FROM quiz_results qr
-                    JOIN quizzes q ON qr.quizId = q.id
-                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
-                `).get(req.user.id, prevCourse.id);
-
-                if (!passed) {
-                    return res.status(403).json({ error: 'Course is locked' });
-                }
-            }
+        const prereq = checkCoursePrerequisite(req.user.id, courseId);
+        if (!prereq.unlocked) {
+            return res.status(403).json({ error: 'المساق مغلق' });
         }
 
-        // SECURITY: Check enrollment deadline
+        // Check enrollment deadline
         const enrollment = db.prepare('SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
         if (enrollment) {
             let locked = enrollment.is_locked;
@@ -325,6 +348,13 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
             if (locked) {
                 return res.status(403).json({ error: 'انتهت الفترة المتاحة لدراسة المساق، يرجى مراجعة المشرف', isLockedOut: true });
             }
+        }
+    }
+
+    // S2: Backend validation — require meaningful watch time before marking complete
+    if (completed && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        if (!watchedDuration || watchedDuration < 30) {
+            return res.status(400).json({ error: 'لا يمكن إكمال الدرس بدون مشاهدة فعلية كافية' });
         }
     }
 
@@ -366,8 +396,8 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
 
         res.json({ success: true });
     } catch (e) {
-        console.error('Error updating episode progress:', e);
-        res.status(500).json({ error: e.message });
+        console.error('[EPISODE_PROGRESS_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تحديث التقدم' });
     }
 });
 
@@ -424,8 +454,8 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
 
         res.status(201).json({ success: true, id: course.id });
     } catch (e) {
-        console.error('Error adding course:', e);
-        res.status(500).json({ error: e.message });
+        console.error('[COURSE_CREATE_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء إنشاء المساق' });
     }
 });
 
@@ -472,20 +502,30 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
 
         res.json({ success: true });
     } catch (e) {
-        console.error('Error updating course:', e);
-        res.status(500).json({ error: e.message });
+        console.error('[COURSE_UPDATE_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تحديث المساق' });
     }
 });
 
-// Delete Course
+// Delete Course (S3: proper cleanup, preserving cert/quiz archive)
 router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     const { id } = req.params;
     try {
-        db.prepare('DELETE FROM courses WHERE id = ?').run(id);
-        // Cascading delete handles episodes and enrollments if configured (FOREIGN KEY ... ON DELETE CASCADE)
+        db.transaction(() => {
+            // Clean related data
+            db.prepare('DELETE FROM episodes WHERE courseId = ?').run(id);
+            db.prepare('DELETE FROM episode_progress WHERE course_id = ?').run(id);
+            db.prepare('DELETE FROM enrollments WHERE course_id = ?').run(id);
+            // NOTE: certificates and quiz_results intentionally KEPT for admin archive
+            // Decrement is not needed since we're deleting the course row
+            db.prepare('DELETE FROM courses WHERE id = ?').run(id);
+        })();
+
+        console.log(`[COURSE_DELETED] Admin ${req.user.id} deleted course ${id}`);
         res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[COURSE_DELETE_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء حذف المساق' });
     }
 });
 

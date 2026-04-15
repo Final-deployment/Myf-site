@@ -152,11 +152,6 @@ const Settings: React.FC = memo(() => {
    const [email, setEmail] = useState('');
    const [activeSection, setActiveSection] = useState('profile');
 
-   // Notifications state
-   const [pushEnabled, setPushEnabled] = useState(true);
-   const [emailEnabled, setEmailEnabled] = useState(true);
-   const [lessonReminders, setLessonReminders] = useState(true);
-
    // Privacy state
    const [lastSeen, setLastSeen] = useState(true);
    const [pointsPublic, setPointsPublic] = useState(true);
@@ -175,7 +170,6 @@ const Settings: React.FC = memo(() => {
    const navItems: SettingsNavItem[] = useMemo(() => {
       const base = [
          { id: 'profile', label: t('settings.profile'), icon: User },
-         { id: 'notifications', label: t('settings.notifications'), icon: Bell },
          { id: 'privacy', label: t('settings.privacy'), icon: Lock },
       ];
       if (user?.role === 'admin') {
@@ -184,21 +178,20 @@ const Settings: React.FC = memo(() => {
       return base;
    }, [t, user?.role]);
 
-   /** Handle save settings */
-   const handleSave = useCallback(() => {
+   const handleSave = useCallback(async () => {
       // Sanitize inputs before saving
       const sanitizedFirstName = sanitizeHTML(firstName);
       const sanitizedLastName = sanitizeHTML(lastName);
-      const sanitizedEmail = sanitizeEmail(email);
 
       const fullName = `${sanitizedFirstName} ${sanitizedLastName}`.trim();
-      updateUser({
-         name: fullName,
-         email: sanitizedEmail
-      });
-
-      toast.success('تم حفظ الإعدادات بنجاح! ✅');
-   }, [firstName, lastName, email, updateUser, toast]);
+      
+      try {
+         await updateUser({ name: fullName });
+         toast.success('تم حفظ الإعدادات بنجاح! ✅');
+      } catch (err) {
+         toast.error('حدث خطأ أثناء حفظ الإعدادات');
+      }
+   }, [firstName, lastName, updateUser, toast]);
 
    /** Handle language toggle */
    const handleLanguageToggle = useCallback(() => {
@@ -381,16 +374,19 @@ const Settings: React.FC = memo(() => {
                            </div>
                            <div className="space-y-2 md:col-span-2">
                               <label htmlFor="email" className="text-sm text-gray-400">
-                                 {t('settings.email')}
+                                 {t('settings.email')} <span className="text-xs text-gray-500">(غير قابل للتعديل)</span>
                               </label>
-                              <input
-                                 id="email"
-                                 type="email"
-                                 value={email}
-                                 onChange={(e) => setEmail(e.target.value)}
-                                 className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                                 aria-label={t('settings.email')}
-                              />
+                              <div className="relative">
+                                 <input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    disabled
+                                    className="w-full bg-black/10 border border-white/5 rounded-xl px-4 py-3 text-gray-400 cursor-not-allowed"
+                                    aria-label={t('settings.email')}
+                                 />
+                                 <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                              </div>
                            </div>
                         </form>
                      </section>
@@ -426,29 +422,6 @@ const Settings: React.FC = memo(() => {
                         </div>
                      </section>
                   </>
-               )}
-
-               {activeSection === 'notifications' && (
-                  <section className="glass-panel p-8 rounded-3xl animate-slide-up">
-                     <h3 className="text-xl font-bold text-white mb-6 border-b border-white/10 pb-4">الإشعارات</h3>
-                     <div className="space-y-4">
-                        <PreferenceRow
-                           icon={Bell} iconBgColor="bg-emerald-500/10" iconColor="text-emerald-400"
-                           title="إشعارات المتصفح" subtitle="تلقي تنبيهات بالدروس والرسائل الجديدة"
-                           rightElement={<ToggleSwitch isOn={pushEnabled} isRtl={isRtl} onToggle={() => setPushEnabled(!pushEnabled)} />}
-                        />
-                        <PreferenceRow
-                           icon={Globe} iconBgColor="bg-blue-500/10" iconColor="text-blue-400"
-                           title="إشعارات البريد" subtitle="تلقي ملخصات أسبوعية بالبريد الإلكتروني"
-                           rightElement={<ToggleSwitch isOn={emailEnabled} isRtl={isRtl} onToggle={() => setEmailEnabled(!emailEnabled)} />}
-                        />
-                        <PreferenceRow
-                           icon={Clock} iconBgColor="bg-amber-500/10" iconColor="text-amber-400"
-                           title="تذكير الدروس" subtitle="تذكيري بالدروس غير المكتملة يومياً"
-                           rightElement={<ToggleSwitch isOn={lessonReminders} isRtl={isRtl} onToggle={() => setLessonReminders(!lessonReminders)} />}
-                        />
-                     </div>
-                  </section>
                )}
 
                {activeSection === 'privacy' && (

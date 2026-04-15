@@ -243,7 +243,9 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   /** Find next course when allCourses or course changes */
   useEffect(() => {
     if (allCourses.length > 0 && course) {
-      const sorted = [...allCourses].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      // L2: Filter by same folder to prevent cross-folder navigation
+      const sameFolderCourses = allCourses.filter(c => c.folderId === course.folderId);
+      const sorted = [...sameFolderCourses].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
       const currentIndex = sorted.findIndex(c => String(c.id) === String(course.id));
       if (currentIndex !== -1 && currentIndex < sorted.length - 1) {
         setNextCourse(sorted[currentIndex + 1]);

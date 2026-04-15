@@ -2,9 +2,9 @@
  * Quizzes Routes Module
  * 
  * Handles quiz CRUD and results.
- * - GET quizzes: Public (for course learning)
+ * - GET quizzes: Optionally authenticated (strips answers for non-admins)
  * - POST/PUT/DELETE quizzes: Admin only
- * - POST results: Authenticated users
+ * - POST results: Server-side scoring with enrollment checks
  * 
  * @module server/routes/quizzes
  */
@@ -13,23 +13,30 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { db } = require('../database.cjs');
-const { authenticateToken, requireAdmin } = require('../middleware.cjs');
+const { authenticateToken, optionalAuth, requireAdmin } = require('../middleware.cjs');
 
 // ============================================================================
-// Get all quizzes (Public - needed for course learning)
+// Get all quizzes (S1: Strip correctAnswer for non-admins)
 // ============================================================================
-router.get('/', (req, res) => {
+router.get('/', optionalAuth, (req, res) => {
     try {
         const quizzes = db.prepare('SELECT * FROM quizzes').all();
-        res.json(quizzes.map(q => ({
-            ...q,
-            questions: JSON.parse(q.questions || '[]'),
-            passingScore: q.passing_score || 70,
-            titleEn: q.title_en || q.title
-        })));
+        const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'supervisor');
+        
+        res.json(quizzes.map(q => {
+            const questions = JSON.parse(q.questions || '[]');
+            return {
+                ...q,
+                questions: isPrivileged 
+                    ? questions 
+                    : questions.map(({ correctAnswer, ...rest }) => rest),
+                passingScore: q.passing_score || 70,
+                titleEn: q.title_en || q.title
+            };
+        }));
     } catch (e) {
         console.error('[QUIZZES_GET_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to fetch quizzes' });
+        res.status(500).json({ error: 'حدث خطأ أثناء تحميل الاختبارات' });
     }
 });
 
@@ -53,7 +60,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
         res.status(201).json({ success: true, id });
     } catch (e) {
         console.error('[QUIZ_CREATE_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to create quiz' });
+        res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الاختبار' });
     }
 });
 
@@ -80,12 +87,12 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
         res.json({ success: true });
     } catch (e) {
         console.error('[QUIZ_UPDATE_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to update quiz' });
+        res.status(500).json({ error: 'حدث خطأ أثناء تحديث الاختبار' });
     }
 });
 
 // ============================================================================
-// Delete Quiz (Admin Only)
+// Delete Quiz (Admin Only) — quiz_results kept for admin archive
 // ============================================================================
 router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     const { id } = req.params;
@@ -97,51 +104,115 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
             return res.status(404).json({ error: 'Quiz not found' });
         }
 
+        // NOTE: quiz_results intentionally KEPT for admin archive (same policy as certificates)
         console.log(`[QUIZ_DELETED] Admin ${req.user.id} deleted quiz: ${id}`);
         res.json({ success: true });
     } catch (e) {
         console.error('[QUIZ_DELETE_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to delete quiz' });
+        res.status(500).json({ error: 'حدث خطأ أثناء حذف الاختبار' });
     }
 });
 
 // ============================================================================
-// Save quiz results (Authenticated Users)
+// Submit quiz answers — S2: Server-side scoring (no client-supplied scores)
 // ============================================================================
 router.post('/results', authenticateToken, (req, res) => {
-    const { quizId, score, total, percentage } = req.body;
-    const userId = req.user.id; // Use authenticated user's ID
+    const { quizId, answers } = req.body;
+    const userId = req.user.id;
 
-    if (!quizId || score === undefined || total === undefined || percentage === undefined) {
-        return res.status(400).json({ error: 'Missing required fields: quizId, score, total, percentage' });
+    if (!quizId || !Array.isArray(answers)) {
+        return res.status(400).json({ error: 'Missing required fields: quizId, answers' });
     }
 
     try {
-        // SECURITY: Check enrollment deadline
-        const quiz = db.prepare('SELECT courseId FROM quizzes WHERE id = ?').get(quizId);
-        if (quiz && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-            const enrollment = db.prepare('SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?').get(userId, quiz.courseId);
-            if (enrollment) {
-                let locked = enrollment.is_locked;
-                if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
-                    db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
-                    locked = 1;
-                }
-                if (locked) {
-                    return res.status(403).json({ error: 'انتهت الفترة المتاحة لدراسة المساق، يرجى مراجعة المشرف للتقديم.', isLockedOut: true });
+        // Fetch the quiz with its questions
+        const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(quizId);
+        if (!quiz) {
+            return res.status(404).json({ error: 'الاختبار غير موجود' });
+        }
+
+        const questions = JSON.parse(quiz.questions || '[]');
+        if (questions.length === 0) {
+            return res.status(400).json({ error: 'الاختبار لا يحتوي على أسئلة' });
+        }
+
+        // S3: Verify enrollment and prerequisites for students
+        if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+            // Check user account is active
+            const userRecord = db.prepare('SELECT status FROM users WHERE id = ?').get(userId);
+            if (!userRecord || userRecord.status !== 'active') {
+                return res.status(403).json({ error: 'حسابك غير مفعّل. يرجى التواصل مع الإدارة.' });
+            }
+
+            // Check enrollment in the course
+            const enrollment = db.prepare(
+                'SELECT progress, completed, deadline, is_locked FROM enrollments WHERE user_id = ? AND course_id = ?'
+            ).get(userId, quiz.courseId);
+            if (!enrollment) {
+                return res.status(403).json({ error: 'لست مسجلاً في هذا المساق' });
+            }
+
+            // Check deadline lock
+            let locked = enrollment.is_locked;
+            if (!locked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
+                db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
+                locked = 1;
+            }
+            if (locked) {
+                return res.status(403).json({ error: 'انتهت الفترة المتاحة لدراسة المساق، يرجى مراجعة المشرف', isLockedOut: true });
+            }
+
+            // Check episode progress (student must have completed enough episodes)
+            if (quiz.afterEpisodeIndex > 0) {
+                const completedEpisodes = db.prepare(
+                    'SELECT COUNT(*) as count FROM episode_progress WHERE user_id = ? AND course_id = ? AND completed = 1'
+                ).get(userId, quiz.courseId);
+                if (completedEpisodes.count < quiz.afterEpisodeIndex) {
+                    return res.status(403).json({ error: 'لم تكمل الدروس المطلوبة للوصول لهذا الاختبار' });
                 }
             }
         }
 
+        // S2: Server-side scoring — calculate from actual answers
+        let score = 0;
+        const corrections = [];
+        questions.forEach((q, idx) => {
+            const userAnswer = (idx < answers.length && answers[idx] !== undefined && answers[idx] !== null) ? answers[idx] : -1;
+            if (userAnswer === q.correctAnswer) {
+                score++;
+            } else {
+                corrections.push({
+                    questionIndex: idx,
+                    questionText: q.text,
+                    userAnswerText: (userAnswer >= 0 && q.options[userAnswer]) ? q.options[userAnswer] : 'لم يُجب',
+                    correctAnswerText: q.options[q.correctAnswer] || ''
+                });
+            }
+        });
+
+        const total = questions.length;
+        const percentage = Math.round((score / total) * 100);
+        const passed = percentage >= (quiz.passing_score || 70);
+
+        // Save result to DB
         db.prepare(`
             INSERT INTO quiz_results (id, userId, quizId, score, total, percentage, completedAt)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run('res_' + crypto.randomUUID(), userId, quizId, score, total, percentage, new Date().toISOString());
 
-        res.status(201).json({ success: true });
+        console.log(`[QUIZ_SUBMITTED] User ${userId} scored ${score}/${total} (${percentage}%) on quiz ${quizId} — ${passed ? 'PASSED' : 'FAILED'}`);
+
+        res.status(201).json({ 
+            success: true, 
+            score, 
+            total, 
+            percentage, 
+            passed,
+            corrections: passed ? [] : corrections
+        });
     } catch (e) {
         console.error('[QUIZ_RESULT_SAVE_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to save quiz result' });
+        res.status(500).json({ error: 'حدث خطأ أثناء حفظ نتيجة الاختبار' });
     }
 });
 
@@ -153,7 +224,7 @@ router.get('/results', authenticateToken, (req, res) => {
         const results = db.prepare(`
             SELECT qr.*, q.title as quizTitle 
             FROM quiz_results qr 
-            JOIN quizzes q ON qr.quizId = q.id 
+            LEFT JOIN quizzes q ON qr.quizId = q.id 
             WHERE qr.userId = ?
             ORDER BY qr.completedAt DESC
         `).all(req.user.id);
@@ -161,26 +232,33 @@ router.get('/results', authenticateToken, (req, res) => {
         res.json(results);
     } catch (e) {
         console.error('[QUIZ_RESULTS_GET_OWN_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to fetch your quiz results' });
+        res.status(500).json({ error: 'حدث خطأ أثناء تحميل نتائجك' });
     }
 });
 
 // ============================================================================
-// Get specific user's quiz results (Admin Only or Self)
+// Get specific user's quiz results (Admin, assigned Supervisor, or Self)
 // ============================================================================
 router.get('/results/:userId', authenticateToken, (req, res) => {
     const { userId } = req.params;
 
-    // Users can only view their own results (or admin can view any)
+    // L1: Allow admin, self, or assigned supervisor
     if (req.user.id !== userId && req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Access denied' });
+        if (req.user.role === 'supervisor') {
+            const student = db.prepare('SELECT supervisor_id FROM users WHERE id = ?').get(userId);
+            if (!student || student.supervisor_id !== req.user.id) {
+                return res.status(403).json({ error: 'هذا الأمر من صلاحيات مشرف آخر أو من صلاحيات الإدارة وليس من صلاحياتك' });
+            }
+        } else {
+            return res.status(403).json({ error: 'ليس لديك صلاحية الوصول' });
+        }
     }
 
     try {
         const results = db.prepare(`
             SELECT qr.*, q.title as quizTitle 
             FROM quiz_results qr 
-            JOIN quizzes q ON qr.quizId = q.id 
+            LEFT JOIN quizzes q ON qr.quizId = q.id 
             WHERE qr.userId = ?
             ORDER BY qr.completedAt DESC
         `).all(userId);
@@ -188,7 +266,7 @@ router.get('/results/:userId', authenticateToken, (req, res) => {
         res.json(results);
     } catch (e) {
         console.error('[QUIZ_RESULTS_GET_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to fetch quiz results' });
+        res.status(500).json({ error: 'حدث خطأ أثناء تحميل النتائج' });
     }
 });
 
@@ -203,7 +281,6 @@ router.patch('/results/:resultId', authenticateToken, requireAdmin, (req, res) =
         return res.status(400).json({ error: 'Missing required fields: score, total, percentage' });
     }
 
-    // Validate: score must not exceed total
     if (score > total || score < 0 || total < 1) {
         return res.status(400).json({ error: 'Invalid values: score must be between 0 and total' });
     }
@@ -222,7 +299,7 @@ router.patch('/results/:resultId', authenticateToken, requireAdmin, (req, res) =
         res.json({ success: true, message: `Result corrected to ${score}/${total} (${percentage}%)` });
     } catch (e) {
         console.error('[QUIZ_RESULT_FIX_ERROR]:', e.message);
-        res.status(500).json({ error: 'Failed to fix quiz result' });
+        res.status(500).json({ error: 'حدث خطأ أثناء تصحيح النتيجة' });
     }
 });
 
