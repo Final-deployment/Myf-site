@@ -1002,14 +1002,19 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                                         </div>
 
                                         {/* Text Input */}
-                                        <input
-                                            type="text"
+                                        <textarea
                                             maxLength={5000}
                                             value={chatInput}
                                             onChange={(e) => setChatInput(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                                            placeholder={attachment ? "أضف تعليقاً..." : "اكتب رسالتك هنا..."}
-                                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 transition-all font-sans"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    sendMessage();
+                                                }
+                                            }}
+                                            placeholder={attachment ? "أضف تعليقاً..." : "اكتب رسالتك هنا... (Shift + Enter لسطر جديد)"}
+                                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50 transition-all font-sans resize-none custom-scrollbar"
+                                            rows={chatInput ? Math.min(Math.max(chatInput.split('\n').length, 1), 6) : 1}
                                             disabled={sending}
                                         />
 
