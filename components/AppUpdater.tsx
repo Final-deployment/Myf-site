@@ -56,7 +56,16 @@ const AppUpdater: React.FC = () => {
                     </div>
 
                     <button
-                        onClick={() => updateServiceWorker(true)}
+                        onClick={() => {
+                            // Call updateServiceWorker but don't strictly wait for it if it hangs
+                            updateServiceWorker(true).catch(console.error);
+                            
+                            // Immediately force a reload after a short delay regardless of promise resolution
+                            // to ensure the user isn't stuck on the frozen AppUpdater screen
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        }}
                         className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white rounded-xl font-bold text-lg transition-all shadow-lg flex items-center justify-center gap-3 border border-emerald-400/30"
                     >
                         <RefreshCw className="w-6 h-6" />
