@@ -75,7 +75,8 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
             const { success: verifySuccess, error: vError, pendingApproval } = await api.verifyOtp(email, code);
 
             if (vError) {
-                throw new Error(language === 'ar' ? vError.message || 'فشل التحقق' : vError.message || 'Verification failed');
+                const errorMsg = typeof vError === 'string' ? vError : vError.message;
+                throw new Error(errorMsg || (language === 'ar' ? 'فشل التحقق' : 'Verification failed'));
             }
 
             if (!verifySuccess) {

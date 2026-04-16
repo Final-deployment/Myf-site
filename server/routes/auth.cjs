@@ -150,9 +150,9 @@ router.post('/verify-email', authLimiter, (req, res) => {
     const { email, otp } = req.body;
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
-        if (!user) return res.status(404).json({ error: 'User not found' });
-        if (user.verificationCode !== otp) return res.status(400).json({ error: 'Invalid OTP' });
-        if (new Date() > new Date(user.verificationExpiry)) return res.status(400).json({ error: 'OTP expired' });
+        if (!user) return res.status(404).json({ error: 'User not found', errorAr: 'لم يتم العثور على الحساب' });
+        if (user.verificationCode !== otp) return res.status(400).json({ error: 'Invalid OTP', errorAr: 'الرمز المدخل غير صحيح' });
+        if (new Date() > new Date(user.verificationExpiry)) return res.status(400).json({ error: 'OTP expired', errorAr: 'انتهت صلاحية الرمز، يرجى طلب رمز جديد' });
 
         db.prepare('UPDATE users SET emailVerified = 1, verificationCode = NULL, verificationExpiry = NULL WHERE id = ?').run(user.id);
 
