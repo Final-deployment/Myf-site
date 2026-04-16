@@ -119,6 +119,11 @@ export const authApi = {
                 return { success: true, user: null, error: null, pendingApproval: true };
             }
 
+            // Guard: if server returned success but no user object, treat as pendingApproval
+            if (!data.user) {
+                return { success: true, user: null, error: null, pendingApproval: true };
+            }
+
             const user = {
                 ...data.user,
                 access_token: data.accessToken,
