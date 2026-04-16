@@ -17,50 +17,30 @@ try {
     }
     console.log(`تم العثور على المساق: ${course.title} (ID: ${course.id})`);
 
-    // Helper functions to get exact column names from Production PRAGMA
-    function getColumns(tableName) {
-        const info = db.prepare(`PRAGMA table_info(${tableName})`).all();
-        return info.map(c => c.name);
-    }
-    
-    // Determine dynamic column names:
-    const quizCols = getColumns('quiz_results');
-    const qUserId = quizCols.includes('user_id') ? 'user_id' : 'userId';
-    const qQuizId = quizCols.includes('quiz_id') ? 'quiz_id' : 'quizId';
-
-    const epCols = getColumns('episode_progress');
-    const eUserId = epCols.includes('user_id') ? 'user_id' : 'userId';
-    const eCourseId = epCols.includes('course_id') ? 'course_id' : 'courseId';
-    const eEpId = epCols.includes('episode_id') ? 'episode_id' : 'episodeId';
-    const eCompletedAt = epCols.includes('updated_at') ? 'updated_at' : 'completedAt';
-
-    const enCols = getColumns('enrollments');
-    const enUserId = enCols.includes('user_id') ? 'user_id' : 'userId';
-    const enCourseId = enCols.includes('course_id') ? 'course_id' : 'courseId';
-    const enLastAccess = enCols.includes('last_accessed') ? 'last_accessed' : 'lastAccess';
-
-    // 3. مسح الاختبار
-    const quizzes = db.prepare("SELECT id FROM quizzes WHERE courseId = ? OR id IN (SELECT id FROM quizzes WHERE course_id = ?)").all(course.id, course.id);
+    // 3. مسح نتائج الاختبار لتلك الطالبة فقط
+    // Schema -> quizzes: courseId | quiz_results: userId, quizId
+    const quizzes = db.prepare("SELECT id FROM quizzes WHERE courseId = ?").all(course.id);
     for (const quiz of quizzes) {
-        db.prepare(`DELETE FROM quiz_results WHERE ${qUserId} = ? AND ${qQuizId} = ?`).run(user.id, quiz.id);
-        console.log(`تم مسح النتيجة القديمة للاختبار (Quiz ID: ${quiz.id}) لتتمكن من إعادته.`);
+        db.prepare("DELETE FROM quiz_results WHERE userId = ? AND quizId = ?").run(user.id, quiz.id);
+        console.log(`تم مسح النتيجة القديمة للاختبار (Quiz ID: ${quiz.id}) إن وجدت.`);
     }
 
-    // 4. استرجاع المشاهدات بنسبة 100%
-    const episodes = db.prepare("SELECT id, title FROM episodes WHERE courseId = ? OR course_id = ?").all(course.id, course.id);
+    // 4. استكمال الدروس
+    // Schema -> episodes: courseId | episode_progress: user_id, course_id, episode_id
+    const episodes = db.prepare("SELECT id, title FROM episodes WHERE courseId = ?").all(course.id);
     console.log(`جاري تحديث تقدم الدروس (${episodes.length} درس)...`);
 
     for (const ep of episodes) {
-        db.prepare(`DELETE FROM episode_progress WHERE ${eUserId} = ? AND ${eCourseId} = ? AND ${eEpId} = ?`).run(user.id, course.id, ep.id);
-        db.prepare(`INSERT INTO episode_progress (${eUserId}, ${eCourseId}, ${eEpId}, completed, ${eCompletedAt}) VALUES (?, ?, ?, 1, datetime('now'))`).run(user.id, course.id, ep.id);
+        db.prepare(`DELETE FROM episode_progress WHERE user_id = ? AND course_id = ? AND episode_id = ?`).run(user.id, course.id, ep.id);
+        db.prepare(`INSERT INTO episode_progress (user_id, course_id, episode_id, completed, updated_at) VALUES (?, ?, ?, 1, datetime('now'))`).run(user.id, course.id, ep.id);
     }
 
-    // 5. تحديث التقدم العام في المساق ليصبح 100%
-    db.prepare(`DELETE FROM enrollments WHERE ${enUserId} = ? AND ${enCourseId} = ?`).run(user.id, course.id);
-    db.prepare(`INSERT INTO enrollments (${enUserId}, ${enCourseId}, progress, ${enLastAccess}) VALUES (?, ?, 100, datetime('now'))`).run(user.id, course.id);
+    // 5. استكمال التقدم
+    // Schema -> enrollments: user_id, course_id
+    db.prepare(`DELETE FROM enrollments WHERE user_id = ? AND course_id = ?`).run(user.id, course.id);
+    db.prepare(`INSERT INTO enrollments (user_id, course_id, progress, last_accessed) VALUES (?, ?, 100, datetime('now'))`).run(user.id, course.id);
 
-    console.log("=== اكتمل العمل بنجاح المرة هذه! ===");
-    console.log(`تم إعادة فتح مساق "${course.title}" بنسبة 100% وتصفية سجلات الاختبار.`);
+    console.log("=== اكتمل العمل بنجاح! ===");
 
 } catch (e) {
     console.error("حدث خطأ:", e.message);
