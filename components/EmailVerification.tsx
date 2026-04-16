@@ -69,7 +69,7 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
             setOtp(newOtp);
             // Reset paste flag after React processes the state update
             setTimeout(() => { isPastingRef.current = false; }, 100);
-            handleVerify(pastedData.join(''));
+            handleVerify(pastedData);
         }
     };
 
