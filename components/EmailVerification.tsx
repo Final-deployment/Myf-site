@@ -21,6 +21,8 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
     const [countdown, setCountdown] = useState(60);
     const [canResend, setCanResend] = useState(false);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const verifyingRef = useRef(false); // Guard against double calls
+    const isPastingRef = useRef(false); // Guard against paste + auto-submit race
 
     // Countdown timer for resend
     useEffect(() => {
@@ -45,8 +47,9 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
             inputRefs.current[index + 1]?.focus();
         }
 
-        // Auto-submit when all digits are entered
-        if (newOtp.every(digit => digit) && newOtp.join('').length === 6) {
+        // Auto-submit when all digits are entered — BUT NOT during paste
+        // (handlePaste already calls handleVerify, so we skip here to avoid double call)
+        if (!isPastingRef.current && newOtp.every(digit => digit) && newOtp.join('').length === 6) {
             handleVerify(newOtp.join(''));
         }
     };
@@ -61,17 +64,24 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
         e.preventDefault();
         const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
         if (pastedData.length === 6) {
+            isPastingRef.current = true; // Block auto-submit in handleOtpChange
             const newOtp = pastedData.split('');
             setOtp(newOtp);
+            // Reset paste flag after React processes the state update
+            setTimeout(() => { isPastingRef.current = false; }, 100);
             handleVerify(pastedData.join(''));
         }
     };
 
     const handleVerify = async (code: string) => {
+        // Prevent double calls (paste + auto-submit race condition)
+        if (verifyingRef.current) return;
+        verifyingRef.current = true;
+
         if (!email) {
-            // No email — clear stale state and go back to login
             localStorage.removeItem('pendingVerificationEmail');
             setError(language === 'ar' ? 'لم يتم العثور على البريد الإلكتروني. يرجى تسجيل الدخول مرة أخرى.' : 'Email not found. Please login again.');
+            verifyingRef.current = false;
             return;
         }
 
@@ -121,6 +131,7 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
             }
         } finally {
             setIsLoading(false);
+            verifyingRef.current = false;
         }
     };
 
