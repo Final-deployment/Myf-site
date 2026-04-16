@@ -107,7 +107,7 @@ router.post('/assign', isAdmin, (req, res) => {
         }
         
         // supervisorId can be null to assign to Admin
-        const info = db.prepare('UPDATE users SET supervisor_id = ? WHERE id = ? AND role = "student"').run(supervisorId || null, studentId);
+        const info = db.prepare("UPDATE users SET supervisor_id = ? WHERE id = ? AND role = 'student'").run(supervisorId || null, studentId);
         if (process.env.NODE_ENV !== 'production') {
             console.log('[SV_ASSIGN] Result:', info);
         }
