@@ -35,7 +35,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (passwordMatch) {
-            if (user.role === 'student' && !user.emailVerified) {
+            if (user.role === 'student' && !user.emailVerified && !user.approved) {
                 return res.status(403).json({
                     error: 'Email not verified',
                     errorAr: 'البريد الإلكتروني لم يتم تفعيله بعد',
@@ -356,8 +356,8 @@ router.post('/approve-student/:id', authenticateToken, requireAdmin, async (req,
         if (!student) return res.status(404).json({ error: 'Student not found' });
         if (student.approved) return res.status(400).json({ error: 'Student already approved' });
 
-        // Approve the student
-        db.prepare('UPDATE users SET approved = 1 WHERE id = ?').run(id);
+        // Approve the student and implicitly verify their email
+        db.prepare('UPDATE users SET approved = 1, emailVerified = 1 WHERE id = ?').run(id);
 
         // Auto-enroll in foundational course upon approval
         try {
