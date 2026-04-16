@@ -4,7 +4,7 @@
  */
 
 import React, { memo, useCallback, useMemo } from 'react';
-import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, UserPlus, LucideIcon } from 'lucide-react';
+import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, UserPlus, LucideIcon, RefreshCw } from 'lucide-react';
 import { UserRole } from '../types';
 import { useLanguage } from './LanguageContext';
 
@@ -295,6 +295,31 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
             <Settings className="w-5 h-5" aria-hidden="true" />
             <span>{t('sidebar.settings')}</span>
           </button>
+          
+          {/* Refresh and Clear Cache Button for quick recovery */}
+          <button
+            onClick={() => {
+              if(window.confirm('هل أنت متأكد من رغبتك في مسح الذاكرة المؤقتة وتحديث التطبيق؟ (سيطلب منك تسجيل الدخول مرة أخرى في بعض الحالات)')) {
+                localStorage.clear();
+                sessionStorage.clear();
+                // If service workers exist, unregister them
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) {
+                            registration.unregister();
+                        }
+                    });
+                }
+                window.location.reload();
+              }
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-orange-300 hover:text-orange-100 hover:bg-orange-900/20 rounded-xl transition-colors mb-2"
+            role="menuitem"
+            aria-label="تحديث ومسح الذاكرة (إصلاح المشاكل)"
+          >
+            <RefreshCw className="w-5 h-5" aria-hidden="true" />
+            <span>تحديث ومسح الذاكرة</span>
+          </button>
           <button
             onClick={handleLogoutClick}
             onKeyDown={handleLogoutKeyDown}
@@ -384,6 +409,19 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
                 >
                   <Settings className="w-5 h-5" />
                   <span>{t('sidebar.settings')}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if(window.confirm('هل أنت متأكد من رغبتك في مسح الذاكرة المؤقتة وتحديث التطبيق؟')) {
+                      localStorage.clear();
+                      sessionStorage.clear();
+                      window.location.reload();
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-orange-300 hover:bg-orange-900/20"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>مسح الذاكرة والتحديث</span>
                 </button>
                 <button
                   onClick={() => {

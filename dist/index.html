@@ -17,14 +17,14 @@
   <meta property="og:url" content="https://mastaba.org/" />
   <meta property="og:title" content="المصطبة العلمية - Muslim Youth Forum" />
   <meta property="og:description" content="منصة معرفية شاملة للشباب المسلم للدورات الإسلامية الصوتية والمرئية" />
-  <meta property="og:image" content="./icons/icon-512x512.png" />
+  <meta property="og:image" content="/icons/icon-512x512.png" />
   <meta property="og:locale" content="ar_AR" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="المصطبة العلمية - Muslim Youth Forum" />
   <meta name="twitter:description" content="منصة معرفية شاملة للشباب المسلم للدورات الإسلامية الصوتية والمرئية" />
-  <meta name="twitter:image" content="./icons/icon-512x512.png" />
+  <meta name="twitter:image" content="/icons/icon-512x512.png" />
 
   <!-- PWA Meta Tags -->
   <meta name="theme-color" content="#0f3d36" />
@@ -32,8 +32,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="المصطبة العلمية" />
-  <link rel="apple-touch-icon" href="./icons/icon-192x192.png" />
-  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+  <link rel="manifest" href="/manifest.json" />
 
   <title>المصطبة العلمية - Muslim Youth Forum</title>
   <link rel="icon" type="image/svg+xml"
@@ -64,12 +64,112 @@
   }
 }
   </script>
-  <script type="module" crossorigin src="./assets/index-D3LUFzbw.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-xiRdh3gV.css">
-<link rel="manifest" href="./manifest.webmanifest"></head>
+  <script type="module" crossorigin src="/assets/index-Bl1iuwwd.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-I9iPBUiG.css">
+<link rel="manifest" href="/manifest.webmanifest"></head>
 
 <body
   class="bg-[#0f3d36] text-white min-h-screen font-sans overflow-auto md:overflow-hidden selection:bg-gold-500 selection:text-black bg-pattern-overlay bg-fixed">
+  
+  <!-- Cache Buster + SW Recovery Script (Safe — prevents infinite loops) -->
+  <script>
+    (function() {
+      // === PART 1: Infinite Loop Protection ===
+      var RELOAD_KEY = '__mastaba_reload_guard';
+      var reloadCount = parseInt(sessionStorage.getItem(RELOAD_KEY) || '0', 10);
+      if (reloadCount > 2) {
+        console.warn('[Recovery] Reload loop detected (' + reloadCount + ' reloads). Stopping.');
+        sessionStorage.removeItem(RELOAD_KEY);
+        return; // Stop — don't reload anymore
+      }
+
+      // === PART 2: Service Worker Stale Cache Recovery ===
+      // If JS bundles fail to load (SW served old HTML pointing to deleted JS files),
+      // nuke the SW + caches and reload ONCE.
+      window.addEventListener('error', function(e) {
+        if (e.filename && (e.filename.includes('/assets/') || e.message && e.message.includes('Failed to fetch dynamically imported module'))) {
+          console.error('[Recovery] JS bundle load failure detected. Clearing SW cache...');
+          sessionStorage.setItem(RELOAD_KEY, String(reloadCount + 1));
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) { r.unregister(); });
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              Promise.all(names.map(function(n) { return caches.delete(n); })).then(function() {
+                window.location.reload();
+              });
+            });
+          } else {
+            window.location.reload();
+          }
+        }
+      }, true);
+
+      // Also catch dynamic import failures (lazy-loaded React components)
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && e.reason.message && (
+          e.reason.message.includes('Failed to fetch dynamically imported module') ||
+          e.reason.message.includes('Importing a module script failed') ||
+          e.reason.message.includes('error loading dynamically imported module')
+        )) {
+          console.error('[Recovery] Dynamic import failure. Clearing SW cache...');
+          sessionStorage.setItem(RELOAD_KEY, String(reloadCount + 1));
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) { r.unregister(); });
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              Promise.all(names.map(function(n) { return caches.delete(n); })).then(function() {
+                window.location.reload();
+              });
+            });
+          } else {
+            window.location.reload();
+          }
+        }
+      });
+
+      // === PART 3: Safe Version Check (non-blocking, no loop risk) ===
+      (async function checkAppVersion() {
+        try {
+          var timestamp = new Date().getTime();
+          var response = await fetch('/version.json?t=' + timestamp, { cache: 'no-store' });
+          if (!response.ok) return; // File missing? Just skip — don't reload.
+          
+          var data = await response.json();
+          var latestVersion = data.version;
+          var currentVersion = localStorage.getItem('appVersion');
+
+          if (currentVersion && currentVersion !== latestVersion) {
+            console.log('[Update] New version detected:', latestVersion);
+            localStorage.setItem('appVersion', latestVersion);
+            sessionStorage.setItem(RELOAD_KEY, String(reloadCount + 1));
+            
+            if ('caches' in window) {
+              var cacheNames = await caches.keys();
+              await Promise.all(cacheNames.map(function(name) { return caches.delete(name); }));
+            }
+            window.location.reload();
+          } else if (!currentVersion) {
+            // First visit — just store version, don't reload
+            localStorage.setItem('appVersion', latestVersion);
+          }
+        } catch (error) {
+          // Silently ignore — version.json may not exist yet
+        }
+      })();
+
+      // Reset reload guard after successful page load
+      window.addEventListener('load', function() {
+        setTimeout(function() { sessionStorage.removeItem(RELOAD_KEY); }, 3000);
+      });
+    })();
+  </script>
+
   <!-- Skip Link for Accessibility -->
   <a href="#main-content" class="skip-link">تخطي إلى المحتوى الرئيسي</a>
 

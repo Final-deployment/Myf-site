@@ -202,6 +202,30 @@ router.post('/results', authenticateToken, (req, res) => {
 
         console.log(`[QUIZ_SUBMITTED] User ${userId} scored ${score}/${total} (${percentage}%) on quiz ${quizId} — ${passed ? 'PASSED' : 'FAILED'}`);
 
+        // DEEP ROOT CAUSE FIX: Auto-complete the course on the server if ALL quizzes for this course are passed!
+        // This prevents the race condition where the frontend fails to send episodeId='FULL_COURSE' after passing,
+        // which leaves progress < 100 and completely locks the student out of their passed course when the deadline hits.
+        if (passed) {
+            try {
+                const quizCountRow = db.prepare('SELECT COUNT(*) as c FROM quizzes WHERE courseId = ?').get(quiz.courseId);
+                const totalQuizzes = quizCountRow ? quizCountRow.c : 0;
+                
+                const passedCountRow = db.prepare(`
+                    SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
+                    JOIN quizzes q ON qr.quizId = q.id
+                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+                `).get(userId, quiz.courseId);
+                const passedQuizzes = passedCountRow ? passedCountRow.c : 0;
+                
+                if (passedQuizzes >= totalQuizzes && totalQuizzes > 0) {
+                    db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
+                    console.log(`[COURSE_AUTO_COMPLETED] System safely marked course ${quiz.courseId} as completed for user ${userId} upon passing final quiz.`);
+                }
+            } catch (completionErr) {
+                console.error('[QUIZ_AUTO_COMPLETION_ERROR]:', completionErr.message);
+            }
+        }
+
         res.status(201).json({ 
             success: true, 
             score, 

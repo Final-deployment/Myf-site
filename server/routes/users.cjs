@@ -19,9 +19,13 @@ const PROTECTED_MANAGER_ID = 'admin_manager';
 // ============================================================================
 // SECURITY: Whitelist of allowed update fields (prevents SQL injection)
 // ============================================================================
-const ALLOWED_UPDATE_FIELDS = [
-    'name', 'nameEn', 'avatar', 'status', 'points', 'level', 'streak',
-    'whatsapp', 'country', 'age', 'gender', 'educationLevel',
+const STUDENT_UPDATE_FIELDS = [
+    'name', 'nameEn', 'avatar', 'whatsapp', 'country', 'age', 'gender', 'educationLevel'
+];
+
+const ADMIN_UPDATE_FIELDS = [
+    ...STUDENT_UPDATE_FIELDS,
+    'status', 'points', 'level', 'streak',
     'supervisor_id', 'supervisor_capacity', 'supervisor_priority'
 ];
 
@@ -259,8 +263,12 @@ router.put('/:id', authenticateToken, requireOwnerOrAdmin, (req, res) => {
     try {
         // Filter updates to only allowed fields (SECURITY: prevents SQL injection)
         const safeUpdates = {};
+        const allowedFields = (req.user.role === 'admin' || req.user.role === 'supervisor') 
+            ? ADMIN_UPDATE_FIELDS 
+            : STUDENT_UPDATE_FIELDS;
+            
         for (const key of Object.keys(updates)) {
-            let isAllowed = ALLOWED_UPDATE_FIELDS.includes(key);
+            let isAllowed = allowedFields.includes(key);
 
             // Allow admins to update the role
             if (key === 'role' && req.user.role === 'admin') {

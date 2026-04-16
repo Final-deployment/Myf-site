@@ -24,10 +24,17 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   const [isCompleted, setIsCompleted] = useState(false);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
 
-  const episodes = useMemo(() => course.episodes && course.episodes.length > 0
+  const [episodes, setEpisodes] = useState<any[]>(() => course.episodes && course.episodes.length > 0
     ? course.episodes
     : [{ id: 'default', title: course.title, videoUrl: course.videoUrl || '', orderIndex: 0, lastPosition: 0, watchedDuration: 0, completed: false }]
-    , [course]);
+  );
+
+  useEffect(() => {
+    setEpisodes(course.episodes && course.episodes.length > 0
+      ? course.episodes
+      : [{ id: 'default', title: course.title, videoUrl: course.videoUrl || '', orderIndex: 0, lastPosition: 0, watchedDuration: 0, completed: false }]
+    );
+  }, [course]);
 
   const currentEpisode = episodes[currentEpisodeIndex];
   const [progress, setProgress] = useState((currentEpisode as any).progress || 0);
@@ -343,13 +350,24 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     const time = videoRef.current?.currentTime || 0;
     const duration = videoRef.current?.duration || 0;
 
-    await api.updateEpisodeProgress(
-      course.id,
-      currentEpisode.id,
-      true,
-      duration > 0 ? duration : time,
-      duration > 0 ? duration : time
-    );
+    try {
+        await api.updateEpisodeProgress(
+          course.id,
+          currentEpisode.id,
+          true,
+          duration > 0 ? duration : time,
+          duration > 0 ? duration : time
+        );
+        // Update local state instantly so the UI reflects completion
+        setEpisodes(prev => prev.map((ep, idx) => 
+          idx === currentEpisodeIndex 
+            ? { ...ep, completed: true, watchedDuration: Math.max((ep as any).watchedDuration || 0, duration > 0 ? duration : time) } 
+            : ep
+        ));
+    } catch (error: any) {
+        alert(error.message || 'لا يمكن إكمال الدرس بدون مشاهدة فعلية كافية.');
+        return; // HALT execution — do not show quiz, do not auto-advance
+    }
 
     // Check for manual quiz at this stage
     let quizToShow = quizzes.find(q => q.afterEpisodeIndex === currentEpisodeIndex + 1);
@@ -371,8 +389,12 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
       const allQuizzesPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => passedQuizIds.includes(q.id));
 
       if (allQuizzesPassed) {
-        api.updateCourseProgress(course.id, 100);
-        setIsCompleted(true);
+        try {
+           await api.updateCourseProgress(course.id, 100);
+           setIsCompleted(true);
+        } catch (e) {
+           console.error('Failed to complete course', e);
+        }
       } else {
         // Don't mark as complete, student still has quizzes to pass
         console.log('Cannot complete course: not all quizzes passed yet.');
@@ -839,9 +861,14 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                 onClick={() => setIsPlaying(prev => !prev)}
                 className={`max-h-[70vh] w-auto max-w-full mx-auto block transition-opacity duration-300 cursor-pointer object-contain ${videoLoading ? 'opacity-0' : 'opacity-100'}`}
                 onPlay={() => setIsPlaying(true)}
-                onPause={() => {
+                onPause={(e) => {
                   setIsPlaying(false);
-                  saveProgress();
+                  const video = e.target as HTMLVideoElement;
+                  // Prevent double-save when video naturally ends 
+                  // Only save progress if the user manually pauses and there's more than 1 second left
+                  if (video.duration && (video.duration - video.currentTime > 1)) {
+                    saveProgress();
+                  }
                 }}
                 onTimeUpdate={handleTimeUpdate}
                 onWaiting={() => setVideoLoading(true)}

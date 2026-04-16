@@ -29,7 +29,7 @@ export const coursesApi = {
 
     updateEpisodeProgress: async (courseId: string, episodeId: string, completed: boolean, lastPosition?: number, watchedDuration?: number): Promise<void> => {
         const token = getAuthToken();
-        await fetch(getApiUrl('/courses/episode-progress'), {
+        const response = await fetch(getApiUrl('/courses/episode-progress'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -37,6 +37,10 @@ export const coursesApi = {
             },
             body: JSON.stringify({ courseId, episodeId, completed, lastPosition, watchedDuration })
         });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'فشل تحديث التحديث المتقدم. يرجى المشاهدة لفترة أطول أو شحن الرصيد.');
+        }
     },
 
     addCourse: async (course: Course): Promise<Course> => {

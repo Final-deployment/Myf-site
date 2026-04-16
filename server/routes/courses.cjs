@@ -341,6 +341,12 @@ router.post('/enroll', authenticateToken, (req, res) => {
 router.post('/episode-progress', authenticateToken, (req, res) => {
     const { courseId, episodeId, completed, lastPosition, watchedDuration } = req.body;
 
+    // SECURITY FIX: Prevent students from completely bypassing the course
+    if (episodeId === 'FULL_COURSE' && req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        console.warn(`[SECURITY] User ${req.user.id} attempted to bypass course ${courseId} via FULL_COURSE payload.`);
+        return res.status(403).json({ error: 'غير مصرح بتأكيد اكتمال المساق بهذه الطريقة. يرجى إكمال الدروس والاختبارات.' });
+    }
+
     // SECURITY: Unified prerequisite + deadline check (S1)
     if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
         const prereq = checkCoursePrerequisite(req.user.id, courseId);
@@ -404,7 +410,17 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
                     `).get(req.user.id, courseId).count;
 
                     const progress = Math.round((completedCount / episodes.length) * 100);
-                    db.prepare('UPDATE enrollments SET progress = ?, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(progress, req.user.id, courseId);
+                    
+                    // SECURITY: Auto-complete only if 100% AND no quizzes exist for this course
+                    const quizzesCount = db.prepare('SELECT COUNT(*) as count FROM quizzes WHERE courseId = ?').get(courseId).count;
+                    let setCompleted = 0;
+                    if (progress === 100 && quizzesCount === 0) setCompleted = 1;
+
+                    if (setCompleted === 1) {
+                        db.prepare('UPDATE enrollments SET progress = ?, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(progress, req.user.id, courseId);
+                    } else {
+                        db.prepare('UPDATE enrollments SET progress = ?, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(progress, req.user.id, courseId);
+                    }
                 }
             }
         }

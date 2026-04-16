@@ -464,13 +464,18 @@ router.post('/messages', (req, res) => {
         if (isComplaint === 1 || isComplaint === true) {
             // Note: If an ADMIN is replying TO A GUEST or STUDENT, it's technically a complaint reply, but we don't re-route it back to the admin!
             if (senderRole !== 'admin') {
-                const supportManager = db.prepare("SELECT id, role FROM users WHERE id = ?").get(SUPPORT_MANAGER_ID);
+                let supportManager = db.prepare("SELECT id, role FROM users WHERE id = ?").get(SUPPORT_MANAGER_ID);
+                if (!supportManager) {
+                     // Fallback: If manager was accidentally deleted, route to the first available admin
+                     supportManager = db.prepare("SELECT id, role FROM users WHERE role = 'admin' LIMIT 1").get();
+                }
+                
                 if (supportManager) {
-                    console.log(`[COMPLAINT_ROUTING] Routing complaint from ${senderId} to ${SUPPORT_MANAGER_ID}`);
-                    finalReceiverId = SUPPORT_MANAGER_ID;
+                    console.log(`[COMPLAINT_ROUTING] Routing complaint from ${senderId} to ${supportManager.id}`);
+                    finalReceiverId = supportManager.id;
                     receiver = db.prepare('SELECT role, supervisor_id FROM users WHERE id = ?').get(finalReceiverId);
                 } else {
-                    return res.status(503).json({ error: 'خدمة الدعم الفني غير متوفرة حالياً' });
+                    return res.status(503).json({ error: 'خدمة الدعم الفني غير متوفرة حالياً لعدم وجود مدير للنظام' });
                 }
             }
         }
@@ -517,12 +522,23 @@ router.post('/messages', (req, res) => {
         if (attachmentUrl || attachmentType) {
             const date = new Date();
             // Technical Support files expire in 14 days, regular attachments in 7
-            if (isComplaint === 1 || isComplaint === true) {
+            if (isComplaint === 1 || isComplaint === true || senderRole === 'admin') {
                 date.setDate(date.getDate() + 14);
             } else {
                 date.setDate(date.getDate() + 7);
             }
             expiryDate = date.toISOString();
+        }
+
+        // Force Admin-to-Student/Guest messages to be flagged as support messages
+        // so they properly route to the student's SupportChatBubble.
+        let finalIsComplaint = (isComplaint === 1 || isComplaint === true) ? 1 : 0;
+        
+        let isGuestParams = String(finalReceiverId).startsWith('guest_') || !receiver;
+        if (senderRole === 'admin') {
+            if (isGuestParams || (receiver && receiver.role === 'student')) {
+                finalIsComplaint = 1;
+            }
         }
 
         db.prepare(`
@@ -539,9 +555,9 @@ router.post('/messages', (req, res) => {
             attachmentType: attachmentType || null,
             attachmentName: attachmentName || null,
             expiryDate,
-            isComplaint: (isComplaint === 1 || isComplaint === true) ? 1 : 0
+            isComplaint: finalIsComplaint
         });
-        res.status(201).json({ id, senderId, receiverId: finalReceiverId, content, read: 0, timestamp, attachmentUrl, attachmentType, attachmentName, expiryDate, isComplaint });
+        res.status(201).json({ id, senderId, receiverId: finalReceiverId, content, read: 0, timestamp, attachmentUrl, attachmentType, attachmentName, expiryDate, isComplaint: finalIsComplaint });
     } catch (e) {
         console.error('[MESSAGING_SEND_ERROR]:', e.message);
         res.status(500).json({ error: e.message });
