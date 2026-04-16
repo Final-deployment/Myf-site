@@ -31,8 +31,12 @@ const AppUpdater: React.FC = () => {
 
     if (!offlineReady && !needRefresh) return null;
 
+    // NEVER show the blocking update screen during verification or registration!
+    // A forced reload here would destroy the pendingEmail state and lock the user out.
+    const isOnCriticalFlow = window.location.pathname === '/verify' || window.location.pathname === '/signup';
+
     // S1: Full Screen critical blocker if a new update is found!
-    if (needRefresh) {
+    if (needRefresh && !isOnCriticalFlow) {
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0a1815]/95 backdrop-blur-md animate-fade-in">
                 <div className="max-w-md w-full mx-4 glass-panel p-8 rounded-3xl border-2 border-emerald-500/50 text-center shadow-2xl shadow-emerald-500/20">

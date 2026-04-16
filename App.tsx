@@ -136,7 +136,7 @@ const AppContent: React.FC = () => {
   const location = useLocation();
 
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
-  const [pendingEmail, setPendingEmail] = useState<string>('');
+  const [pendingEmail, setPendingEmail] = useState<string>(() => localStorage.getItem('pendingVerificationEmail') || '');
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
