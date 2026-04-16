@@ -5,7 +5,7 @@
 
 import React, { memo, useCallback, useMemo } from 'react';
 import { Users, Mic2, TrendingUp, Download, Calendar, Activity, Bell, Play, LucideIcon } from 'lucide-react';
-import { api } from '../services/api';
+import { api, getAuthToken } from '../services/api';
 import RatingBox from './RatingBox';
 
 /**
@@ -351,7 +351,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                submitBtn.innerText = 'جاري الإرسال...';
                
                try {
-                  const token = localStorage.getItem('authToken');
+                  const token = getAuthToken();
                   const res = await fetch('/api/notifications/send', {
                      method: 'POST',
                      headers: { 
