@@ -62,7 +62,16 @@ const PushNotificationManager: React.FC = () => {
             const response = await fetch('/api/notifications/vapid-public-key', {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
-            const { publicKey } = await response.json();
+            const vapidData = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(vapidData.error || 'Failed to fetch VAPID key. Keys might be missing on the server.');
+            }
+            
+            const publicKey = vapidData.publicKey;
+            if (!publicKey) {
+                throw new Error('VAPID public key is empty on the server.');
+            }
 
             const convertedVapidKey = urlBase64ToUint8Array(publicKey);
 
@@ -87,9 +96,12 @@ const PushNotificationManager: React.FC = () => {
             } else {
                 toast.error('فشل في حفظ الاشتراك على الخادم');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to subscribe:', error);
-            toast.error('حدث خطأ أثناء محاولة تفعيل الإشعارات');
+            const errorMsg = error.message.includes('VAPID') || error.message.includes('key') 
+                ? 'فشل: مفاتيح الإشعارات (VAPID Keys) غير متوفرة في ملف .env على السيرفر' 
+                : 'حدث خطأ أثناء محاولة تفعيل الإشعارات: ' + error.message;
+            toast.error(errorMsg);
         } finally {
             setIsLoading(false);
         }
