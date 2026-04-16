@@ -9,7 +9,7 @@ const rateLimit = require('express-rate-limit');
 
 const authLimiter = rateLimit({
     windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 8, // Limit each IP to 8 requests per windowMs
+    max: 15, // Limit each IP to 15 requests per windowMs
     message: { 
         error: 'Too many requests from this IP, please try again after 5 minutes', 
         errorAr: 'تجاوزت الحد المسموح به من المحاولات، يرجى المحاولة بعد 5 دقائق' 
@@ -151,6 +151,23 @@ router.post('/verify-email', authLimiter, (req, res) => {
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
         if (!user) return res.status(404).json({ error: 'User not found', errorAr: 'لم يتم العثور على الحساب' });
+
+        // If user is already verified (OTP was consumed before but frontend crashed), handle gracefully
+        if (user.emailVerified && !user.verificationCode) {
+            if (user.role === 'student' && !user.approved) {
+                return res.json({
+                    success: true,
+                    pendingApproval: true,
+                    message: 'Email already verified. Your account is pending admin approval.',
+                    messageAr: 'بريدك مؤكد مسبقاً. حسابك بانتظار موافقة المسؤولين.'
+                });
+            }
+            // Already verified and approved — issue a token directly
+            const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role, emailVerified: true }, SECRET_KEY, { expiresIn: '24h' });
+            const { password: _, verificationCode: _vc, verificationExpiry: _ve, ...userWithoutPassword } = user;
+            return res.json({ success: true, user: { ...userWithoutPassword, emailVerified: true }, accessToken });
+        }
+
         if (user.verificationCode !== otp) return res.status(400).json({ error: 'Invalid OTP', errorAr: 'الرمز المدخل غير صحيح' });
         if (new Date() > new Date(user.verificationExpiry)) return res.status(400).json({ error: 'OTP expired', errorAr: 'انتهت صلاحية الرمز، يرجى طلب رمز جديد' });
 
