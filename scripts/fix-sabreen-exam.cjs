@@ -1,4 +1,4 @@
-const db = require('better-sqlite3')('database.sqlite');
+const db = require('better-sqlite3')('data/db.sqlite');
 
 try {
     console.log("=== بدء سكريبت استرجاع تقدم الطالبة صابرين ===");
