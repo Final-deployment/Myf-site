@@ -183,8 +183,28 @@ export const authApi = {
     getCurrentUser: (): User | null => {
         try {
             const stored = localStorage.getItem(STORAGE_PREFIX + 'currentUser') || sessionStorage.getItem(STORAGE_PREFIX + 'currentUser');
-            return stored ? JSON.parse(stored) : null;
-        } catch {
+            if (!stored) return null;
+            
+            const user = JSON.parse(stored);
+            
+            // Validate required fields to prevent crashes from corrupted data
+            if (!user || typeof user !== 'object' || !user.id || !user.role || !user.email) {
+                console.warn('[Auth] Corrupted user data detected in storage. Clearing...');
+                localStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+                sessionStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+                localStorage.removeItem('authToken');
+                sessionStorage.removeItem('authToken');
+                return null;
+            }
+            
+            return user;
+        } catch (e) {
+            console.error('[Auth] Failed to parse stored user data:', e);
+            // Clear corrupted data
+            localStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+            sessionStorage.removeItem(STORAGE_PREFIX + 'currentUser');
+            localStorage.removeItem('authToken');
+            sessionStorage.removeItem('authToken');
             return null;
         }
     },

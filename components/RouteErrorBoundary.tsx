@@ -96,6 +96,27 @@ class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteE
         window.location.href = '/';
     };
 
+    /**
+     * Nuclear option: clear all app data and reload
+     */
+    handleClearAndReload = async (): void => {
+        try {
+            localStorage.clear();
+            sessionStorage.clear();
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(r => r.unregister()));
+            }
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+        } catch (e) {
+            console.error('Failed to clear data:', e);
+        }
+        window.location.href = '/';
+    };
+
     render(): ReactNode {
         const { hasError, error } = this.state;
         const { children, fallback, errorTitle } = this.props;
@@ -124,29 +145,24 @@ class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteE
                     </h2>
 
                     {/* Error Description */}
-                    <p className="text-gray-300 mb-6 max-w-md">
+                    <p className="text-gray-300 mb-4 max-w-md">
                         نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى أو العودة إلى الصفحة الرئيسية.
                     </p>
 
-                    {/* Error Details (Development only) */}
-                    {process.env.NODE_ENV === 'development' && error && (
-                        <details className="mb-6 w-full max-w-lg text-left">
-                            <summary className="cursor-pointer text-sm text-gray-400 hover:text-gray-300">
-                                تفاصيل الخطأ (للمطورين)
-                            </summary>
-                            <pre className="mt-2 p-4 bg-black/30 rounded-lg text-xs text-red-300 overflow-auto max-h-40">
+                    {/* Error Details (Always shown) */}
+                    {error && (
+                        <div className="mb-6 w-full max-w-lg">
+                            <div className="p-4 bg-black/30 rounded-lg text-xs text-red-300 overflow-auto max-h-24 break-all text-left">
                                 {error.message}
-                                {'\n\n'}
-                                {error.stack}
-                            </pre>
-                        </details>
+                            </div>
+                        </div>
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex gap-4">
+                    <div className="flex flex-col gap-3 w-full max-w-xs">
                         <button
                             onClick={this.handleRetry}
-                            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors font-medium"
+                            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors font-medium justify-center"
                             aria-label="حاول مرة أخرى"
                         >
                             <RefreshCw className="w-5 h-5" aria-hidden="true" />
@@ -154,14 +170,27 @@ class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteE
                         </button>
 
                         <button
+                            onClick={this.handleClearAndReload}
+                            className="flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl transition-colors font-medium justify-center"
+                            aria-label="مسح البيانات وإعادة التشغيل"
+                        >
+                            <AlertTriangle className="w-5 h-5" aria-hidden="true" />
+                            مسح البيانات وإعادة التشغيل
+                        </button>
+
+                        <button
                             onClick={this.handleGoHome}
-                            className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium"
+                            className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors font-medium justify-center"
                             aria-label="العودة للرئيسية"
                         >
                             <Home className="w-5 h-5" aria-hidden="true" />
                             الرئيسية
                         </button>
                     </div>
+
+                    <p className="text-gray-500 text-xs mt-4 max-w-md leading-relaxed">
+                        إذا استمرت المشكلة، جرّب "مسح البيانات" ثم سجّل دخولك مجدداً.
+                    </p>
                 </div>
             );
         }

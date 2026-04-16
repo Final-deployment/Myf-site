@@ -225,24 +225,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Check for existing session on mount and validate expiration
     useEffect(() => {
         const initAuth = async () => {
-            const storedUser = api.getCurrentUser();
-            const token = getAuthToken();
+            try {
+                const storedUser = api.getCurrentUser();
+                const token = getAuthToken();
 
-            if (storedUser) {
-                // Check if session has expired (frontend inactivity)
-                if (isSessionExpired()) {
-                    handleSessionExpiration();
-                } else {
-                    setUser(storedUser);
-                    updateLastActivity();
-                    // Optional: re-validate with server in background
-                    checkSession();
+                if (storedUser) {
+                    // Check if session has expired (frontend inactivity)
+                    if (isSessionExpired()) {
+                        handleSessionExpiration();
+                    } else {
+                        // Validate token is still valid with a lightweight server check
+                        if (token) {
+                            try {
+                                const response = await fetch('/api/health', {
+                                    headers: { 'Authorization': `Bearer ${token}` },
+                                    signal: AbortSignal.timeout(5000) // 5s timeout
+                                });
+                                if (response.ok) {
+                                    setUser(storedUser);
+                                    updateLastActivity();
+                                } else if (response.status === 401 || response.status === 403) {
+                                    // Token is invalid/expired — force logout
+                                    console.warn('[Auth] Stored token is invalid. Forcing logout.');
+                                    api.logout();
+                                }
+                            } catch {
+                                // Network error — still allow offline access with stored user
+                                setUser(storedUser);
+                                updateLastActivity();
+                            }
+                        } else {
+                            setUser(storedUser);
+                            updateLastActivity();
+                        }
+                    }
+                } else if (token) {
+                    // No user object but we have a token - try to restore
+                    await checkSession();
                 }
-            } else if (token) {
-                // No user object but we have a token - try to restore
-                await checkSession();
+            } catch (e) {
+                console.error('[Auth] initAuth failed:', e);
+                // Force clean state on any unexpected error
+                api.logout();
+                setUser(null);
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
 
         initAuth();

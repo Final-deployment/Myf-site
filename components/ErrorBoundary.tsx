@@ -86,6 +86,34 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         window.location.href = '/';
     };
 
+    /**
+     * Nuclear option: clear all app data and reload
+     */
+    handleClearAndReload = async (): Promise<void> => {
+        try {
+            // Clear all storage
+            localStorage.clear();
+            sessionStorage.clear();
+
+            // Unregister all service workers
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(r => r.unregister()));
+            }
+
+            // Clear all caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+        } catch (e) {
+            console.error('Failed to clear data:', e);
+        }
+
+        // Hard reload
+        window.location.href = '/';
+    };
+
     render(): ReactNode {
         const { hasError, error } = this.state;
         const { children, fallback } = this.props;
@@ -113,32 +141,46 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
                             نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى.
                         </p>
 
-                        {/* Error Details (Development) */}
-                        {process.env.NODE_ENV === 'development' && error && (
+                        {/* Error Details (Always shown for debugging) */}
+                        {error && (
                             <div className="mb-6 p-4 bg-red-900/20 rounded-xl text-right">
-                                <p className="text-red-400 text-sm font-mono overflow-auto">
+                                <p className="text-red-400 text-sm font-mono overflow-auto max-h-24 break-all">
                                     {error.message}
                                 </p>
                             </div>
                         )}
 
                         {/* Action Buttons */}
-                        <div className="flex gap-3 justify-center">
+                        <div className="flex flex-col gap-3">
                             <button
                                 onClick={this.handleReset}
-                                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-2 transition-colors"
+                                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-2 transition-colors justify-center"
                             >
                                 <RefreshCw className="w-5 h-5" />
                                 <span>إعادة المحاولة</span>
                             </button>
                             <button
+                                onClick={this.handleClearAndReload}
+                                className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold flex items-center gap-2 transition-colors justify-center"
+                            >
+                                <AlertTriangle className="w-5 h-5" />
+                                <span>مسح البيانات وإعادة التشغيل</span>
+                            </button>
+                            <button
                                 onClick={this.handleGoHome}
-                                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 transition-colors"
+                                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 transition-colors justify-center"
                             >
                                 <Home className="w-5 h-5" />
                                 <span>الصفحة الرئيسية</span>
                             </button>
                         </div>
+
+                        {/* Help Text */}
+                        <p className="text-gray-500 text-xs mt-4 leading-relaxed">
+                            إذا استمرت المشكلة، جرّب زر "مسح البيانات" أعلاه ثم سجّل دخولك مجدداً.
+                            <br />
+                            أو تواصل مع الدعم الفني عبر فقاعة المحادثة البرتقالية.
+                        </p>
                     </div>
                 </div>
             );
