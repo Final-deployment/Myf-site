@@ -173,11 +173,32 @@ const AppContent: React.FC = () => {
       return;
     }
 
-    // 2. Fallback to localStorage
+    // 2. Fallback to localStorage — but VALIDATE before redirecting
     const pendingVerificationEmail = localStorage.getItem('pendingVerificationEmail');
     if (pendingVerificationEmail && !isAuthenticated && location.pathname !== '/verify') {
-      setPendingEmail(pendingVerificationEmail);
-      navigate('/verify');
+      // Quick server check: is this user actually still unverified?
+      fetch(`/api/check-verification-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingVerificationEmail })
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.needsVerification) {
+            // User genuinely needs to verify — redirect
+            setPendingEmail(pendingVerificationEmail);
+            navigate('/verify');
+          } else {
+            // User is already verified (or doesn't exist) — clear stale flag
+            localStorage.removeItem('pendingVerificationEmail');
+            console.log('[App] Cleared stale pendingVerificationEmail — user is already verified or not found');
+          }
+        })
+        .catch(() => {
+          // Network error — fall back to redirect (safer)
+          setPendingEmail(pendingVerificationEmail);
+          navigate('/verify');
+        });
     }
   }, [isAuthenticated, location.pathname, location.search, navigate]);
 

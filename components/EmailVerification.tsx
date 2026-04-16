@@ -68,6 +68,13 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
     };
 
     const handleVerify = async (code: string) => {
+        if (!email) {
+            // No email — clear stale state and go back to login
+            localStorage.removeItem('pendingVerificationEmail');
+            setError(language === 'ar' ? 'لم يتم العثور على البريد الإلكتروني. يرجى تسجيل الدخول مرة أخرى.' : 'Email not found. Please login again.');
+            return;
+        }
+
         setIsLoading(true);
         setError('');
 
@@ -102,9 +109,16 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ email, onSuccess,
                 onSuccess();
             }, 1500);
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Verification failed');
+            const errMsg = err instanceof Error ? err.message : 'Verification failed';
+            setError(errMsg);
             setOtp(['', '', '', '', '', '']);
             inputRefs.current[0]?.focus();
+
+            // If the error indicates the OTP was already consumed or user not found,
+            // clear the stale localStorage to break the redirect loop
+            if (errMsg.includes('already verified') || errMsg.includes('مؤكد مسبقاً') || errMsg.includes('User not found') || errMsg.includes('لم يتم العثور')) {
+                localStorage.removeItem('pendingVerificationEmail');
+            }
         } finally {
             setIsLoading(false);
         }

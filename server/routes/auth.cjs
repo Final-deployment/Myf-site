@@ -192,6 +192,23 @@ router.post('/verify-email', authLimiter, (req, res) => {
         res.status(500).json({ error: 'حدث خطأ أثناء التحقق من البريد' });
     }
 });
+
+// Check if a user actually needs email verification (prevents stale localStorage redirect)
+router.post('/check-verification-status', (req, res) => {
+    const { email } = req.body;
+    try {
+        if (!email) return res.json({ needsVerification: false });
+        const user = db.prepare('SELECT emailVerified, approved, role FROM users WHERE LOWER(email) = LOWER(?)').get(email);
+        if (!user) return res.json({ needsVerification: false }); // user doesn't exist
+        // Only needs verification if student AND email NOT verified
+        const needsVerification = user.role === 'student' && !user.emailVerified;
+        res.json({ needsVerification, emailVerified: !!user.emailVerified, approved: !!user.approved });
+    } catch (e) {
+        console.error('[CHECK_VERIFICATION_STATUS_ERROR]:', e.message);
+        res.json({ needsVerification: false }); // fail-safe: don't redirect
+    }
+});
+
 router.post('/resend-otp', authLimiter, async (req, res) => {
     const { email } = req.body;
     try {
@@ -321,7 +338,7 @@ router.get('/pending-students', authenticateToken, requireAdmin, (req, res) => {
         const students = db.prepare(`
             SELECT id, name, nameEn, email, whatsapp, country, age, gender, educationLevel, joinDate, emailVerified, approved
             FROM users
-            WHERE role = 'student' AND approved = 0 AND emailVerified = 1
+            WHERE role = 'student' AND approved = 0
             ORDER BY joinDate DESC
         `).all();
         res.json(students);
