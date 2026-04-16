@@ -351,7 +351,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = memo(({ setActiveTab, unre
                submitBtn.innerText = 'جاري الإرسال...';
                
                try {
-                  const token = localStorage.getItem('token');
+                  const token = localStorage.getItem('authToken');
                   const res = await fetch('/api/notifications/send', {
                      method: 'POST',
                      headers: { 

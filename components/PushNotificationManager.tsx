@@ -95,23 +95,6 @@ const PushNotificationManager: React.FC = () => {
         }
     };
 
-    const unsubscribeUser = async () => {
-        setIsLoading(true);
-        try {
-            const registration = await navigator.serviceWorker.ready;
-            const subscription = await registration.pushManager.getSubscription();
-            if (subscription) {
-                await subscription.unsubscribe();
-                setIsSubscribed(false);
-                toast.success('تم إيقاف الإشعارات بنجاح');
-            }
-        } catch (error) {
-            console.error('Error unsubscribing:', error);
-            toast.error('حدث خطأ أثناء محاولة إلغاء الإشعارات');
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     if (!isSupported) {
         return (
@@ -140,15 +123,15 @@ const PushNotificationManager: React.FC = () => {
                     </p>
                 </div>
                 <button
-                    onClick={isSubscribed ? unsubscribeUser : subscribeUser}
-                    disabled={isLoading}
+                    onClick={!isSubscribed ? subscribeUser : undefined}
+                    disabled={isLoading || isSubscribed}
                     className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${isSubscribed
-                        ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                         : 'bg-emerald-500 hover:bg-emerald-400 text-white'
-                        } disabled:opacity-50`}
+                        } disabled:opacity-80`}
                 >
                     {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {isSubscribed ? 'إيقاف الإشعارات' : 'تفعيل الإشعارات'}
+                    {isSubscribed ? 'الإشعارات مفعلة ✓' : 'تفعيل الإشعارات الآن'}
                 </button>
             </div>
         </div>
