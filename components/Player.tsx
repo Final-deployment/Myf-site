@@ -54,6 +54,26 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [nextCourse, setNextCourse] = useState<Course | null>(null);
   const [allCourses, setAllCourses] = useState<Course[]>([]);
+  const [isRefreshingNext, setIsRefreshingNext] = useState(false);
+
+  /**
+   * CRITICAL: Re-fetch all courses from the server to get the accurate isLocked status.
+   * This MUST be called after a student passes all quizzes for the current course,
+   * because the server is the source of truth for sequential unlock logic.
+   * Without this, the next course button uses stale data and stays hidden.
+   */
+  const refreshCoursesAndNextCourse = async () => {
+    try {
+      setIsRefreshingNext(true);
+      const freshCourses = await api.getCourses();
+      setAllCourses(freshCourses);
+      // The useEffect [allCourses, course] will automatically recalculate nextCourse
+    } catch (e) {
+      console.error('[REFRESH_COURSES_ERROR] Failed to refresh courses after completion:', e);
+    } finally {
+      setIsRefreshingNext(false);
+    }
+  };
 
   /** Check if ALL quizzes for this course have been passed */
   const allCourseQuizzesPassed = useMemo(() => {
@@ -255,7 +275,12 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     if (allCourses.length > 0 && course) {
       // L2: Filter by same folder to prevent cross-folder navigation
       const sameFolderCourses = allCourses.filter(c => c.folderId === course.folderId);
-      const sorted = [...sameFolderCourses].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      const sorted = [...sameFolderCourses].sort((a, b) => {
+        const orderA = a.orderIndex !== undefined ? a.orderIndex : 999;
+        const orderB = b.orderIndex !== undefined ? b.orderIndex : 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
       const currentIndex = sorted.findIndex(c => String(c.id) === String(course.id));
       if (currentIndex !== -1 && currentIndex < sorted.length - 1) {
         setNextCourse(sorted[currentIndex + 1]);
@@ -390,8 +415,15 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
 
       if (allQuizzesPassed) {
         try {
-           await api.updateCourseProgress(course.id, 100);
+           // NOTE: We do NOT call api.updateCourseProgress(FULL_COURSE) here because
+           // the server blocks FULL_COURSE for students (403). The server already handles
+           // auto-completion in both paths:
+           //   - With quizzes: quizzes.cjs auto-completes when all quizzes pass
+           //   - Without quizzes: courses.cjs auto-completes when progress reaches 100%
+           // We just need to update UI state and refresh course data.
            setIsCompleted(true);
+           // CRITICAL FIX: Refresh courses so the next course's isLocked is updated from server
+           await refreshCoursesAndNextCourse();
         } catch (e) {
            console.error('Failed to complete course', e);
         }
@@ -458,7 +490,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
             onSuccess={() => {
               setPassedQuizIds(prev => [...prev, activeQuiz.id]);
             }}
-            onClose={() => {
+            onClose={async () => {
               // Build a local snapshot including the just-passed quiz
               const updatedPassedIds = passedQuizIds.includes(activeQuiz.id)
                 ? passedQuizIds
@@ -472,8 +504,15 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                   const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
                   const allPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => updatedPassedIds.includes(q.id));
                   if (allPassed) {
-                    api.updateCourseProgress(course.id, 100);
-                    setIsCompleted(true);
+                    try {
+                      // NOTE: Server already auto-completed the course in quizzes.cjs
+                      // when all quizzes passed. No need for FULL_COURSE (blocked for students).
+                      setIsCompleted(true);
+                      // CRITICAL FIX: Refresh courses so the next course's isLocked is updated from server
+                      await refreshCoursesAndNextCourse();
+                    } catch (e) {
+                      console.error('Failed to complete course after quiz:', e);
+                    }
                   }
                 }
               }
@@ -564,14 +603,50 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
               )}
 
               {/* Next Course Button - STRICTLY requires all episodes completed AND all quizzes passed */}
+              {/* isLocked is from the FRESHLY FETCHED server data (via refreshCoursesAndNextCourse) */}
               {isTrulyCompleted && nextCourse && !nextCourse.isLocked && (
                 <button
-                  onClick={() => onPlayCourse(nextCourse)}
-                  className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-3 animate-bounce-subtle"
+                  onClick={async () => {
+                    try {
+                      // Auto-enroll if not already enrolled, then navigate
+                      if (!(nextCourse as any).isEnrolled) {
+                        await api.enroll(nextCourse.id);
+                        // Refetch to get the enrolled version with deadline etc.
+                        const refreshed = await api.getCourses();
+                        const updated = refreshed.find((c: any) => String(c.id) === String(nextCourse.id));
+                        if (updated) {
+                          onPlayCourse(updated);
+                          return;
+                        }
+                      }
+                      onPlayCourse(nextCourse);
+                    } catch (err: any) {
+                      // If already enrolled, just navigate
+                      if (err?.message?.includes('Already enrolled')) {
+                        onPlayCourse(nextCourse);
+                      } else {
+                        alert(err?.message || 'فشل التسجيل في المساق التالي');
+                      }
+                    }
+                  }}
+                  disabled={isRefreshingNext}
+                  className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-3 animate-bounce-subtle disabled:opacity-50"
                 >
-                  <SkipForward className="w-5 h-5" />
-                  <span>الانتقال للمساق التالي: {nextCourse.title}</span>
+                  {isRefreshingNext ? (
+                    <span>جاري التحميل...</span>
+                  ) : (
+                    <>
+                      <SkipForward className="w-5 h-5" />
+                      <span>الانتقال للمساق التالي: {nextCourse.title}</span>
+                    </>
+                  )}
                 </button>
+              )}
+              {/* Show loading indicator while refreshing next course availability */}
+              {isTrulyCompleted && isRefreshingNext && (
+                <div className="w-full py-3 text-center text-violet-300 text-sm animate-pulse">
+                  جاري التحقق من المساق التالي...
+                </div>
               )}
             </div>
 

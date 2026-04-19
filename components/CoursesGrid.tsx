@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Course, CourseFolder } from '../types';
 import { api } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
@@ -60,9 +61,13 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
         }
     };
 
+    // Re-fetch courses on every navigation to this page to get fresh isLocked status.
+    // location.key changes on every navigation event, triggering a refetch.
+    const location = useLocation();
+
     useEffect(() => {
         loadData();
-    }, []);
+    }, [location.key]);
 
     const handleCreateFolder = async (e: React.FormEvent) => {
         e.preventDefault();

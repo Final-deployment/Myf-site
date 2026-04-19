@@ -253,7 +253,12 @@ const Dashboard: React.FC<DashboardProps> = memo(({ onPlayCourse, setActiveTab, 
    /** Get displayed courses (first 4 enrolled) */
    const displayedCourses = useMemo(() => {
       return [...enrolledCourses]
-         .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+         .sort((a, b) => {
+            const orderA = a.orderIndex !== undefined ? a.orderIndex : 999;
+            const orderB = b.orderIndex !== undefined ? b.orderIndex : 999;
+            if (orderA !== orderB) return orderA - orderB;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+         })
          .slice(0, 4);
    }, [enrolledCourses]);
 

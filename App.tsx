@@ -207,13 +207,33 @@ const AppContent: React.FC = () => {
   // Preloading logic moved to AppLayout
 
   /**
-   * Handles playing a course - navigates to player view
+   * Handles playing a course - navigates to player view.
+   * CRITICAL: Always re-verify lock status from the server before blocking,
+   * because the course object passed in may have stale isLocked data
+   * (e.g. from before the student passed a quiz that unlocks this course).
    */
   const handlePlayCourse = async (course: Course): Promise<void> => {
     // Block locked courses globally, but exempt admins and supervisors
     if (course.isLocked && user?.role !== 'admin' && user?.role !== 'supervisor') {
-      alert(`هذا المساق مغلق. ${(course as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
-      return;
+      // CRITICAL FIX: Don't trust stale isLocked — ask the server for the real status
+      try {
+        const { api } = await import('./services/api');
+        const freshCourses = await api.getCourses();
+        const freshCourse = freshCourses.find((c: any) => String(c.id) === String(course.id));
+        if (freshCourse && freshCourse.isLocked) {
+          // Server confirms it's still locked
+          alert(`هذا المساق مغلق. ${(freshCourse as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(freshCourse as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+          return;
+        }
+        // Server says it's unlocked now — use the fresh data and proceed
+        if (freshCourse) {
+          course = freshCourse;
+        }
+      } catch (err) {
+        // Network error — fallback to blocking with stale data (safer)
+        alert(`هذا المساق مغلق. ${(course as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+        return;
+      }
     }
     // Auto-enroll if not enrolled
     if (!(course as any).isEnrolled) {
