@@ -16,7 +16,7 @@ function isCoursePassed(userId, courseId) {
         const passedCount = db.prepare(`
             SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
             JOIN quizzes q ON qr.quizId = q.id
-            WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= (q.passing_score OR 70)
+            WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= IFNULL(q.passing_score, 70)
         `).get(userId, courseId).c;
         return passedCount >= quizCount;
     }
