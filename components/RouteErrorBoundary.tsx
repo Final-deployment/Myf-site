@@ -47,6 +47,10 @@ interface RouteErrorBoundaryState {
  * </RouteErrorBoundary>
  */
 class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteErrorBoundaryState> {
+    public props!: RouteErrorBoundaryProps;
+    public state!: RouteErrorBoundaryState;
+    public setState: any;
+
     constructor(props: RouteErrorBoundaryProps) {
         super(props);
         this.state = {
@@ -99,7 +103,7 @@ class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteE
     /**
      * Nuclear option: clear all app data and reload
      */
-    handleClearAndReload = async (): void => {
+    handleClearAndReload = async (): Promise<void> => {
         try {
             localStorage.clear();
             sessionStorage.clear();

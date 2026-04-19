@@ -38,6 +38,7 @@ jobs:
           Dockerfile \
           nginx_app.conf \
           deploy.sh \
+          scripts \
           fix_progress.cjs
 
     - name: Copy deployment package to VPS
