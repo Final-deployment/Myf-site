@@ -816,7 +816,7 @@ ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
                                         {msg.content && <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>}
                                         {renderAttachment(msg)}
                                         <div className={`flex items-center gap-1 mt-2 text-[10px] ${isMe ? 'text-violet-200' : 'text-gray-500'}`}>
-                                            <span dir="ltr">{new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
+                                            <span dir="ltr">{new Date(msg.timestamp).toLocaleString('ar-EG', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                             {isMe && (
                                                 msg.read ? 
                                                 <CheckCheck className="w-4 h-4 text-sky-400 drop-shadow-[0_0_2px_rgba(56,189,248,0.5)]" /> : 

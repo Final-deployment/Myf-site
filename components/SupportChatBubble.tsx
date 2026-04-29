@@ -493,7 +493,7 @@ export default function SupportChatBubble() {
                                             {renderAttachment(msg)}
 
                                             <div className={`flex items-center gap-1 mt-1 text-[10px] ${isMe ? 'text-emerald-200' : 'text-slate-500'}`}>
-                                                <span>{new Date(msg.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                <span>{new Date(msg.timestamp).toLocaleString('ar-EG', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                                 {isMe && (
                                                     msg.read ? <CheckCheck className="w-3 h-3 text-blue-300" /> : <Check className="w-3 h-3" />
                                                 )}
