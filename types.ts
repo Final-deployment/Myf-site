@@ -155,6 +155,8 @@ export interface Course {
   orderIndex?: number;
   /** Whether the course is currently locked for the student */
   isLocked?: boolean;
+  /** Whether the course enrollment is marked as completed (server truth) */
+  completed?: boolean;
   /** Whether the student is enrolled in this course */
   isEnrolled?: boolean;
 }

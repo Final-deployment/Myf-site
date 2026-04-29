@@ -15,7 +15,7 @@ const AdminQuizManagement: React.FC = () => {
         courseId: '',
         questions: [],
         passingScore: 70,
-        afterEpisodeIndex: 3 // Default as per user request
+        afterEpisodeIndex: 0 // Will be set dynamically when course is selected
     });
 
     // Question Editing State
@@ -120,7 +120,7 @@ const AdminQuizManagement: React.FC = () => {
 
             setIsModalOpen(false);
             setEditingId(null);
-            setQuizForm({ title: '', courseId: '', questions: [], passingScore: 70, afterEpisodeIndex: 3 });
+            setQuizForm({ title: '', courseId: '', questions: [], passingScore: 70, afterEpisodeIndex: 0 });
             await loadQuizzes();
         } catch (error) {
             console.error('Failed to save quiz:', error);
@@ -145,7 +145,8 @@ const AdminQuizManagement: React.FC = () => {
                 <button
                     onClick={() => {
                         setEditingId(null);
-                        setQuizForm({ title: '', courseId: courses.length > 0 ? courses[0].id : '', questions: [], passingScore: 70, afterEpisodeIndex: 3 });
+                        const firstCourse = courses.length > 0 ? courses[0] : null;
+                        setQuizForm({ title: '', courseId: firstCourse?.id || '', questions: [], passingScore: 70, afterEpisodeIndex: firstCourse?.lessonsCount || firstCourse?.episodes?.length || 0 });
                         setIsModalOpen(true);
                     }}
                     className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-bold hover:opacity-90 flex items-center gap-2"
@@ -237,7 +238,11 @@ const AdminQuizManagement: React.FC = () => {
                                         <select
                                             required
                                             value={quizForm.courseId}
-                                            onChange={e => setQuizForm({ ...quizForm, courseId: e.target.value })}
+                                            onChange={e => {
+                                                const selected = courses.find(c => c.id === e.target.value);
+                                                const episodeCount = selected?.lessonsCount || selected?.episodes?.length || 0;
+                                                setQuizForm({ ...quizForm, courseId: e.target.value, afterEpisodeIndex: episodeCount });
+                                            }}
                                             className="w-full bg-[#0a1815] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 appearance-none"
                                         >
                                             <option value="">اختر الدورة...</option>

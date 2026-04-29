@@ -294,7 +294,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                                 <td className="px-4 py-3 text-center text-amber-400 font-bold">{(course as any).daysAvailable || 30} يوم</td>
                                                 <td className="px-4 py-3 text-center">
                                                     {isEnrolled ? (
-                                                        course.progress >= 100 ? (
+                                                        (course.progress >= 100 || course.completed) ? (
                                                             <span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1">✓ منتهية</span>
                                                         ) : (
                                                             <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md text-xs font-bold inline-block">نشطة ({course.progress || 0}%)</span>

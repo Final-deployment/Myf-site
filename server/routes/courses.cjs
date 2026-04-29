@@ -39,7 +39,7 @@ function checkCoursePrerequisite(userId, courseId) {
 
     const currentFolderId = String(course.folder_id || '').toLowerCase().trim();
     const folderCourses = db.prepare(
-        'SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC, id ASC'
+        "SELECT * FROM courses WHERE LOWER(TRIM(COALESCE(folder_id, ''))) = ? ORDER BY order_index ASC, id ASC"
     ).all(currentFolderId);
     const courseIndex = folderCourses.findIndex(c => String(c.id) === String(courseId));
 
@@ -238,6 +238,7 @@ router.get('/', async (req, res) => {
                 daysAvailable: c.days_available,
                 bookPath: bookUrl,
                 progress: progress,
+                completed: enrollment ? !!enrollment.completed : false,
                 deadline: deadline,
                 isLockedByDeadline: isLockedByDeadline,
                 isLocked: isLocked,
@@ -380,7 +381,7 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
             INSERT INTO episode_progress (user_id, course_id, episode_id, completed, last_position, watched_duration, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, episode_id) DO UPDATE SET 
-                completed = COALESCE(excluded.completed, completed),
+                completed = MAX(COALESCE(excluded.completed, 0), COALESCE(completed, 0)),
                 last_position = COALESCE(excluded.last_position, last_position),
                 watched_duration = MAX(COALESCE(excluded.watched_duration, 0), watched_duration),
                 updated_at = CURRENT_TIMESTAMP
@@ -437,10 +438,13 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
         if (courseJustCompleted) {
             try {
                 const currentCourse = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
-                if (currentCourse && currentCourse.folder_id) {
+                if (currentCourse) {
+                    // Use same normalization as GET /courses — empty folder_id becomes ''
+                    // so courses without a folder are treated as one sequential group
+                    const normalizedFolderId = String(currentCourse.folder_id || '').toLowerCase().trim();
                     const folderCourses = db.prepare(
-                        'SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC, id ASC'
-                    ).all(String(currentCourse.folder_id).toLowerCase().trim());
+                        "SELECT * FROM courses WHERE LOWER(TRIM(COALESCE(folder_id, ''))) = ? ORDER BY order_index ASC, id ASC"
+                    ).all(normalizedFolderId);
 
                     const currentIdx = folderCourses.findIndex(c => String(c.id) === String(courseId));
                     if (currentIdx !== -1 && currentIdx < folderCourses.length - 1) {
@@ -481,8 +485,8 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
     const course = req.body;
     try {
         const stmt = db.prepare(`
-            INSERT INTO courses(id, title, title_en, instructor, instructor_en, category, category_en, duration, duration_en, thumbnail, description, description_en, lessons_count, students_count, video_url, status, passing_score, quiz_frequency, folder_id)
-            VALUES(@id, @title, @title_en, @instructor, @instructor_en, @category, @category_en, @duration, @duration_en, @thumbnail, @description, @description_en, @lessons_count, @students_count, @video_url, @status, @passing_score, @quiz_frequency, @folder_id)
+            INSERT INTO courses(id, title, title_en, instructor, instructor_en, category, category_en, duration, duration_en, thumbnail, description, description_en, lessons_count, students_count, video_url, status, passing_score, quiz_frequency, folder_id, order_index, days_available)
+            VALUES(@id, @title, @title_en, @instructor, @instructor_en, @category, @category_en, @duration, @duration_en, @thumbnail, @description, @description_en, @lessons_count, @students_count, @video_url, @status, @passing_score, @quiz_frequency, @folder_id, @order_index, @days_available)
                 `);
 
         stmt.run({
@@ -504,7 +508,9 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
             status: course.status || 'published',
             passing_score: course.passingScore || 80,
             quiz_frequency: course.quizFrequency || 0,
-            folder_id: course.folderId || null
+            folder_id: course.folderId || null,
+            order_index: course.orderIndex || 0,
+            days_available: course.daysAvailable || null
         });
 
         // Insert Episodes if any
@@ -540,29 +546,46 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
     const updates = req.body;
     try {
         // Update basic course info
-        const allowedFields = ['title', 'title_en', 'instructor', 'instructor_en', 'category', 'category_en', 'duration', 'duration_en', 'thumbnail', 'description', 'description_en', 'lessons_count', 'students_count', 'video_url', 'status', 'passing_score', 'quiz_frequency', 'folder_id'];
-        const fieldsToUpdate = Object.keys(updates).filter(k => allowedFields.includes(k) || k === 'titleEn' || k === 'instructorEn' || k === 'quizFrequency' || k === 'folderId');
+        const allowedFields = ['title', 'title_en', 'instructor', 'instructor_en', 'category', 'category_en', 'duration', 'duration_en', 'thumbnail', 'description', 'description_en', 'lessons_count', 'students_count', 'video_url', 'status', 'passing_score', 'quiz_frequency', 'folder_id', 'order_index', 'days_available'];
+        const fieldsToUpdate = Object.keys(updates).filter(k => allowedFields.includes(k) || k === 'titleEn' || k === 'instructorEn' || k === 'quizFrequency' || k === 'folderId' || k === 'orderIndex' || k === 'daysAvailable');
 
         if (fieldsToUpdate.length > 0) {
             const setClause = fieldsToUpdate.map(k => {
-                const dbKey = k === 'titleEn' ? 'title_en' : k === 'instructorEn' ? 'instructor_en' : k === 'quizFrequency' ? 'quiz_frequency' : k === 'folderId' ? 'folder_id' : k;
+                const dbKey = k === 'titleEn' ? 'title_en' : k === 'instructorEn' ? 'instructor_en' : k === 'quizFrequency' ? 'quiz_frequency' : k === 'folderId' ? 'folder_id' : k === 'orderIndex' ? 'order_index' : k === 'daysAvailable' ? 'days_available' : k;
                 return `${dbKey} = ?`;
             }).join(', ');
             const values = fieldsToUpdate.map(k => updates[k]);
             db.prepare(`UPDATE courses SET ${setClause} WHERE id = ? `).run(...values, id);
         }
 
-        // Sync Episodes
+        // Sync Episodes — SMART UPSERT to preserve student progress
         if (updates.episodes && Array.isArray(updates.episodes)) {
-            // Delete old ones
-            db.prepare('DELETE FROM episodes WHERE courseId = ?').run(id);
-            // Insert new ones
-            const epStmt = db.prepare(`
+            // Collect the IDs of episodes being sent in the update
+            const incomingIds = updates.episodes.map(ep => ep.id).filter(Boolean);
+
+            // Delete ONLY episodes that are no longer in the updated list
+            if (incomingIds.length > 0) {
+                const placeholders = incomingIds.map(() => '?').join(',');
+                db.prepare(`DELETE FROM episodes WHERE courseId = ? AND id NOT IN (${placeholders})`).run(id, ...incomingIds);
+            } else {
+                // No IDs provided — delete all old episodes (backwards compatible)
+                db.prepare('DELETE FROM episodes WHERE courseId = ?').run(id);
+            }
+
+            // UPSERT each episode: update if exists, insert if new
+            const upsertStmt = db.prepare(`
                 INSERT INTO episodes(id, courseId, title, title_en, duration, videoUrl, orderIndex, isLocked)
-        VALUES(@id, @courseId, @title, @title_en, @duration, @videoUrl, @orderIndex, @isLocked)
+                VALUES(@id, @courseId, @title, @title_en, @duration, @videoUrl, @orderIndex, @isLocked)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    title_en = excluded.title_en,
+                    duration = excluded.duration,
+                    videoUrl = excluded.videoUrl,
+                    orderIndex = excluded.orderIndex,
+                    isLocked = excluded.isLocked
             `);
             for (const ep of updates.episodes) {
-                epStmt.run({
+                upsertStmt.run({
                     id: ep.id || ('ep_' + crypto.randomUUID()),
                     courseId: id,
                     title: ep.title,

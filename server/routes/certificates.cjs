@@ -188,20 +188,39 @@ router.post('/master', authenticateToken, (req, res) => {
 
         // Fix #7: Only count published courses for master certificate eligibility
         const courses = db.prepare("SELECT id FROM courses WHERE status = 'published'").all();
-        const passedQuizzes = db.prepare(`
-            SELECT DISTINCT q.courseId 
-            FROM quiz_results qr
-            JOIN quizzes q ON qr.quizId = q.id
-            WHERE qr.userId = ? AND qr.percentage >= q.passing_score
-        `).all(user.id);
-
-        const passedCourseIds = new Set(passedQuizzes.map(p => String(p.courseId)));
-        const allPassed = courses.every(c => passedCourseIds.has(String(c.id)));
+        
+        // Use the same dual-path logic as courses.cjs isCoursePassed:
+        // - Courses WITH quizzes: student must pass ALL quizzes
+        // - Courses WITHOUT quizzes: student must have progress >= 100 OR completed = 1
+        const allPassed = courses.every(c => {
+            const quizCount = db.prepare('SELECT COUNT(*) as cnt FROM quizzes WHERE courseId = ?').get(c.id).cnt;
+            if (quizCount > 0) {
+                const passedCount = db.prepare(`
+                    SELECT COUNT(DISTINCT q.id) as cnt FROM quiz_results qr
+                    JOIN quizzes q ON qr.quizId = q.id
+                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+                `).get(user.id, c.id).cnt;
+                return passedCount >= quizCount;
+            } else {
+                const enrollment = db.prepare(
+                    'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ? AND (progress >= 100 OR completed = 1)'
+                ).get(user.id, c.id);
+                return !!enrollment;
+            }
+        });
 
         if (!allPassed) {
+            const passedCount = courses.filter(c => {
+                const qc = db.prepare('SELECT COUNT(*) as cnt FROM quizzes WHERE courseId = ?').get(c.id).cnt;
+                if (qc > 0) {
+                    const pc = db.prepare(`SELECT COUNT(DISTINCT q.id) as cnt FROM quiz_results qr JOIN quizzes q ON qr.quizId = q.id WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score`).get(user.id, c.id).cnt;
+                    return pc >= qc;
+                }
+                return !!db.prepare('SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ? AND (progress >= 100 OR completed = 1)').get(user.id, c.id);
+            }).length;
             return res.status(400).json({
                 error: 'Not all courses completed',
-                completed: passedCourseIds.size,
+                completed: passedCount,
                 total: courses.length
             });
         }

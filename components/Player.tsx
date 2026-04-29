@@ -30,10 +30,15 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   );
 
   useEffect(() => {
-    setEpisodes(course.episodes && course.episodes.length > 0
+    const freshEpisodes = course.episodes && course.episodes.length > 0
       ? course.episodes
-      : [{ id: 'default', title: course.title, videoUrl: course.videoUrl || '', orderIndex: 0, lastPosition: 0, watchedDuration: 0, completed: false }]
-    );
+      : [{ id: 'default', title: course.title, videoUrl: course.videoUrl || '', orderIndex: 0, lastPosition: 0, watchedDuration: 0, completed: false }];
+    setEpisodes(freshEpisodes);
+    // Sync completedEpisodesRef with the fresh server data — ADD only, never remove
+    // (a locally-completed episode must remain marked even if server data is stale)
+    freshEpisodes.forEach(ep => {
+      if (ep.completed) completedEpisodesRef.current.add(ep.id);
+    });
   }, [course]);
 
   const currentEpisode = episodes[currentEpisodeIndex];
@@ -43,6 +48,8 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   const [quizzes, setQuizzes] = useState<QuizType[]>([]);
   const [activeQuiz, setActiveQuiz] = useState<QuizType | null>(null);
   const [passedQuizIds, setPassedQuizIds] = useState<string[]>([]);
+  // Ref mirror of passedQuizIds — synchronously updated so onClose always has the latest value
+  const passedQuizIdsRef = useRef<Set<string>>(new Set());
   const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -97,7 +104,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
 
   /** Sync isCompleted for previously completed courses once quiz data is loaded */
   useEffect(() => {
-    if (!isLoadingQuizzes && course.progress >= 100 && allCourseQuizzesPassed) {
+    if (!isLoadingQuizzes && (course.progress >= 100 || course.completed) && allCourseQuizzesPassed) {
       setIsCompleted(true);
     }
   }, [isLoadingQuizzes, course.progress, allCourseQuizzesPassed]);
@@ -163,6 +170,13 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     return items;
   }, [episodes, quizzes]);
 
+  // Ref to track episode IDs that have been marked complete in this session.
+  // Using a ref (not state) ensures the periodic saveProgress closure always reads the latest value,
+  // preventing the race condition where a stale React closure sends completed=false for a completed episode.
+  const completedEpisodesRef = useRef<Set<string>>(new Set(
+    (course.episodes || []).filter(ep => ep.completed).map(ep => ep.id)
+  ));
+
   /** Save progress to backend */
   const saveProgress = useCallback(async (isCompletedParam = false) => {
     if (!videoRef.current || user?.role === 'admin' || user?.role === 'supervisor') return;
@@ -173,11 +187,15 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     const time = videoRef.current.currentTime;
     const duration = videoRef.current.duration;
 
+    // Use the ref to check if this episode was already completed — never send false for a completed episode
+    const alreadyCompleted = completedEpisodesRef.current.has(currentEpisode.id);
+    const completedValue = isCompletedParam || isCompleted || (currentEpisode as any).completed || alreadyCompleted;
+
     try {
       await api.updateEpisodeProgress(
         course.id,
         currentEpisode.id,
-        isCompletedParam || isCompleted || (currentEpisode as any).completed,
+        completedValue,
         time,
         Math.max(time, (currentEpisode as any).watchedDuration || 0)
       );
@@ -241,6 +259,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
           .filter(r => r.percentage >= (courseQuizzes.find(q => q.id === r.quizId)?.passingScore || 70))
           .map(r => r.quizId);
         setPassedQuizIds(passedIds);
+        passedQuizIdsRef.current = new Set(passedIds);
 
         // Fetch all courses to find the next one
         const coursesData = await api.getCourses();
@@ -274,7 +293,10 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
   useEffect(() => {
     if (allCourses.length > 0 && course) {
       // L2: Filter by same folder to prevent cross-folder navigation
-      const sameFolderCourses = allCourses.filter(c => c.folderId === course.folderId);
+      // Normalize to match server-side LOWER(TRIM(folder_id)) logic
+      const normFolderId = (id: string | undefined | null) => String(id || '').toLowerCase().trim();
+      const currentFolderNorm = normFolderId(course.folderId);
+      const sameFolderCourses = allCourses.filter(c => normFolderId(c.folderId) === currentFolderNorm);
       const sorted = [...sameFolderCourses].sort((a, b) => {
         const orderA = a.orderIndex !== undefined ? a.orderIndex : 999;
         const orderB = b.orderIndex !== undefined ? b.orderIndex : 999;
@@ -383,6 +405,8 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
           duration > 0 ? duration : time,
           duration > 0 ? duration : time
         );
+        // Register in ref IMMEDIATELY so stale saveProgress closures never revert this episode
+        completedEpisodesRef.current.add(currentEpisode.id);
         // Update local state instantly so the UI reflects completion
         setEpisodes(prev => prev.map((ep, idx) => 
           idx === currentEpisodeIndex 
@@ -398,7 +422,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     let quizToShow = quizzes.find(q => q.afterEpisodeIndex === currentEpisodeIndex + 1);
 
     // Filter out quizzes already passed
-    if (quizToShow && passedQuizIds.includes(quizToShow.id)) {
+    if (quizToShow && passedQuizIdsRef.current.has(quizToShow.id)) {
       quizToShow = undefined;
     }
 
@@ -411,7 +435,7 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     if (currentEpisodeIndex === episodes.length - 1) {
       // Check if there are remaining quizzes that haven't been passed
       const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
-      const allQuizzesPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => passedQuizIds.includes(q.id));
+      const allQuizzesPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => passedQuizIdsRef.current.has(q.id));
 
       if (allQuizzesPassed) {
         try {
@@ -458,9 +482,9 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
     if (index === 0) return false;
     if (index <= maxReachedIndex) return false;
 
-    // Additional check: if previous episode is completed, this one should be open
+    // Additional check: if previous episode is completed (in state OR ref), this one should be open
     const prevEpisode = episodes[index - 1];
-    if (prevEpisode && prevEpisode.completed) return false;
+    if (prevEpisode && (prevEpisode.completed || completedEpisodesRef.current.has(prevEpisode.id))) return false;
 
     return true;
   };
@@ -488,27 +512,28 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
             quiz={activeQuiz}
             courseName={course.title}
             onSuccess={() => {
+              passedQuizIdsRef.current.add(activeQuiz.id);
               setPassedQuizIds(prev => [...prev, activeQuiz.id]);
             }}
             onClose={async () => {
-              // Build a local snapshot including the just-passed quiz
-              const updatedPassedIds = passedQuizIds.includes(activeQuiz.id)
-                ? passedQuizIds
-                : [...passedQuizIds, activeQuiz.id];
+              // Only advance if the student actually PASSED the quiz.
+              // onSuccess (which adds to passedQuizIds) is called BEFORE onClose,
+              // but React state may not have flushed yet. So we check both:
+              // 1) passedQuizIds (already contains it if React flushed)
+              // 2) We do NOT blindly add it — that was the bug causing advancement on failure
+              // Use the ref (not state) because React may not have flushed setPassedQuizIds yet
+              const quizWasPassed = passedQuizIdsRef.current.has(activeQuiz.id);
 
-              if (updatedPassedIds.includes(activeQuiz.id)) {
+              if (quizWasPassed) {
                 if (currentEpisodeIndex < episodes.length - 1) {
                   setCurrentEpisodeIndex(prev => prev + 1);
                 } else {
                   // Last episode: check if ALL course quizzes are now passed
                   const courseQuizzes = quizzes.filter(q => q.courseId === course.id);
-                  const allPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => updatedPassedIds.includes(q.id));
+                  const allPassed = courseQuizzes.length === 0 || courseQuizzes.every(q => passedQuizIdsRef.current.has(q.id));
                   if (allPassed) {
                     try {
-                      // NOTE: Server already auto-completed the course in quizzes.cjs
-                      // when all quizzes passed. No need for FULL_COURSE (blocked for students).
                       setIsCompleted(true);
-                      // CRITICAL FIX: Refresh courses so the next course's isLocked is updated from server
                       await refreshCoursesAndNextCourse();
                     } catch (e) {
                       console.error('Failed to complete course after quiz:', e);
@@ -860,7 +885,11 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
                     const isPassed = passedQuizIds.includes(quiz.id);
                     const afterEpIdx = quiz.afterEpisodeIndex || 0;
                     const isAdmin = user?.role === 'admin' || user?.role === 'supervisor' || !!user?.is_tester;
-                    const isLocked = !isAdmin && afterEpIdx > 0 && isEpisodeLocked(afterEpIdx);
+                    // Quiz is locked if the required number of preceding episodes haven't been completed
+                    const requiredEpisodesCompleted = afterEpIdx > 0 
+                      ? episodes.slice(0, afterEpIdx).every(ep => ep.completed || completedEpisodesRef.current.has(ep.id))
+                      : true;
+                    const isLocked = !isAdmin && afterEpIdx > 0 && !requiredEpisodesCompleted;
 
                     return (
                       <div
@@ -1006,8 +1035,8 @@ const Player: React.FC<PlayerProps> = ({ course, onBack, onPlayCourse }) => {
       )}
 
       {/* Lock out overlay if deadline passed — Fix #5: never show for completed courses */}
-      {(((course as any).isLockedByDeadline && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && course.progress < 100) || 
-        (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && course.progress < 100 && !isCompleted)) && (
+      {(((course as any).isLockedByDeadline && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && course.progress < 100 && !course.completed) || 
+        (timeLeft && timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.mins === 0 && user?.role !== 'admin' && user?.role !== 'supervisor' && !user?.is_tester && course.progress < 100 && !course.completed && !isCompleted)) && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl animate-fade-in">
           <div className="bg-red-900/30 border border-red-500/50 p-8 rounded-3xl max-w-md text-center space-y-4 shadow-2xl">
             <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">

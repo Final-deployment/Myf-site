@@ -165,7 +165,9 @@ router.post('/results', authenticateToken, (req, res) => {
             // Check episode progress (student must have completed enough episodes)
             if (quiz.afterEpisodeIndex > 0) {
                 const completedEpisodes = db.prepare(
-                    'SELECT COUNT(*) as count FROM episode_progress WHERE user_id = ? AND course_id = ? AND completed = 1'
+                    `SELECT COUNT(*) as count FROM episode_progress ep
+                     INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id
+                     WHERE ep.user_id = ? AND ep.course_id = ? AND ep.completed = 1`
                 ).get(userId, quiz.courseId);
                 if (completedEpisodes.count < quiz.afterEpisodeIndex) {
                     return res.status(403).json({ error: 'لم تكمل الدروس المطلوبة للوصول لهذا الاختبار' });
@@ -229,10 +231,12 @@ router.post('/results', authenticateToken, (req, res) => {
                     // ================================================================
                     try {
                         const currentCourse = db.prepare('SELECT * FROM courses WHERE id = ?').get(quiz.courseId);
-                        if (currentCourse && currentCourse.folder_id) {
+                        if (currentCourse) {
+                            // Use same normalization as GET /courses
+                            const normalizedFolderId = String(currentCourse.folder_id || '').toLowerCase().trim();
                             const folderCourses = db.prepare(
-                                'SELECT * FROM courses WHERE LOWER(TRIM(folder_id)) = ? ORDER BY order_index ASC, id ASC'
-                            ).all(String(currentCourse.folder_id).toLowerCase().trim());
+                                "SELECT * FROM courses WHERE LOWER(TRIM(COALESCE(folder_id, ''))) = ? ORDER BY order_index ASC, id ASC"
+                            ).all(normalizedFolderId);
 
                             const currentIdx = folderCourses.findIndex(c => String(c.id) === String(quiz.courseId));
                             if (currentIdx !== -1 && currentIdx < folderCourses.length - 1) {
@@ -363,6 +367,28 @@ router.patch('/results/:resultId', authenticateToken, requireAdmin, (req, res) =
         db.prepare(`
             UPDATE quiz_results SET score = ?, total = ?, percentage = ? WHERE id = ?
         `).run(score, total, percentage, resultId);
+
+        // Re-evaluate course completion after admin correction
+        const result = db.prepare('SELECT userId, quizId FROM quiz_results WHERE id = ?').get(resultId);
+        if (result) {
+            const quiz = db.prepare('SELECT courseId, passing_score FROM quizzes WHERE id = ?').get(result.quizId);
+            if (quiz) {
+                const quizCountRow = db.prepare('SELECT COUNT(*) as c FROM quizzes WHERE courseId = ?').get(quiz.courseId);
+                const passedCountRow = db.prepare(`
+                    SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
+                    JOIN quizzes q ON qr.quizId = q.id
+                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+                `).get(result.userId, quiz.courseId);
+                
+                if (passedCountRow.c >= quizCountRow.c && quizCountRow.c > 0) {
+                    const enrollment = db.prepare('SELECT completed FROM enrollments WHERE user_id = ? AND course_id = ?').get(result.userId, quiz.courseId);
+                    if (enrollment && !enrollment.completed) {
+                        db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(result.userId, quiz.courseId);
+                        console.log(`[ADMIN_FIX_AUTO_COMPLETE] Course ${quiz.courseId} auto-completed for user ${result.userId} after admin quiz correction.`);
+                    }
+                }
+            }
+        }
 
         console.log(`[QUIZ_RESULT_FIXED] Admin ${req.user.id} corrected result ${resultId}: ${score}/${total} (${percentage}%)`);
         res.json({ success: true, message: `Result corrected to ${score}/${total} (${percentage}%)` });

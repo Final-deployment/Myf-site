@@ -157,7 +157,7 @@ router.get('/my-students', (req, res) => {
 
         const students = db.prepare(`
             SELECT u.id, u.name, u.email, u.role, u.points, u.level, u.joinDate, u.status,
-            (SELECT COUNT(*) FROM episode_progress ep WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
+            (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes e ON ep.episode_id = e.id AND e.courseId = ep.course_id WHERE ep.user_id = u.id AND ep.completed = 1) as completedLessons,
             (SELECT GROUP_CONCAT(c.title, ', ') FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = u.id) as activeCourses
             FROM users u
             WHERE u.supervisor_id = ?
@@ -198,7 +198,7 @@ router.get('/students-progress', (req, res) => {
 
         const progressData = students.map(student => {
             const enrollments = db.prepare(`
-                SELECT e.course_id, c.title, e.progress, e.deadline, e.is_locked, c.days_available
+                SELECT e.course_id, c.title, e.progress, e.completed, e.deadline, e.is_locked, c.days_available
                 FROM enrollments e
                 JOIN courses c ON e.course_id = c.id
                 WHERE e.user_id = ?
@@ -212,12 +212,17 @@ router.get('/students-progress', (req, res) => {
                         const diff = new Date(en.deadline).getTime() - Date.now();
                         daysRemaining = Math.max(0, Math.ceil(diff / (1000 * 3600 * 24)));
                     }
+                    // Dynamically compute lock status based on deadline
+                    let isLocked = !!en.is_locked;
+                    if (!isLocked && en.deadline && new Date() > new Date(en.deadline) && en.progress < 100 && !en.completed) {
+                        isLocked = true;
+                    }
                     return {
                         courseId: en.course_id,
                         title: en.title,
                         progress: en.progress,
                         deadline: en.deadline,
-                        isLocked: !!en.is_locked,
+                        isLocked,
                         daysAvailable: en.days_available,
                         daysRemaining
                     };

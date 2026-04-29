@@ -410,14 +410,24 @@ router.get('/:id/details', authenticateToken, (req, res) => {
         }
 
         // Get enrollments
-        const enrollments = db.prepare(`
-            SELECT e.course_id, c.title as courseTitle, e.progress, e.last_accessed, e.enrolled_at, e.is_locked, e.deadline,
+        const enrollmentsRaw = db.prepare(`
+            SELECT e.course_id, c.title as courseTitle, e.progress, e.completed, e.last_accessed, e.enrolled_at, e.is_locked, e.deadline,
                    c.lessons_count,
                    (SELECT COUNT(*) FROM episode_progress ep INNER JOIN episodes eps ON ep.episode_id = eps.id AND eps.courseId = ep.course_id WHERE ep.user_id = e.user_id AND ep.course_id = e.course_id AND ep.completed = 1) as completed_lessons
             FROM enrollments e 
             JOIN courses c ON e.course_id = c.id 
             WHERE e.user_id = ?
         `).all(id);
+
+        // Dynamically compute deadline lock status (same logic as GET /courses)
+        // This ensures the "Extend" button appears even if the student never opened the course after deadline
+        const enrollments = enrollmentsRaw.map(en => {
+            let isLocked = !!en.is_locked;
+            if (!isLocked && en.deadline && new Date() > new Date(en.deadline) && en.progress < 100 && !en.completed) {
+                isLocked = true;
+            }
+            return { ...en, is_locked: isLocked ? 1 : 0 };
+        });
 
         // Get quiz results grouped by course
         const quizResults = db.prepare(`
