@@ -222,8 +222,13 @@ const AppContent: React.FC = () => {
         const freshCourses = await api.getCourses();
         const freshCourse = freshCourses.find((c: any) => String(c.id) === String(course.id));
         if (freshCourse && freshCourse.isLocked) {
-          // Server confirms it's still locked
-          alert(`هذا المساق مغلق. ${(freshCourse as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(freshCourse as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+          // Server confirms it's still locked — show correct message based on lock type
+          const lockMsg = (freshCourse as any).isLockedByDeadline
+            ? 'انتهت مهلة دراسة هذا المساق. يرجى مراجعة المشرف لإعادة فتحه.'
+            : (freshCourse as any).lockedByPrerequisiteName
+              ? `يجب اجتياز مساق "${(freshCourse as any).lockedByPrerequisiteName}" أولاً`
+              : 'اجتز المساق السابق للفتح';
+          alert(`هذا المساق مغلق. ${lockMsg}`);
           return;
         }
         // Server says it's unlocked now — use the fresh data and proceed
@@ -232,7 +237,12 @@ const AppContent: React.FC = () => {
         }
       } catch (err) {
         // Network error — fallback to blocking with stale data (safer)
-        alert(`هذا المساق مغلق. ${(course as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+        const fallbackMsg = (course as any).isLockedByDeadline
+          ? 'انتهت مهلة دراسة هذا المساق. يرجى مراجعة المشرف لإعادة فتحه.'
+          : (course as any).lockedByPrerequisiteName
+            ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+            : 'اجتز المساق السابق للفتح';
+        alert(`هذا المساق مغلق. ${fallbackMsg}`);
         return;
       }
     }

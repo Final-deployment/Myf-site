@@ -161,6 +161,7 @@ router.get('/', async (req, res) => {
             let progress = 0;
             let isLocked = false;
             let prerequisiteName = null;
+            let isFirstInFolder = false;
 
             // Per-folder locking logic: isolated to within the same folder
             const currentFolderId = String(c.folder_id || '').toLowerCase().trim();
@@ -175,6 +176,7 @@ router.get('/', async (req, res) => {
                 isLocked = false;
             } else if (indexInFolder === 0 || indexInFolder === -1) {
                 isLocked = false; // First course in each folder is always unlocked
+                isFirstInFolder = true;
             } else {
                 // Subsequent courses are locked if the PREVIOUS one in the order isn't "passed"
                 const prevCourse = folderCourses[indexInFolder - 1];
@@ -188,6 +190,7 @@ router.get('/', async (req, res) => {
             // Emergency override: if it's the ONLY course in its folder, it's never locked
             if (folderCourses.length <= 1) {
                 isLocked = false;
+                isFirstInFolder = true;
                 prerequisiteName = null;
             }
 
@@ -210,7 +213,13 @@ router.get('/', async (req, res) => {
                     isLockedByDeadline = false;
                     isLocked = false;
                 } else if (isLockedByDeadline) {
-                    isLocked = true;
+                    // FIX: Deadline lock should NEVER override prerequisite-unlocked status
+                    // for the first course in a folder. The first course is always accessible
+                    // from a prerequisite standpoint — deadline lock is a separate concern
+                    // shown via isLockedByDeadline flag, not isLocked (which implies prerequisite).
+                    if (!isFirstInFolder) {
+                        isLocked = true;
+                    }
                 }
             }
 
@@ -509,7 +518,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
             passing_score: course.passingScore || 80,
             quiz_frequency: course.quizFrequency || 0,
             folder_id: course.folderId || null,
-            order_index: course.orderIndex || 0,
+            order_index: course.orderIndex != null ? course.orderIndex : 0,
             days_available: course.daysAvailable || null
         });
 

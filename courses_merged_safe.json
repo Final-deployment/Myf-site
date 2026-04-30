@@ -1,6 +1,7 @@
 [
   {
     "id": "course_aqeeda",
+    "orderIndex": 1,
     "title": "عقيدة",
     "titleEn": "Aqeeda",
     "instructor": "العلماء",
@@ -151,6 +152,7 @@
   },
   {
     "id": "course_fiqh1-waseelit",
+    "orderIndex": 2,
     "title": "فقه (الوسيلة)",
     "titleEn": "Fiqh (Al-Waseela)",
     "instructor": "العلماء",
@@ -340,6 +342,7 @@
   },
   {
     "id": "course_fiqh2-it7af",
+    "orderIndex": 8,
     "title": "فقه (الإتحاف)",
     "titleEn": "Fiqh (Al-Ithaf)",
     "instructor": "العلماء",
@@ -555,6 +558,7 @@
   },
   {
     "id": "course_madkhal",
+    "orderIndex": 0,
     "title": "مدخل للعلوم الشرعية",
     "titleEn": "Introduction to Sharia Sciences",
     "instructor": "العلماء",
@@ -653,6 +657,7 @@
   },
   {
     "id": "course_nifas",
+    "orderIndex": 3,
     "title": "أحكام النفاس",
     "titleEn": "Rules of Postpartum",
     "instructor": "العلماء",
@@ -777,6 +782,7 @@
   },
   {
     "id": "course_seerah",
+    "orderIndex": 6,
     "title": "سيرة نبوية",
     "titleEn": "Prophetic Seerah",
     "instructor": "العلماء",
@@ -927,6 +933,7 @@
   },
   {
     "id": "course_tafseer",
+    "orderIndex": 4,
     "title": "تفسير",
     "titleEn": "Tafseer",
     "instructor": "العلماء",
@@ -986,6 +993,7 @@
   },
   {
     "id": "course_tazkiyah",
+    "orderIndex": 5,
     "title": "تزكية",
     "titleEn": "Tazkiyah",
     "instructor": "العلماء",
@@ -1097,6 +1105,7 @@
   },
   {
     "id": "course_arba3oon",
+    "orderIndex": 7,
     "title": "الأربعون النووية",
     "titleEn": "The Forty Nuclear",
     "instructor": "العلماء",

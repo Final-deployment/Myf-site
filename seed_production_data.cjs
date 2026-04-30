@@ -69,7 +69,7 @@ async function seed() {
                 students_count: course.studentsCount || 0,
                 status: course.status || 'published',
                 folder_id: course.folderId || 'foundation_shariah',
-                order_index: course.orderIndex || 0
+                order_index: course.orderIndex != null ? course.orderIndex : 0
             });
 
             if (course.episodes && course.episodes.length > 0) {

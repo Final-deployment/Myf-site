@@ -400,7 +400,12 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                         className={`h-48 relative group ${effectivelyLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                         onClick={async () => {
                                             if (effectivelyLocked) {
-                                                alert(`هذا المساق مغلق. ${(course as any).lockedByPrerequisiteName ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً` : 'اجتز المساق السابق للفتح'}`);
+                                                const lockMsg = (course as any).isLockedByDeadline
+                                                    ? 'انتهت مهلة دراسة هذا المساق. يرجى مراجعة المشرف لإعادة فتحه.'
+                                                    : (course as any).lockedByPrerequisiteName
+                                                        ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+                                                        : 'اجتز المساق السابق للفتح';
+                                                alert(`هذا المساق مغلق. ${lockMsg}`);
                                                 return;
                                             }
                                             if (isEnrolled) {
@@ -423,9 +428,11 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                                     <Lock className="w-6 h-6 text-white/50" />
                                                 </div>
                                                 <span className="bg-black/80 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-300 border border-white/5">
-                                                    {(course as any).lockedByPrerequisiteName
-                                                        ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
-                                                        : "اجتز المساق السابق للفتح"}
+                                                    {(course as any).isLockedByDeadline
+                                                        ? 'انتهت المهلة — راجع المشرف'
+                                                        : (course as any).lockedByPrerequisiteName
+                                                            ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+                                                            : "اجتز المساق السابق للفتح"}
                                                 </span>
                                             </div>
                                         ) : isEnrolled && (
@@ -459,9 +466,11 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
                                                     مغلق
                                                 </button>
                                                 <p className="text-[10px] text-gray-500 text-center leading-relaxed">
-                                                    {(course as any).lockedByPrerequisiteName
-                                                        ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
-                                                        : "اجتز المساق السابق للفتح"}
+                                                    {(course as any).isLockedByDeadline
+                                                        ? 'انتهت مهلة دراسة هذا المساق. يرجى مراجعة المشرف لإعادة فتحه.'
+                                                        : (course as any).lockedByPrerequisiteName
+                                                            ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+                                                            : "اجتز المساق السابق للفتح"}
                                                 </p>
                                             </div>
                                         ) : isEnrolled ? (
