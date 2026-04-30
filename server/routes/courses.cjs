@@ -627,4 +627,27 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     }
 });
 
+// Bulk update course order
+router.put('/reorder', authenticateToken, requireAdmin, (req, res) => {
+    const { updates } = req.body;
+    if (!updates || !Array.isArray(updates)) {
+        return res.status(400).json({ error: 'مصفوفة التحديثات مطلوبة' });
+    }
+
+    try {
+        db.transaction(() => {
+            const stmt = db.prepare('UPDATE courses SET order_index = ? WHERE id = ?');
+            for (const item of updates) {
+                if (item.id && item.order_index !== undefined) {
+                    stmt.run(item.order_index, item.id);
+                }
+            }
+        })();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[COURSES_REORDER_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء حفظ ترتيب المساقات' });
+    }
+});
+
 module.exports = router;

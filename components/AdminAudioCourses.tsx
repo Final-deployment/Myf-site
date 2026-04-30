@@ -20,8 +20,25 @@ const CourseCard: React.FC<{
     onEdit: (course: Course) => void;
     onDelete: (id: string) => void;
     isSupervisor: boolean;
-}> = ({ course, t, onPreview, onEdit, onDelete, isSupervisor }) => (
-    <div className="glass-panel p-0 rounded-2xl overflow-hidden hover:border-violet-500/50 transition-all group">
+    // Drag & Drop props
+    draggable?: boolean;
+    onDragStart?: (e: React.DragEvent, id: string) => void;
+    onDragOver?: (e: React.DragEvent, id: string) => void;
+    onDrop?: (e: React.DragEvent, id: string) => void;
+    isDragged?: boolean;
+    isDragOver?: boolean;
+}> = ({ course, t, onPreview, onEdit, onDelete, isSupervisor, draggable, onDragStart, onDragOver, onDrop, isDragged, isDragOver }) => (
+    <div 
+        className={`glass-panel p-0 rounded-2xl overflow-hidden transition-all group ${
+            isDragged ? 'opacity-50 scale-95 border-violet-500' : 
+            isDragOver ? 'border-2 border-emerald-500 transform scale-[1.02]' : 
+            'hover:border-violet-500/50'
+        } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        draggable={draggable}
+        onDragStart={draggable ? (e) => onDragStart?.(e, course.id) : undefined}
+        onDragOver={draggable ? (e) => onDragOver?.(e, course.id) : undefined}
+        onDrop={draggable ? (e) => onDrop?.(e, course.id) : undefined}
+    >
         <div className="flex flex-col sm:flex-row">
             {/* Thumbnail */}
             <div className="w-full sm:w-32 h-32 flex-shrink-0 relative">
@@ -109,6 +126,12 @@ const AdminAudioCourses: React.FC<AdminAudioCoursesProps> = ({ onPreview }) => {
     const { user } = useAuth();
     const isSupervisor = user?.role === 'supervisor';
 
+    // Drag & Drop State
+    const [draggedCourseId, setDraggedCourseId] = useState<string | null>(null);
+    const [dragOverCourseId, setDragOverCourseId] = useState<string | null>(null);
+    const [isSavingOrder, setIsSavingOrder] = useState(false);
+    const [unsavedChanges, setUnsavedChanges] = useState(false);
+
     // Form State
     const [courseForm, setCourseForm] = useState<Partial<Course>>({
         title: '',
@@ -143,6 +166,68 @@ const AdminAudioCourses: React.FC<AdminAudioCoursesProps> = ({ onPreview }) => {
         course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         course.instructor.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Drag & Drop Handlers
+    const handleDragStart = (e: React.DragEvent, id: string) => {
+        setDraggedCourseId(id);
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => e.target && (e.target as HTMLElement).classList.add('opacity-50'), 0);
+    };
+
+    const handleDragOver = (e: React.DragEvent, id: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (id !== dragOverCourseId) {
+            setDragOverCourseId(id);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        setDragOverCourseId(null);
+        if (!draggedCourseId || draggedCourseId === targetId) {
+            setDraggedCourseId(null);
+            return;
+        }
+
+        setCourses(prev => {
+            const newCourses = [...prev];
+            const draggedIndex = newCourses.findIndex(c => c.id === draggedCourseId);
+            const targetIndex = newCourses.findIndex(c => c.id === targetId);
+
+            if (draggedIndex > -1 && targetIndex > -1) {
+                const [draggedCourse] = newCourses.splice(draggedIndex, 1);
+                newCourses.splice(targetIndex, 0, draggedCourse);
+                setUnsavedChanges(true);
+                return newCourses;
+            }
+            return prev;
+        });
+        setDraggedCourseId(null);
+    };
+
+    const handleSaveOrder = async () => {
+        if (!selectedFolderId) return;
+        setIsSavingOrder(true);
+        try {
+            // Courses are already sorted in the UI state
+            const folderCourses = courses.filter(c => c.folderId === selectedFolderId);
+            const updates = folderCourses.map((c, index) => ({
+                id: c.id,
+                order_index: index
+            }));
+
+            await api.reorderCourses(updates);
+            setUnsavedChanges(false);
+            alert('تم حفظ ترتيب المساقات بنجاح!');
+        } catch (error) {
+            console.error('Failed to save order:', error);
+            alert('فشل حفظ الترتيب');
+            loadData(); // Revert to DB state on fail
+        } finally {
+            setIsSavingOrder(false);
+        }
+    };
 
     const handleDelete = async (id: string) => {
         if (window.confirm('هل أنت متأكد من حذف هذه الدورة؟')) {
@@ -372,13 +457,29 @@ const AdminAudioCourses: React.FC<AdminAudioCoursesProps> = ({ onPreview }) => {
                     <span>{t('admin.filter')}</span>
                 </button>
                 {selectedFolderId && (
-                    <button
-                        onClick={() => setSelectedFolderId(null)}
-                        className="px-6 py-3 bg-violet-500/20 text-violet-300 rounded-xl border border-violet-500/30 font-bold hover:bg-violet-500/30 transition-all flex items-center gap-2"
-                    >
-                        <ArrowRight className="w-5 h-5" />
-                        <span>العودة للمجلدات</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {!isSupervisor && unsavedChanges && (
+                            <button
+                                onClick={handleSaveOrder}
+                                disabled={isSavingOrder}
+                                className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                            >
+                                <Save className="w-5 h-5" />
+                                <span>{isSavingOrder ? 'جاري الحفظ...' : 'حفظ الترتيب'}</span>
+                            </button>
+                        )}
+                        <button
+                            onClick={() => {
+                                if (unsavedChanges && !window.confirm('لديك تغييرات غير محفوظة في الترتيب، هل أنت متأكد من المغادرة؟')) return;
+                                setSelectedFolderId(null);
+                                setUnsavedChanges(false);
+                            }}
+                            className="px-6 py-3 bg-violet-500/20 text-violet-300 rounded-xl border border-violet-500/30 font-bold hover:bg-violet-500/30 transition-all flex items-center gap-2"
+                        >
+                            <ArrowRight className="w-5 h-5" />
+                            <span>العودة للمجلدات</span>
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -443,17 +544,34 @@ const AdminAudioCourses: React.FC<AdminAudioCoursesProps> = ({ onPreview }) => {
                 ) : (
                     <>
                         {/* Courses in selected folder */}
-                        {filteredCourses.filter(c => c.folderId === selectedFolderId).map((course) => (
-                            <CourseCard
-                                key={course.id}
-                                course={course}
-                                t={t}
-                                onPreview={onPreview}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                isSupervisor={isSupervisor}
-                            />
-                        ))}
+                        {filteredCourses.filter(c => c.folderId === selectedFolderId).map((course, index) => {
+                            // Find folder index to create a hierarchy number (e.g. 1.1, 1.2)
+                            const folderIndex = folders.findIndex(f => f.id === selectedFolderId);
+                            const hierarchyNumber = `${folderIndex + 1}.${index + 1}`;
+                            
+                            return (
+                                <div key={course.id} className="relative group/wrapper">
+                                    {/* Hierarchy Number Badge */}
+                                    <div className="absolute -top-3 -right-3 w-10 h-10 bg-violet-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-lg z-10 border-4 border-[#1E1B2E] transition-transform group-hover/wrapper:scale-110">
+                                        {hierarchyNumber}
+                                    </div>
+                                    <CourseCard
+                                        course={course}
+                                        t={t}
+                                        onPreview={onPreview}
+                                        onEdit={handleEdit}
+                                        onDelete={handleDelete}
+                                        isSupervisor={isSupervisor}
+                                        draggable={!isSupervisor && !searchTerm}
+                                        onDragStart={handleDragStart}
+                                        onDragOver={handleDragOver}
+                                        onDrop={handleDrop}
+                                        isDragged={draggedCourseId === course.id}
+                                        isDragOver={dragOverCourseId === course.id}
+                                    />
+                                </div>
+                            );
+                        })}
                     </>
                 )}
             </div>

@@ -85,6 +85,19 @@ export const coursesApi = {
         if (!response.ok) throw new Error('Failed to delete course');
     },
 
+    reorderCourses: async (updates: { id: string, order_index: number }[]): Promise<void> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/courses/reorder'), {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ updates })
+        });
+        if (!response.ok) throw new Error('Failed to reorder courses');
+    },
+
     enroll: async (courseId: string): Promise<void> => {
         const token = getAuthToken();
         const response = await fetch(getApiUrl('/courses/enroll'), {
