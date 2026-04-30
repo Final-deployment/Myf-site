@@ -3,6 +3,7 @@ import { X, Mail, BookOpen, Award, Activity, Calendar, MapPin, Phone, UserCheck,
 import { User, Course, Certificate } from '../types';
 import { api } from '../services/api';
 import { useAuth } from './AuthContext';
+import { StudentJourneyMap } from './StudentJourneyMap';
 
 interface StudentDetailsModalProps {
     isOpen: boolean;
@@ -16,6 +17,7 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
     const [details, setDetails] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [sortBy, setSortBy] = useState<'recent' | 'progress_desc' | 'progress_asc' | 'deadline'>('recent');
+    const [activeTab, setActiveTab] = useState<'info' | 'journey'>('info');
 
     const sortedEnrollments = React.useMemo(() => {
         if (!details?.enrollments) return [];
@@ -36,6 +38,7 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
 
     useEffect(() => {
         if (isOpen && studentId) {
+            setActiveTab('info');
             loadDetails();
         }
     }, [isOpen, studentId]);
@@ -117,10 +120,30 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                 {loading ? (
                     <div className="p-12 text-center text-gray-400">جاري التحميل...</div>
                 ) : (
-                    <div className="overflow-y-auto p-6 space-y-8 custom-scrollbar">
+                    <div className="overflow-y-auto p-0 flex-1 custom-scrollbar flex flex-col">
+                        {/* Tabs */}
+                        <div className="flex border-b border-white/10 px-6 sticky top-0 bg-[#0a1815]/90 backdrop-blur-md z-10">
+                            <button
+                                onClick={() => setActiveTab('info')}
+                                className={`px-6 py-4 font-bold text-sm border-b-2 transition-colors ${activeTab === 'info' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+                            >
+                                المعلومات والأكاديمية
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('journey')}
+                                className={`px-6 py-4 font-bold text-sm border-b-2 transition-colors ${activeTab === 'journey' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+                            >
+                                شجرة الطالب (المسار)
+                            </button>
+                        </div>
 
-                        {/* Personal Info Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="p-6 space-y-8">
+                            {activeTab === 'journey' ? (
+                                <StudentJourneyMap studentId={studentId} />
+                            ) : (
+                                <>
+                                    {/* Personal Info Grid */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                                 <div className="flex items-center gap-2 text-gray-400 mb-2">
                                     <MapPin className="w-4 h-4" />
@@ -421,8 +444,11 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                 )}
                             </div>
                         </div>
-                            </>
-                        )}
+                                </>
+                            )}
+                                </>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

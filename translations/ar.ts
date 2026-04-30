@@ -22,6 +22,7 @@ export const ar = {
         mastaba: 'المصطبة العلمية',
         beacon: 'منارة العلم',
         dashboard: 'لوحة التحكم',
+        more: 'المزيد',
         myCourses: 'دوراتي',
         library: 'المكتبة',
         certificates: 'الشهادات',

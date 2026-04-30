@@ -28,6 +28,7 @@ import CoursesGrid from './components/CoursesGrid';
 import { ProtectedRoute, AdminRoute, PublicRoute, SupervisorRoute } from './components/RouteGuards';
 import { Course } from './types';
 import SupportChatBubble from './components/SupportChatBubble';
+import { StudentJourneyMap } from './components/StudentJourneyMap';
 
 // ============================================================================
 // Lazy-loaded Components (Code Splitting)
@@ -610,6 +611,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                     user?.role === 'supervisor' ? <Navigate to="/supervisor" replace /> :
                       <Dashboard onPlayCourse={handlePlayCourse} setActiveTab={setActiveTab} unreadCount={unreadCount} />
                 } />
+                <Route path="/journey" element={<StudentJourneyMap studentId="me" />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/courses" element={<CoursesGrid onPlayCourse={handlePlayCourse} />} />

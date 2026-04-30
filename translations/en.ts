@@ -22,6 +22,7 @@ export const en = {
         mastaba: 'Al-Mastaba Al-Ilmiya',
         beacon: 'Beacon of Knowledge',
         dashboard: 'Dashboard',
+        more: 'More',
         myCourses: 'My Courses',
         library: 'Library',
         certificates: 'Certificates',

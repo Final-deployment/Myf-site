@@ -4,7 +4,7 @@
  */
 
 import React, { memo, useCallback, useMemo } from 'react';
-import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, UserPlus, LucideIcon, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, BookOpen, GraduationCap, Users, Settings, LogOut, Award, BarChart3, Mic2, User, Calendar, Bell, Heart, TrendingUp, Search, FolderOpen, Megaphone, ClipboardList, Activity, Database, MessageSquare, UserPlus, LucideIcon, RefreshCw, Map } from 'lucide-react';
 import { UserRole } from '../types';
 import { useLanguage } from './LanguageContext';
 
@@ -109,6 +109,7 @@ const Sidebar: React.FC<SidebarProps> = memo(({ activeTab, setActiveTab, onPrelo
   const studentItems: MenuItem[] = useMemo(() => [
     { id: 'dashboard', icon: LayoutDashboard, label: t('sidebar.dashboard') },
     { id: 'messages', icon: MessageSquare, label: 'المراسلات', badgeCount: unreadMessagesCount },
+    { id: 'journey', icon: Map, label: 'مساري التعليمي' },
     { id: 'courses', icon: BookOpen, label: t('sidebar.myCourses') },
     { id: 'library', icon: GraduationCap, label: t('sidebar.library') },
     { id: 'certificates', icon: Award, label: t('sidebar.certificates') },
