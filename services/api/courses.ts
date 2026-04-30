@@ -112,5 +112,22 @@ export const coursesApi = {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.error || 'Failed to enroll');
         }
+    },
+
+    selfExtendCourse: async (courseId: string): Promise<{ success: boolean; message: string; newDeadline?: string }> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl('/courses/self-extend'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ courseId })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'فشل تمديد المساق');
+        }
+        return data;
     }
 };

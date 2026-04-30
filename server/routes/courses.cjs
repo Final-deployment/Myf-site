@@ -252,6 +252,7 @@ router.get('/', async (req, res) => {
                 isLockedByDeadline: isLockedByDeadline,
                 isLocked: isLocked,
                 lockedByPrerequisiteName: prerequisiteName,
+                extensionsUsed: enrollment ? (enrollment.extensions_used || 0) : 0,
                 isEnrolled: userId ? !!enrollment : false,
                 episodes: episodes.map(ep => {
                     let epProgress = { completed: false, lastPosition: 0, watchedDuration: 0 };
@@ -656,6 +657,87 @@ router.put('/reorder', authenticateToken, requireAdmin, (req, res) => {
     } catch (e) {
         console.error('[COURSES_REORDER_ERROR]:', e.message);
         res.status(500).json({ error: 'حدث خطأ أثناء حفظ ترتيب المساقات' });
+    }
+});
+
+// ============================================================================
+// Self-Extend Deadline (Student — One-Time Only)
+// ============================================================================
+router.post('/self-extend', authenticateToken, (req, res) => {
+    const { courseId } = req.body;
+    const userId = req.user.id;
+
+    if (!courseId) {
+        return res.status(400).json({ error: 'معرّف المساق مطلوب' });
+    }
+
+    try {
+        const enrollment = db.prepare(
+            'SELECT * FROM enrollments WHERE user_id = ? AND course_id = ?'
+        ).get(userId, courseId);
+
+        if (!enrollment) {
+            return res.status(404).json({ error: 'لم يتم العثور على تسجيل لهذا المساق' });
+        }
+
+        // Check if already used the one-time extension
+        if ((enrollment.extensions_used || 0) >= 1) {
+            return res.status(403).json({ 
+                error: 'لقد استخدمت فرصة التمديد المتاحة لك. يرجى مراجعة المشرف لإعادة فتح المساق.',
+                alreadyExtended: true
+            });
+        }
+
+        // Verify the course is actually locked by deadline
+        const isDeadlinePassed = enrollment.deadline && new Date() > new Date(enrollment.deadline);
+        const isLocked = enrollment.is_locked || isDeadlinePassed;
+
+        if (!isLocked) {
+            return res.status(400).json({ error: 'المساق ليس مغلقاً حالياً' });
+        }
+
+        // Extend deadline by 2 days from NOW (not from old deadline)
+        const newDeadline = new Date();
+        newDeadline.setDate(newDeadline.getDate() + 2);
+
+        db.transaction(() => {
+            // Update enrollment: unlock, set new deadline, increment extensions_used
+            db.prepare(`
+                UPDATE enrollments 
+                SET is_locked = 0, 
+                    deadline = ?, 
+                    extensions_used = COALESCE(extensions_used, 0) + 1 
+                WHERE user_id = ? AND course_id = ?
+            `).run(newDeadline.toISOString(), userId, courseId);
+
+            // Log the extension in the archive
+            db.prepare(`
+                INSERT INTO extension_archive (user_id, course_id, extended_by, days_added)
+                VALUES (?, ?, 'self', 2)
+            `).run(userId, courseId);
+
+            // Log in activity
+            db.prepare(`
+                INSERT INTO system_activity_logs (id, action, userId, details, timestamp)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            `).run(
+                'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                'self_extend',
+                userId,
+                JSON.stringify({ courseId, newDeadline: newDeadline.toISOString(), daysAdded: 2 })
+            );
+        })();
+
+        console.log(`[SELF-EXTEND] User ${userId} extended course ${courseId} by 2 days. New deadline: ${newDeadline.toISOString()}`);
+
+        res.json({ 
+            success: true, 
+            message: 'تم تمديد المساق يومين إضافيين بنجاح. هذه الفرصة الأولى والأخيرة.',
+            newDeadline: newDeadline.toISOString()
+        });
+    } catch (e) {
+        console.error('[SELF_EXTEND_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تمديد المساق' });
     }
 });
 

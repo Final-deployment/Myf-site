@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Course, CourseFolder } from '../types';
 import { api } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
-import { Folder, ChevronRight, Plus, X, Image as ImageIcon, LayoutGrid, ArrowRight, Lock, Book, Award, Trash2, Pencil, AlertTriangle } from 'lucide-react';
+import { Folder, ChevronRight, Plus, X, Image as ImageIcon, LayoutGrid, ArrowRight, Lock, Book, Award, Trash2, Pencil, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { QuizResult } from '../types';
 
@@ -23,6 +23,7 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
     const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
     const [quizzes, setQuizzes] = useState<any[]>([]);
     const [confirmEnroll, setConfirmEnroll] = useState<Course | null>(null);
+    const [extendingId, setExtendingId] = useState<string | null>(null);
 
     // Add Folder Form State
     const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
@@ -458,20 +459,65 @@ const CoursesGrid: React.FC<CoursesGridProps> = ({ onPlayCourse }) => {
 
                                         {effectivelyLocked ? (
                                             <div className="space-y-2">
-                                                <button
-                                                    disabled
-                                                    className="w-full py-4 bg-red-500/10 text-red-400 rounded-xl font-bold text-sm border border-red-500/20 cursor-not-allowed flex items-center justify-center gap-2"
-                                                >
-                                                    <Lock className="w-4 h-4" />
-                                                    مغلق
-                                                </button>
-                                                <p className="text-[10px] text-gray-500 text-center leading-relaxed">
-                                                    {(course as any).isLockedByDeadline
-                                                        ? 'انتهت مهلة دراسة هذا المساق. يرجى مراجعة المشرف لإعادة فتحه.'
-                                                        : (course as any).lockedByPrerequisiteName
-                                                            ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
-                                                            : "اجتز المساق السابق للفتح"}
-                                                </p>
+                                                {(course as any).isLockedByDeadline ? (
+                                                    /* ========== DEADLINE LOCK — Rich UI ========== */
+                                                    <>
+                                                        <div className="w-full py-3 bg-red-500/10 text-red-400 rounded-xl font-bold text-sm border border-red-500/20 flex items-center justify-center gap-2">
+                                                            <Clock className="w-4 h-4" />
+                                                            انتهت المهلة
+                                                        </div>
+                                                        {/* Show expiry date */}
+                                                        {(course as any).deadline && (
+                                                            <p className="text-[10px] text-amber-400/80 text-center font-medium">
+                                                                انتهى الوقت بتاريخ: {new Date((course as any).deadline).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                            </p>
+                                                        )}
+                                                        {/* Self-Extend Button — only if never used */}
+                                                        {((course as any).extensionsUsed || 0) === 0 ? (
+                                                            <button
+                                                                disabled={extendingId === course.id}
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!confirm('⚠️ هذا التمديد متاح لمرة واحدة فقط.\n\nإذا لم تنهِ المساق خلال اليومين القادمين، سيُغلق نهائياً ولن يُفتح إلا عبر المشرف.\n\nهل تريد التمديد؟')) return;
+                                                                    setExtendingId(course.id);
+                                                                    try {
+                                                                        const result = await api.selfExtendCourse(course.id);
+                                                                        alert(`✅ ${result.message}`);
+                                                                        loadData(); // Refresh to show unlocked state
+                                                                    } catch (err: any) {
+                                                                        alert(err.message || 'فشل التمديد');
+                                                                    } finally {
+                                                                        setExtendingId(null);
+                                                                    }
+                                                                }}
+                                                                className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 hover:text-amber-200 rounded-xl font-bold text-xs transition-all border border-amber-500/30 hover:border-amber-400/50 flex items-center justify-center gap-2"
+                                                            >
+                                                                <RefreshCw className={`w-4 h-4 ${extendingId === course.id ? 'animate-spin' : ''}`} />
+                                                                {extendingId === course.id ? 'جارٍ التمديد...' : 'تمديد يومين (فرصة واحدة)'}
+                                                            </button>
+                                                        ) : (
+                                                            <p className="text-[10px] text-red-400/80 text-center leading-relaxed bg-red-500/5 rounded-lg p-2 border border-red-500/10">
+                                                                تم استخدام فرصة التمديد. يرجى مراجعة المشرف لإعادة فتح المساق.
+                                                            </p>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    /* ========== PREREQUISITE LOCK ========== */
+                                                    <>
+                                                        <button
+                                                            disabled
+                                                            className="w-full py-4 bg-red-500/10 text-red-400 rounded-xl font-bold text-sm border border-red-500/20 cursor-not-allowed flex items-center justify-center gap-2"
+                                                        >
+                                                            <Lock className="w-4 h-4" />
+                                                            مغلق
+                                                        </button>
+                                                        <p className="text-[10px] text-gray-500 text-center leading-relaxed">
+                                                            {(course as any).lockedByPrerequisiteName
+                                                                ? `يجب اجتياز مساق "${(course as any).lockedByPrerequisiteName}" أولاً`
+                                                                : "اجتز المساق السابق للفتح"}
+                                                        </p>
+                                                    </>
+                                                )}
                                             </div>
                                         ) : isEnrolled ? (
                                             <div className="space-y-3">

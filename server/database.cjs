@@ -141,6 +141,7 @@ function initDatabase() {
   // Migration for enrollments
   try { db.prepare('ALTER TABLE enrollments ADD COLUMN deadline TEXT').run(); } catch (e) { }
   try { db.prepare('ALTER TABLE enrollments ADD COLUMN is_locked INTEGER DEFAULT 0').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE enrollments ADD COLUMN extensions_used INTEGER DEFAULT 0').run(); } catch (e) { }
 
   // Indexes for Enrollments
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_enrollments_user ON enrollments(user_id)'); } catch(e){}
