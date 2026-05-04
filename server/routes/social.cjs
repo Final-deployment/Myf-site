@@ -236,11 +236,11 @@ router.get('/messages', async (req, res) => {
         // Filter out expired messages dynamically or rely on cleanup
         // ALSO: Filter out complaints if the user is a student (one-way only)
         // AND: Allow admins to see ALL complaints regardless of recipient
-        // Students see: non-complaints OR messages they sent (so they see their own complaints)
+        // Students see: non-complaints OR messages they sent OR messages they received
         const isAdmin = req.user.role === 'admin';
         const adminComplaintAccess = isAdmin ? 'OR isComplaint = 1' : '';
         const roleFilter = req.user.role === 'student'
-            ? 'AND (isComplaint = 0 OR isComplaint IS NULL OR senderId = ?)'
+            ? 'AND (isComplaint = 0 OR isComplaint IS NULL OR senderId = ? OR receiverId = ?)'
             : '';
 
         const params = [userId, userId];
@@ -248,7 +248,10 @@ router.get('/messages', async (req, res) => {
             // No extra param for adminComplaintAccess since it's hardcoded '1'
         }
         params.push(new Date().toISOString());
-        if (req.user.role === 'student') params.push(userId);
+        if (req.user.role === 'student') {
+            params.push(userId); // for senderId
+            params.push(userId); // for receiverId
+        }
 
         const messages = db.prepare(`
             SELECT * FROM messages 
@@ -286,9 +289,9 @@ router.get('/messages', async (req, res) => {
 router.get('/messages/unread', (req, res) => {
     const userId = req.user.id;
     try {
-        // Exclude complaints and admin messages from unread count for students
+        // Do NOT exclude admin messages from unread count anymore, so students get notified of replies
         const roleFilter = req.user.role === 'student'
-            ? "AND (isComplaint = 0 OR isComplaint IS NULL) AND senderId NOT IN (SELECT id FROM users WHERE role = 'admin') AND senderId != 'admin_manager'"
+            ? ""
             : '';
         const result = db.prepare(`SELECT COUNT(*) as count FROM messages WHERE receiverId = ? AND read = 0 ${roleFilter}`).get(userId);
         res.json({ count: result.count });
