@@ -16,7 +16,8 @@ echo ">>> Removing old Docker image..."
 docker rmi mastaba-v4-image 2>/dev/null || true
 
 echo ">>> Building and starting Docker container..."
-docker compose up -d --build
+docker build --network=host -t mastaba-v4-image .
+docker compose up -d
 
 echo ">>> Configuring Nginx..."
 if [ ! -f /etc/nginx/sites-available/scientific-bench ]; then
