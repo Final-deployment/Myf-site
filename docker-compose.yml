@@ -3,9 +3,7 @@ services:
     build: .
     image: mastaba-v4-image
     container_name: mastaba-v4-container
-    restart: always
-    ports:
-      - "3001:5000"
+    network_mode: "host"
     volumes:
       - ./data:/app/data
     env_file:
