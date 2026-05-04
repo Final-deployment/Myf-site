@@ -1,11 +1,11 @@
 # Use Node.js 20 (LTS)
-FROM node:20-alpine
+FROM node:20-slim
 
 # Set working directory
 WORKDIR /app
 
 # Install build dependencies for better-sqlite3 (python3, make, g++)
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package.json package-lock.json ./
