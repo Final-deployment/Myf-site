@@ -35,7 +35,8 @@ jobs:
           package.json \
           package-lock.json \
           docker-compose.yml \
-          Dockerfile
+          Dockerfile \
+          .env.vps
 
     - name: Copy deployment package to VPS
       uses: appleboy/scp-action@v0.1.7
@@ -59,6 +60,9 @@ jobs:
 
           echo ">>> Unzipping updated application..."
           unzip -o deploy_production_latest.zip || true
+
+          echo ">>> Updating environment variables..."
+          cp .env.vps .env || true
 
           echo ">>> Building and starting Docker container..."
           docker compose up -d --build
