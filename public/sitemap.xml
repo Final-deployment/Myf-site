@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-        <loc>https://mastaba.org/</loc>
+        <loc>https://muslimyouth.ps/</loc>
         <lastmod>2026-05-04</lastmod>
         <changefreq>daily</changefreq>
         <priority>1.0</priority>
     </url>
     <url>
-        <loc>https://mastaba.org/login</loc>
+        <loc>https://muslimyouth.ps/login</loc>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
-        <loc>https://mastaba.org/register</loc>
+        <loc>https://muslimyouth.ps/register</loc>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
