@@ -83,6 +83,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
         callback: (resp: any) => callbackRef.current?.(resp),
         auto_select: false,
         itp_support: true,
+        use_fedcm_for_prompt: true,
       });
 
       if (googleButtonRef.current) {
