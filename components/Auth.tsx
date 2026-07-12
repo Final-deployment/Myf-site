@@ -23,7 +23,7 @@ interface AuthProps {
   onProfileRequired?: () => void;
 }
 
-const GOOGLE_CLIENT_ID = (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) || '';
+const GOOGLE_CLIENT_ID = '443270122580-d70le861ut6n6p64mka528tsfj20jadu.apps.googleusercontent.com';
 
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
   const { login, loginWithGoogle } = useAuth();
