@@ -1,22 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, Loader2, AlertCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useToast } from './Toast';
 import { useNavigate } from 'react-router-dom';
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: any) => void;
-          renderButton: (element: HTMLElement, config: any) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
 
 interface AuthProps {
   onLoginSuccess: () => void;
@@ -32,9 +18,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [gisReady, setGisReady] = useState(false);
-  const googleButtonRef = useRef<HTMLDivElement>(null);
-  const callbackRef = useRef<((response: any) => void) | null>(null);
 
   // Old login form state
   const [email, setEmail] = useState('');
@@ -42,67 +25,68 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showOldLogin, setShowOldLogin] = useState(false);
 
-  // Store callback in ref so GIS doesn't capture stale closure
-  callbackRef.current = async (response: any) => {
-    if (!response.credential) {
-      setError('لم يتم الحصول على بيانات من جوجل');
-      return;
-    }
-    setIsLoading(true);
-    setError('');
-    try {
-      const result = await loginWithGoogle(response.credential);
-      if (result.success) {
-        if (result.profileCompleted) {
+  // ─── Handle Google OAuth2 redirect callback ───
+  useEffect(() => {
+    const handleOAuthCallback = async () => {
+      // Check for id_token in URL hash (implicit flow redirect from Google)
+      const hash = window.location.hash;
+      if (!hash || !hash.includes('id_token=')) return;
+
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get('id_token');
+      if (!idToken) return;
+
+      setIsLoading(true);
+      setError('');
+
+      try {
+        // Send the id_token (JWT credential) to backend
+        const response = await fetch('/api/google-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: idToken })
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          setError(err.error || 'فشل تسجيل الدخول');
+          window.history.replaceState({}, '', '/login');
+          setIsLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        localStorage.setItem('authToken', data.accessToken);
+        
+        // Clean the URL
+        window.history.replaceState({}, '', '/login');
+
+        if (data.profileCompleted) {
           onLoginSuccess();
         } else {
           onProfileRequired ? onProfileRequired() : navigate('/complete-profile');
         }
-      } else {
-        setError('فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.');
+      } catch {
+        setError('حدث خطأ أثناء تسجيل الدخول');
+        window.history.replaceState({}, '', '/login');
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      setError('حدث خطأ غير متوقع');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Initialize Google Identity Services
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID_HERE') return;
-
-    const initGIS = () => {
-      if (!window.google?.accounts?.id) {
-        setTimeout(initGIS, 300);
-        return;
-      }
-
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: (resp: any) => callbackRef.current?.(resp),
-        auto_select: false,
-        itp_support: true,
-        use_fedcm_for_prompt: true,
-      });
-
-      if (googleButtonRef.current) {
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          type: 'standard',
-          theme: 'filled_black',
-          size: 'large',
-          text: 'signin_with',
-          shape: 'pill',
-          logo_alignment: 'center',
-          width: 350,
-          locale: 'ar',
-        });
-      }
-      setGisReady(true);
     };
 
-    initGIS();
+    handleOAuthCallback();
   }, []);
+
+  // ─── Google Sign-In via OAuth2 Redirect (NO popup) ───
+  const handleGoogleLogin = () => {
+    const redirectUri = window.location.origin + '/login';
+    const scope = 'openid email profile';
+    const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=${encodeURIComponent(scope)}&nonce=${nonce}&prompt=select_account`;
+    
+    // Full page redirect — no popup at all
+    window.location.href = authUrl;
+  };
 
   // ─── Old Email/Password Login Handler ───
   const handleOldLogin = async (e: React.FormEvent) => {
@@ -128,7 +112,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
   };
 
   const inputClass = "w-full bg-black/30 border border-white/10 rounded-xl py-3.5 pr-12 pl-4 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors";
-  const hasClientId = GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE';
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -162,29 +145,20 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
         {!isLoading && (
           <div className="flex flex-col items-center gap-5">
 
-            {/* ══════ Google One Tap Button (Real GIS) ══════ */}
-            {hasClientId ? (
-              <>
-                <p className="text-gray-400 text-xs">سجّل دخولك بنقرة واحدة</p>
-                <div
-                  ref={googleButtonRef}
-                  className="flex justify-center"
-                  style={{ minHeight: 44 }}
-                />
-                {!gisReady && (
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>جارٍ تحميل خدمة جوجل...</span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="w-full bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
-                <p className="text-yellow-300 text-xs">
-                  تسجيل الدخول بجوجل غير مُفعّل — يرجى تعيين GOOGLE_CLIENT_ID في ملف .env
-                </p>
-              </div>
-            )}
+            {/* ══════ Google Sign-In Button (Redirect — No Popup) ══════ */}
+            <p className="text-gray-400 text-xs">سجّل دخولك بنقرة واحدة</p>
+            <button
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-6 rounded-full bg-white hover:bg-gray-100 text-gray-800 font-medium shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              <span>الدخول بحساب Google</span>
+            </button>
 
             {/* ══════ Divider ══════ */}
             <div className="w-full flex items-center gap-3 my-1">
