@@ -59,6 +59,13 @@ function initDatabase() {
   // Auto-approve all existing users and all non-student roles
   try { db.prepare("UPDATE users SET approved = 1 WHERE approved = 0 AND (role != 'student' OR emailVerified = 1)").run(); } catch (e) { }
 
+  // Migration for Google Sign-In support
+  try { db.prepare('ALTER TABLE users ADD COLUMN google_id TEXT').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT \'local\'').run(); } catch (e) { }
+  try { db.prepare('ALTER TABLE users ADD COLUMN profile_completed INTEGER DEFAULT 0').run(); } catch (e) { }
+  // Auto-mark all existing users as profile_completed (they registered through the old form)
+  try { db.prepare("UPDATE users SET profile_completed = 1 WHERE profile_completed = 0 AND name IS NOT NULL AND name != ''").run(); } catch (e) { }
+
   // Indexes for Users
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)'); } catch(e){}
 

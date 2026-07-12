@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { generateOTP, sendVerificationEmail, sendPasswordResetOtpEmail, sendApprovalNotificationEmail, sendRejectionNotificationEmail } = require('../email.cjs');
 const rateLimit = require('express-rate-limit');
+const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 
 const authLimiter = rateLimit({
     windowMs: 5 * 60 * 1000, // 5 minutes
@@ -31,40 +32,192 @@ router.post('/login', authLimiter, async (req, res) => {
     const { email, password, rememberMe } = req.body;
     try {
         const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
-        if (!user) return res.status(400).json({ error: 'Cannot find user' });
 
-        const passwordMatch = await bcrypt.compare(password, user.password);
-        if (passwordMatch) {
-            if (user.role === 'student' && !user.emailVerified && !user.approved) {
-                return res.status(403).json({
-                    error: 'Email not verified',
-                    errorAr: 'البريد الإلكتروني لم يتم تفعيله بعد',
-                    needsVerification: true,
-                    email: user.email
-                });
-            }
-            // Check if student is approved by admin
-            if (user.role === 'student' && !user.approved) {
-                return res.status(403).json({
-                    error: 'Account pending approval',
-                    errorAr: 'حسابك بانتظار موافقة المسؤولين. سيتم إبلاغك عبر البريد الإلكتروني عند الموافقة.',
-                    pendingApproval: true
-                });
-            }
-            const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = user;
-            const expiresIn = rememberMe ? '30d' : '24h';
-            const accessToken = jwt.sign(
-                { id: user.id, email: user.email, role: user.role, emailVerified: !!user.emailVerified },
-                SECRET_KEY,
-                { expiresIn }
-            );
-            res.json({ accessToken, user: userWithoutPassword });
-        } else {
-            res.status(403).json({ error: 'Invalid password' });
+        // Timing attack mitigation: always run bcrypt.compare even if user doesn't exist
+        // This ensures consistent response times regardless of whether the email is registered
+        const DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+        const passwordMatch = await bcrypt.compare(password || '', user ? user.password : DUMMY_HASH);
+
+        if (!user || !passwordMatch) {
+            return res.status(403).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
         }
+
+        if (user.role === 'student' && !user.emailVerified && !user.approved) {
+            return res.status(403).json({
+                error: 'Email not verified',
+                errorAr: 'البريد الإلكتروني لم يتم تفعيله بعد',
+                needsVerification: true,
+                email: user.email
+            });
+        }
+        // Check if student is approved by admin
+        if (user.role === 'student' && !user.approved) {
+            return res.status(403).json({
+                error: 'Account pending approval',
+                errorAr: 'حسابك بانتظار موافقة المسؤولين. سيتم إبلاغك عبر البريد الإلكتروني عند الموافقة.',
+                pendingApproval: true
+            });
+        }
+        const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = user;
+        const expiresIn = rememberMe ? '30d' : '24h';
+        const accessToken = jwt.sign(
+            { id: user.id, email: user.email, role: user.role, emailVerified: !!user.emailVerified },
+            SECRET_KEY,
+            { expiresIn }
+        );
+        res.json({ accessToken, user: userWithoutPassword });
     } catch (e) {
         console.error('[LOGIN_ERROR]:', e.message);
         res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول' });
+    }
+});
+
+// ============================================================================
+// Google Sign-In (Cosmetic JWT decode — no signature verification)
+// Accepts EITHER { credential } (from GIS) OR { email, name } (fallback)
+// ============================================================================
+router.post('/google-login', authLimiter, (req, res) => {
+    const { credential, email: rawEmail, name: rawName, picture: rawPicture } = req.body;
+
+    let cleanEmail, userName, picture;
+
+    try {
+        if (credential) {
+            // ── Mode 1: Google Identity Services JWT ──
+            const parts = credential.split('.');
+            if (parts.length !== 3) {
+                return res.status(400).json({ error: 'Invalid credential format' });
+            }
+            const payload = Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+            const googleUser = JSON.parse(payload);
+
+            cleanEmail = (googleUser.email || '').trim().toLowerCase();
+            userName = googleUser.name || cleanEmail.split('@')[0];
+            picture = googleUser.picture || null;
+        } else if (rawEmail) {
+            // ── Mode 2: Direct email (fallback) ──
+            cleanEmail = rawEmail.trim().toLowerCase();
+            userName = (rawName || '').trim() || cleanEmail.split('@')[0];
+            picture = rawPicture || null;
+        } else {
+            return res.status(400).json({ error: 'بيانات تسجيل الدخول مفقودة' });
+        }
+
+        if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            return res.status(400).json({ error: 'صيغة البريد الإلكتروني غير صحيحة' });
+        }
+
+        // Check if user exists
+        let user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+
+        if (user) {
+            // Existing user — update auth_provider if needed
+            if (user.auth_provider === 'local') {
+                db.prepare('UPDATE users SET auth_provider = ? WHERE id = ?').run('both', user.id);
+            }
+            if (picture && !user.avatar) {
+                db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(picture, user.id);
+            }
+            user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+        } else {
+            // New user — create account
+            const id = 'user_' + crypto.randomUUID();
+            db.prepare(`
+                INSERT INTO users (id, email, password, name, nameEn, role, avatar, points, level, joinDate, emailVerified, approved, google_id, auth_provider, profile_completed)
+                VALUES (?, ?, '', ?, ?, 'student', ?, 0, 1, ?, 1, 1, NULL, 'google', 0)
+            `).run(id, cleanEmail, userName, userName, picture, new Date().toISOString().split('T')[0]);
+
+            user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+            console.log(`[GOOGLE_AUTH] New user created: ${cleanEmail} (id: ${id})`);
+        }
+
+        // Issue app JWT
+        const accessToken = jwt.sign(
+            { id: user.id, email: user.email, role: user.role, emailVerified: true },
+            SECRET_KEY,
+            { expiresIn: '30d' }
+        );
+
+        const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = user;
+        res.json({ accessToken, user: userWithoutPassword, profileCompleted: !!user.profile_completed });
+    } catch (e) {
+        console.error('[GOOGLE_LOGIN_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول' });
+    }
+});
+
+// ============================================================================
+// Complete Profile (After Google Sign-In)
+// ============================================================================
+router.post('/complete-profile', authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    const { name, nameEn, whatsapp, country, age, gender, educationLevel } = req.body;
+
+    // Validate required fields
+    if (!name || !name.trim()) return res.status(400).json({ error: 'الاسم مطلوب', field: 'name' });
+    if (!whatsapp || !whatsapp.trim()) return res.status(400).json({ error: 'رقم الواتساب مطلوب', field: 'whatsapp' });
+    if (!country) return res.status(400).json({ error: 'الدولة مطلوبة', field: 'country' });
+    if (!age || parseInt(age) < 5 || parseInt(age) > 100) return res.status(400).json({ error: 'العمر غير صحيح', field: 'age' });
+    if (!gender) return res.status(400).json({ error: 'الجنس مطلوب', field: 'gender' });
+    if (!educationLevel) return res.status(400).json({ error: 'المستوى التعليمي مطلوب', field: 'educationLevel' });
+
+    try {
+        db.prepare(`
+            UPDATE users SET name = ?, nameEn = ?, whatsapp = ?, country = ?, age = ?, gender = ?, educationLevel = ?, profile_completed = 1
+            WHERE id = ?
+        `).run(name.trim(), (nameEn || name).trim(), whatsapp.trim(), country, parseInt(age), gender, educationLevel, userId);
+
+        // Auto-enroll in foundational course
+        try {
+            const foundationalCourseId = 'course_madkhal';
+            const fCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+            if (fCourse) {
+                const date = new Date();
+                date.setDate(date.getDate() + (fCourse.days_available || 30));
+                const deadline = date.toISOString();
+                const enrollResult = db.prepare(`
+                    INSERT OR IGNORE INTO enrollments (user_id, course_id, enrolled_at, deadline, progress, completed, is_locked)
+                    VALUES (?, ?, CURRENT_TIMESTAMP, ?, 0, 0, 0)
+                `).run(userId, foundationalCourseId, deadline);
+                if (enrollResult.changes > 0) {
+                    db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
+                }
+                console.log(`[PROFILE] Auto-enrolled user ${userId} in ${foundationalCourseId}`);
+            }
+        } catch (enrollErr) {
+            console.error('[PROFILE] Failed to auto-enroll:', enrollErr.message);
+        }
+
+        // Find and assign supervisor
+        try {
+            const supervisors = db.prepare(`
+                SELECT id, supervisor_capacity, supervisor_priority 
+                FROM users 
+                WHERE role = 'supervisor'
+            `).all();
+            const candidates = supervisors.map(sv => {
+                const count = db.prepare('SELECT COUNT(*) as count FROM users WHERE supervisor_id = ?').get(sv.id).count;
+                return { ...sv, count };
+            }).filter(sv => sv.count < (sv.supervisor_capacity || 0));
+            candidates.sort((a, b) => {
+                if (a.count !== b.count) return a.count - b.count;
+                return (a.supervisor_priority || 999) - (b.supervisor_priority || 999);
+            });
+            if (candidates.length > 0) {
+                db.prepare('UPDATE users SET supervisor_id = ? WHERE id = ?').run(candidates[0].id, userId);
+            }
+        } catch (svErr) {
+            console.error('[PROFILE] Supervisor assignment failed:', svErr.message);
+        }
+
+        const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+        const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = updatedUser;
+
+        console.log(`[PROFILE] Profile completed for user ${userId}`);
+        res.json({ success: true, user: userWithoutPassword });
+    } catch (e) {
+        console.error('[COMPLETE_PROFILE_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء حفظ البيانات' });
     }
 });
 
@@ -202,7 +355,8 @@ router.post('/check-verification-status', (req, res) => {
         if (!user) return res.json({ needsVerification: false }); // user doesn't exist
         // Only needs verification if student AND email NOT verified
         const needsVerification = user.role === 'student' && !user.emailVerified;
-        res.json({ needsVerification, emailVerified: !!user.emailVerified, approved: !!user.approved });
+        // BUG-V2-07 fix: Only return needsVerification boolean — do not expose emailVerified/approved to unauthenticated callers
+        res.json({ needsVerification });
     } catch (e) {
         console.error('[CHECK_VERIFICATION_STATUS_ERROR]:', e.message);
         res.json({ needsVerification: false }); // fail-safe: don't redirect
@@ -226,7 +380,7 @@ router.post('/resend-otp', authLimiter, async (req, res) => {
         res.status(500).json({ error: 'حدث خطأ أثناء إعادة إرسال الرمز' });
     }
 });
-const { authenticateToken, requireAdmin } = require('../middleware.cjs');
+// (middleware imported at top of file)
 
 // Forgot Password (Public) - Generates OTP instead of overwriting password
 router.post('/forgot-password', authLimiter, async (req, res) => {

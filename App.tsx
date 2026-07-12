@@ -70,9 +70,7 @@ const ROUTE_IMPORTS = {
   // Auth
   landing: () => import('./components/LandingPage'),
   auth: () => import('./components/Auth'),
-  registration: () => import('./components/RegistrationForm'),
-  'email-verification': () => import('./components/EmailVerification'),
-  'forgot-password': () => import('./components/ForgotPassword'),
+  'complete-profile': () => import('./components/CompleteProfile'),
 };
 
 // Student Components
@@ -110,9 +108,7 @@ const SupervisorStudents = lazy(() => import('./components/SupervisorStudents'))
 // Auth Components
 const LandingPage = lazy(ROUTE_IMPORTS.landing);
 const Auth = lazy(ROUTE_IMPORTS.auth);
-const RegistrationForm = lazy(ROUTE_IMPORTS.registration);
-const EmailVerification = lazy(ROUTE_IMPORTS['email-verification']);
-const ForgotPassword = lazy(ROUTE_IMPORTS['forgot-password']);
+const CompleteProfile = lazy(ROUTE_IMPORTS['complete-profile']);
 
 // ============================================================================
 // Types
@@ -156,11 +152,19 @@ const AppContent: React.FC = () => {
   // Sync view state with authentication state
   useEffect(() => {
     if (isAuthenticated && (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/signup')) {
-      if (user?.role === 'admin') navigate('/admin', { replace: true });
+      // Check if profile is complete — if not, redirect to complete-profile
+      if (user && !(user as any).profile_completed && user.role === 'student') {
+        navigate('/complete-profile', { replace: true });
+      } else if (user?.role === 'admin') navigate('/admin', { replace: true });
       else if (user?.role === 'supervisor') navigate('/supervisor', { replace: true });
       else navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, user?.role, location.pathname, navigate]);
+    // If authenticated but profile incomplete and trying to access protected routes
+    if (isAuthenticated && user && !(user as any).profile_completed && user.role === 'student' 
+        && location.pathname !== '/complete-profile' && location.pathname !== '/' && location.pathname !== '/login') {
+      navigate('/complete-profile', { replace: true });
+    }
+  }, [isAuthenticated, user?.role, (user as any)?.profile_completed, location.pathname, navigate]);
 
   // Check for pending verification or email from URL on mount
   useEffect(() => {
@@ -303,7 +307,7 @@ const AppContent: React.FC = () => {
           <PublicRoute>
             <LandingPage
               onLoginClick={() => navigate('/login')}
-              onSignupClick={() => navigate('/signup')}
+              onSignupClick={() => navigate('/login')}
             />
           </PublicRoute>
         } />
@@ -312,48 +316,21 @@ const AppContent: React.FC = () => {
           <PublicRoute>
               <Auth
               onLoginSuccess={() => navigate('/dashboard')}
-              onForgotPassword={() => navigate('/forgot-password')}
-              onVerificationRequired={(email) => {
-                setPendingEmail(email);
-                navigate('/verify');
-              }}
+              onProfileRequired={() => navigate('/complete-profile')}
             />
           </PublicRoute>
         } />
 
-        <Route path="/forgot-password" element={
-          <PublicRoute>
-            <ForgotPassword onBack={() => navigate('/login')} />
-          </PublicRoute>
+        <Route path="/complete-profile" element={
+          <ProtectedRoute>
+            <CompleteProfile />
+          </ProtectedRoute>
         } />
 
-        <Route path="/signup" element={
-          <PublicRoute>
-            <RegistrationForm
-              onBack={() => navigate('/')}
-              onSuccess={(email) => {
-                setPendingEmail(email);
-                navigate('/verify');
-              }}
-            />
-          </PublicRoute>
-        } />
-
-        <Route path="/verify" element={
-          <EmailVerification
-            email={pendingEmail}
-            onSuccess={() => {
-              localStorage.removeItem('pendingVerificationEmail');
-              checkSession().then(() => navigate('/dashboard'));
-            }}
-            onBack={() => {
-              localStorage.removeItem('pendingVerificationEmail');
-              localStorage.removeItem('authToken');
-              setPendingEmail('');
-              navigate('/');
-            }}
-          />
-        } />
+        {/* Legacy routes — redirect to login */}
+        <Route path="/signup" element={<Navigate to="/login" replace />} />
+        <Route path="/verify" element={<Navigate to="/login" replace />} />
+        <Route path="/forgot-password" element={<Navigate to="/login" replace />} />
 
         {/* Main App Layout */}
         <Route path="/*" element={

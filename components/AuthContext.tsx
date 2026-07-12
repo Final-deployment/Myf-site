@@ -43,6 +43,15 @@ interface AuthContextType {
      * @returns Promise that resolves to true if login successful
      */
     login: (email: string, password: string, rememberMe?: boolean) => Promise<boolean>;
+    /**
+     * Login with Google credential
+     * @returns profileCompleted flag to determine if redirect to complete-profile is needed
+     */
+    loginWithGoogle: (credential: string) => Promise<{ success: boolean; profileCompleted: boolean }>;
+    /**
+     * Complete user profile after Google sign-in
+     */
+    completeUserProfile: (data: { name: string; nameEn: string; whatsapp: string; country: string; age: string; gender: string; educationLevel: string }) => Promise<boolean>;
     /** Logs out the current user */
     logout: () => void;
     /**
@@ -180,6 +189,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }, [updateLastActivity]);
 
     /**
+     * Login with Google credential
+     */
+    const loginWithGoogle = useCallback(async (credential: string): Promise<{ success: boolean; profileCompleted: boolean }> => {
+        try {
+            const result = await api.googleLogin(credential);
+            if (result.user) {
+                setUser(result.user);
+                updateLastActivity();
+                return { success: true, profileCompleted: result.profileCompleted };
+            }
+            return { success: false, profileCompleted: false };
+        } catch {
+            return { success: false, profileCompleted: false };
+        }
+    }, [updateLastActivity]);
+
+    /**
+     * Complete profile after Google sign-in
+     */
+    const completeUserProfile = useCallback(async (data: { name: string; nameEn: string; whatsapp: string; country: string; age: string; gender: string; educationLevel: string }): Promise<boolean> => {
+        try {
+            const result = await api.completeProfile(data);
+            if (result.success && result.user) {
+                setUser(result.user);
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    /**
      * Logs out the current user
      */
     const logout = useCallback((): void => {
@@ -282,12 +324,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
+        completeUserProfile,
         logout,
         updateUser,
         refreshActivity: updateLastActivity,
         checkSession,
         setUser
-    }), [user, isLoading, login, logout, updateUser, updateLastActivity, checkSession]);
+    }), [user, isLoading, login, loginWithGoogle, completeUserProfile, logout, updateUser, updateLastActivity, checkSession]);
 
     return (
         <AuthContext.Provider value={contextValue}>

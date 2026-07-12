@@ -214,6 +214,78 @@ export const authApi = {
         }
     },
 
+    googleLogin: async (credential: string): Promise<{ user: User | null; profileCompleted: boolean; error: any | null }> => {
+        try {
+            const response = await fetch(getApiUrl('/google-login'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                return { user: null, profileCompleted: false, error: errorData.error || 'فشل تسجيل الدخول بجوجل' };
+            }
+
+            const data = await response.json();
+            if (data.accessToken && data.user) {
+                const user: User = {
+                    ...data.user,
+                    access_token: data.accessToken,
+                    nameEn: data.user.nameEn || data.user.name,
+                    joinDate: data.user.joinDate,
+                    emailVerified: true,
+                    supervisorId: data.user.supervisor_id || data.user.supervisorId,
+                    supervisorCapacity: data.user.supervisor_capacity || data.user.supervisorCapacity,
+                    supervisorPriority: data.user.supervisor_priority || data.user.supervisorPriority,
+                };
+                localStorage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(user));
+                localStorage.setItem('authToken', data.accessToken);
+                return { user, profileCompleted: !!data.profileCompleted, error: null };
+            }
+            return { user: null, profileCompleted: false, error: 'استجابة غير متوقعة من الخادم' };
+        } catch (error: any) {
+            return { user: null, profileCompleted: false, error: error.message };
+        }
+    },
+
+    completeProfile: async (profileData: { name: string; nameEn: string; whatsapp: string; country: string; age: string; gender: string; educationLevel: string }): Promise<{ success: boolean; user: User | null; error: any | null }> => {
+        try {
+            const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+            const response = await fetch(getApiUrl('/complete-profile'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(profileData)
+            });
+
+            const data = await response.json();
+            if (!response.ok) return { success: false, user: null, error: data.error || 'فشل حفظ البيانات' };
+
+            if (data.user) {
+                // Update stored user with completed profile
+                const storedRaw = localStorage.getItem(STORAGE_PREFIX + 'currentUser');
+                const storedUser = storedRaw ? JSON.parse(storedRaw) : {};
+                const updatedUser: User = {
+                    ...storedUser,
+                    ...data.user,
+                    access_token: storedUser.access_token,
+                    profile_completed: 1,
+                    supervisorId: data.user.supervisor_id || data.user.supervisorId,
+                    supervisorCapacity: data.user.supervisor_capacity || data.user.supervisorCapacity,
+                    supervisorPriority: data.user.supervisor_priority || data.user.supervisorPriority,
+                };
+                localStorage.setItem(STORAGE_PREFIX + 'currentUser', JSON.stringify(updatedUser));
+                return { success: true, user: updatedUser, error: null };
+            }
+            return { success: true, user: null, error: null };
+        } catch (error: any) {
+            return { success: false, user: null, error: error.message };
+        }
+    },
+
     logout: (): void => {
         localStorage.removeItem(STORAGE_PREFIX + 'currentUser');
         localStorage.removeItem('authToken');
