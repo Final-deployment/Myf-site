@@ -36,39 +36,27 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
       const idToken = params.get('id_token');
       if (!idToken) return;
 
+      // Clean the URL immediately to prevent re-processing
+      window.history.replaceState({}, '', '/login');
+
       setIsLoading(true);
       setError('');
 
       try {
-        // Send the id_token (JWT credential) to backend
-        const response = await fetch('/api/google-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: idToken })
-        });
-
-        if (!response.ok) {
-          const err = await response.json();
-          setError(err.error || 'فشل تسجيل الدخول');
-          window.history.replaceState({}, '', '/login');
-          setIsLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        localStorage.setItem('authToken', data.accessToken);
+        // Use AuthContext's loginWithGoogle to properly set user state
+        const result = await loginWithGoogle(idToken);
         
-        // Clean the URL
-        window.history.replaceState({}, '', '/login');
-
-        if (data.profileCompleted) {
-          onLoginSuccess();
+        if (result.success) {
+          if (result.profileCompleted) {
+            onLoginSuccess();
+          } else {
+            onProfileRequired ? onProfileRequired() : navigate('/complete-profile');
+          }
         } else {
-          onProfileRequired ? onProfileRequired() : navigate('/complete-profile');
+          setError('فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.');
         }
       } catch {
         setError('حدث خطأ أثناء تسجيل الدخول');
-        window.history.replaceState({}, '', '/login');
       } finally {
         setIsLoading(false);
       }
