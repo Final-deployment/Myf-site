@@ -82,7 +82,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
         client_id: GOOGLE_CLIENT_ID,
         callback: (resp: any) => callbackRef.current?.(resp),
         auto_select: false,
-        ux_mode: 'popup',
+        itp_support: true,
       });
 
       if (googleButtonRef.current) {
