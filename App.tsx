@@ -662,8 +662,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       </main>
 
       {/* Floating Buttons */}
-      <SupportChatBubble />
-      <AskSupervisorBubble />
+      {isAuthenticated && <SupportChatBubble />}
+      {isAuthenticated && <AskSupervisorBubble />}
     </div>
   );
 };

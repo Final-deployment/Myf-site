@@ -5,6 +5,7 @@ import { useTheme } from './ThemeContext';
 import { Sun, Moon, ArrowLeft, ArrowRight, BookOpen, Users, Globe, Mail, ChevronDown, PlayCircle } from 'lucide-react';
 import { articlesApi, Article } from '../services/api/articles';
 import { initiativesApi, Initiative } from '../services/api/initiatives';
+import AnimatedBackground from './AnimatedBackground';
 
 interface LandingPageProps {
   onLoginClick: () => void;
@@ -85,21 +86,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
 
       {/* --- 1. HERO SECTION (VIDEO BACKGROUND) --- */}
       <section id="hero" className="relative w-full h-screen flex items-center justify-center overflow-hidden">
-        {/* Placeholder High-Quality Video */}
-        <video 
-          autoPlay 
-          loop 
-          muted 
-          playsInline 
-          className="absolute inset-0 w-full h-full object-cover z-0 opacity-80 mix-blend-screen"
-        >
-          {/* Using a beautiful ink drop / abstract video as a placeholder */}
-          <source src="https://assets.mixkit.co/videos/preview/mixkit-ink-swirling-in-water-23640-large.mp4" type="video/mp4" />
-        </video>
         
-        {/* Overlay Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#022c22]/80 via-[#022c22]/60 to-[#0a192f] z-0"></div>
-        <div className="absolute inset-0 mashrabiya-pattern opacity-10 z-0"></div>
+        {/* Base dark background for contrast */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0a192f] via-[#020c1b] to-[#112240] z-0"></div>
+        
+        {/* 3D Animated Background */}
+        <AnimatedBackground />
+        
+        {/* Overlay Gradients & Patterns */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#022c22]/30 to-[#0a192f] z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 mashrabiya-pattern opacity-10 z-0 pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mt-16">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-[#d4a045] shadow-[0_0_30px_rgba(212,160,69,0.3)] mb-6 animate-pulse-slow">
