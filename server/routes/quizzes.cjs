@@ -197,83 +197,72 @@ router.post('/results', authenticateToken, (req, res) => {
         const passed = percentage >= (quiz.passing_score || 70);
 
         // Save result to DB
-        db.prepare(`
-            INSERT INTO quiz_results (id, userId, quizId, score, total, percentage, completedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run('res_' + crypto.randomUUID(), userId, quizId, score, total, percentage, new Date().toISOString());
+        db.transaction(() => {
+            db.prepare(`
+                INSERT INTO quiz_results (id, userId, quizId, score, total, percentage, completedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run('res_' + crypto.randomUUID(), userId, quizId, score, total, percentage, new Date().toISOString());
 
-        console.log(`[QUIZ_SUBMITTED] User ${userId} scored ${score}/${total} (${percentage}%) on quiz ${quizId} — ${passed ? 'PASSED' : 'FAILED'}`);
+            console.log(`[QUIZ_SUBMITTED] User ${userId} scored ${score}/${total} (${percentage}%) on quiz ${quizId} — ${passed ? 'PASSED' : 'FAILED'}`);
 
-        // DEEP ROOT CAUSE FIX: Auto-complete the course on the server if ALL quizzes for this course are passed!
-        // This prevents the race condition where the frontend fails to send episodeId='FULL_COURSE' after passing,
-        // which leaves progress < 100 and completely locks the student out of their passed course when the deadline hits.
-        if (passed) {
-            try {
-                const quizCountRow = db.prepare('SELECT COUNT(*) as c FROM quizzes WHERE courseId = ?').get(quiz.courseId);
-                const totalQuizzes = quizCountRow ? quizCountRow.c : 0;
-                
-                const passedCountRow = db.prepare(`
-                    SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
-                    JOIN quizzes q ON qr.quizId = q.id
-                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
-                `).get(userId, quiz.courseId);
-                const passedQuizzes = passedCountRow ? passedCountRow.c : 0;
-                
-                if (passedQuizzes >= totalQuizzes && totalQuizzes > 0) {
-                    db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
-                    console.log(`[COURSE_AUTO_COMPLETED] System safely marked course ${quiz.courseId} as completed for user ${userId} upon passing final quiz.`);
+            if (passed) {
+                try {
+                    const quizCountRow = db.prepare('SELECT COUNT(*) as c FROM quizzes WHERE courseId = ?').get(quiz.courseId);
+                    const totalQuizzes = quizCountRow ? quizCountRow.c : 0;
+                    
+                    const passedCountRow = db.prepare(`
+                        SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
+                        JOIN quizzes q ON qr.quizId = q.id
+                        WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
+                    `).get(userId, quiz.courseId);
+                    const passedQuizzes = passedCountRow ? passedCountRow.c : 0;
+                    
+                    if (passedQuizzes >= totalQuizzes && totalQuizzes > 0) {
+                        db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(userId, quiz.courseId);
+                        console.log(`[COURSE_AUTO_COMPLETED] System safely marked course ${quiz.courseId} as completed for user ${userId} upon passing final quiz.`);
 
-                    // ================================================================
-                    // AUTO-ENROLL in the NEXT sequential course in the same folder.
-                    // This guarantees that even if the student exits the app without
-                    // pressing the "Next Course" button, they will find the next
-                    // course already enrolled and ready when they return.
-                    // ================================================================
-                    try {
-                        const currentCourse = db.prepare('SELECT * FROM courses WHERE id = ?').get(quiz.courseId);
-                        if (currentCourse) {
-                            // Use same normalization as GET /courses
-                            const normalizedFolderId = String(currentCourse.folder_id || '').toLowerCase().trim();
-                            const folderCourses = db.prepare(
-                                "SELECT * FROM courses WHERE LOWER(TRIM(COALESCE(folder_id, ''))) = ? ORDER BY order_index ASC, id ASC"
-                            ).all(normalizedFolderId);
+                        try {
+                            const currentCourse = db.prepare('SELECT * FROM courses WHERE id = ?').get(quiz.courseId);
+                            if (currentCourse) {
+                                const normalizedFolderId = String(currentCourse.folder_id || '').toLowerCase().trim();
+                                const folderCourses = db.prepare(
+                                    "SELECT * FROM courses WHERE LOWER(TRIM(COALESCE(folder_id, ''))) = ? ORDER BY order_index ASC, id ASC"
+                                ).all(normalizedFolderId);
 
-                            const currentIdx = folderCourses.findIndex(c => String(c.id) === String(quiz.courseId));
-                            if (currentIdx !== -1 && currentIdx < folderCourses.length - 1) {
-                                const nextCourse = folderCourses[currentIdx + 1];
-                                // Check if already enrolled
-                                const existingEnrollment = db.prepare(
-                                    'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ?'
-                                ).get(userId, nextCourse.id);
+                                const currentIdx = folderCourses.findIndex(c => String(c.id) === String(quiz.courseId));
+                                if (currentIdx !== -1 && currentIdx < folderCourses.length - 1) {
+                                    const nextCourse = folderCourses[currentIdx + 1];
+                                    const existingEnrollment = db.prepare(
+                                        'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ?'
+                                    ).get(userId, nextCourse.id);
 
-                                if (!existingEnrollment) {
-                                    const daysAvailable = nextCourse.days_available || 30;
-                                    const deadline = new Date();
-                                    deadline.setDate(deadline.getDate() + daysAvailable);
+                                    if (!existingEnrollment) {
+                                        const daysAvailable = nextCourse.days_available || 30;
+                                        const deadline = new Date();
+                                        deadline.setDate(deadline.getDate() + daysAvailable);
 
-                                    db.prepare(`
-                                        INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
-                                        VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
-                                    `).run(userId, nextCourse.id, deadline.toISOString());
+                                        db.prepare(`
+                                            INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
+                                            VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
+                                        `).run(userId, nextCourse.id, deadline.toISOString());
 
-                                    // Update students_count
-                                    db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(nextCourse.id);
+                                        db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(nextCourse.id);
 
-                                    console.log(`[AUTO_ENROLL_NEXT] Auto-enrolled user ${userId} in next course "${nextCourse.title}" (${nextCourse.id}) with ${daysAvailable}-day deadline.`);
-                                } else {
-                                    console.log(`[AUTO_ENROLL_SKIP] User ${userId} already enrolled in next course ${nextCourse.id}.`);
+                                        console.log(`[AUTO_ENROLL_NEXT] Auto-enrolled user ${userId} in next course "${nextCourse.title}" (${nextCourse.id}) with ${daysAvailable}-day deadline.`);
+                                    } else {
+                                        console.log(`[AUTO_ENROLL_SKIP] User ${userId} already enrolled in next course ${nextCourse.id}.`);
+                                    }
                                 }
                             }
+                        } catch (enrollErr) {
+                            console.error('[AUTO_ENROLL_NEXT_ERROR]:', enrollErr.message);
                         }
-                    } catch (enrollErr) {
-                        // Non-critical — log but don't fail the quiz submission
-                        console.error('[AUTO_ENROLL_NEXT_ERROR]:', enrollErr.message);
                     }
+                } catch (completionErr) {
+                    console.error('[QUIZ_AUTO_COMPLETION_ERROR]:', completionErr.message);
                 }
-            } catch (completionErr) {
-                console.error('[QUIZ_AUTO_COMPLETION_ERROR]:', completionErr.message);
             }
-        }
+        })();
 
         res.status(201).json({ 
             success: true, 
@@ -281,7 +270,7 @@ router.post('/results', authenticateToken, (req, res) => {
             total, 
             percentage, 
             passed,
-            corrections: passed ? [] : corrections
+            corrections: corrections
         });
     } catch (e) {
         console.error('[QUIZ_RESULT_SAVE_ERROR]:', e.message);
@@ -383,8 +372,41 @@ router.patch('/results/:resultId', authenticateToken, requireAdmin, (req, res) =
                 if (passedCountRow.c >= quizCountRow.c && quizCountRow.c > 0) {
                     const enrollment = db.prepare('SELECT completed FROM enrollments WHERE user_id = ? AND course_id = ?').get(result.userId, quiz.courseId);
                     if (enrollment && !enrollment.completed) {
-                        db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(result.userId, quiz.courseId);
-                        console.log(`[ADMIN_FIX_AUTO_COMPLETE] Course ${quiz.courseId} auto-completed for user ${result.userId} after admin quiz correction.`);
+                        db.transaction(() => {
+                            db.prepare('UPDATE enrollments SET progress = 100, completed = 1, last_accessed = CURRENT_TIMESTAMP WHERE user_id = ? AND course_id = ?').run(result.userId, quiz.courseId);
+                            console.log(`[ADMIN_FIX_AUTO_COMPLETE] Course ${quiz.courseId} auto-completed for user ${result.userId} after admin quiz correction.`);
+                            
+                            // Auto-Enroll next course
+                            const currentCourse = db.prepare('SELECT * FROM courses WHERE id = ?').get(quiz.courseId);
+                            if (currentCourse) {
+                                const normalizedFolderId = String(currentCourse.folder_id || '').toLowerCase().trim();
+                                const folderCourses = db.prepare(
+                                    "SELECT * FROM courses WHERE LOWER(TRIM(COALESCE(folder_id, ''))) = ? ORDER BY order_index ASC, id ASC"
+                                ).all(normalizedFolderId);
+
+                                const currentIdx = folderCourses.findIndex(c => String(c.id) === String(quiz.courseId));
+                                if (currentIdx !== -1 && currentIdx < folderCourses.length - 1) {
+                                    const nextCourse = folderCourses[currentIdx + 1];
+                                    const existingEnrollment = db.prepare(
+                                        'SELECT 1 FROM enrollments WHERE user_id = ? AND course_id = ?'
+                                    ).get(result.userId, nextCourse.id);
+
+                                    if (!existingEnrollment) {
+                                        const daysAvailable = nextCourse.days_available || 30;
+                                        const deadline = new Date();
+                                        deadline.setDate(deadline.getDate() + daysAvailable);
+
+                                        db.prepare(`
+                                            INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
+                                            VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
+                                        `).run(result.userId, nextCourse.id, deadline.toISOString());
+
+                                        db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(nextCourse.id);
+                                        console.log(`[AUTO_ENROLL_ADMIN_FIX] Auto-enrolled user ${result.userId} in next course "${nextCourse.title}" (${nextCourse.id}).`);
+                                    }
+                                }
+                            }
+                        })();
                     }
                 }
             }

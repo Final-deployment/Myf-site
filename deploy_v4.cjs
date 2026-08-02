@@ -25,7 +25,7 @@ async function runInteractive(command, args, password) {
 
 async function main() {
     const password = '@Qqaazz2222##';
-    const server = '147.93.62.42';
+    const server = '72.61.88.213';
     const user = 'root';
 
     console.log('\n>>> Step 1: Uploading NEW update package to Hostinger (Port 3005)...');

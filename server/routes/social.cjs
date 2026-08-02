@@ -13,8 +13,14 @@ const uploadLimiter = rateLimit({
     message: { error: 'تجاوزت الحد المسموح به لرفع الملفات، يرجى المحاولة لاحقاً' }
 });
 
+const publicMessagesLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // Limit each IP to 10 messages per hour to prevent spam
+    message: { error: 'تجاوزت الحد المسموح به لإرسال الرسائل، يرجى المحاولة لاحقاً' }
+});
+
 // --- PUBLIC ROUTES (No Auth Required) ---
-router.post('/public/messages', (req, res) => {
+router.post('/public/messages', publicMessagesLimiter, (req, res) => {
     const { content, guestName, attachmentUrl, attachmentType, attachmentName } = req.body;
 
     if (!content && !attachmentUrl) {
@@ -327,19 +333,20 @@ router.get('/contacts', (req, res) => {
 
             // Admin ALSO sees guests
             const guestMessages = db.prepare(`
-                SELECT DISTINCT senderId 
-                FROM messages 
-                WHERE receiverId = ? AND senderId LIKE 'guest_%'
+                SELECT senderId, content 
+                FROM (
+                    SELECT senderId, content, ROW_NUMBER() OVER(PARTITION BY senderId ORDER BY timestamp ASC) as rn
+                    FROM messages 
+                    WHERE receiverId = ? AND senderId LIKE 'guest_%'
+                ) WHERE rn = 1
             `).all(userId);
 
             const guests = guestMessages.map(g => {
                 try {
-                    // Find first message from this guest to extract name
-                    const firstMsg = db.prepare(`SELECT content FROM messages WHERE senderId = ? ORDER BY timestamp ASC LIMIT 1`).get(g.senderId);
                     let guestNameStr = 'زائر ' + (g.senderId.split('_')[1] || '').substring(0, 4);
 
-                    if (firstMsg && firstMsg.content && firstMsg.content.includes('[رسالة من زائر:')) {
-                        const match = firstMsg.content.match(/\[رسالة من زائر:\s*(.*?)\]/);
+                    if (g.content && g.content.includes('[رسالة من زائر:')) {
+                        const match = g.content.match(/\[رسالة من زائر:\s*(.*?)\]/);
                         if (match && match[1]) {
                             guestNameStr = match[1].trim();
                         }
@@ -348,7 +355,7 @@ router.get('/contacts', (req, res) => {
                     return {
                         id: g.senderId,
                         name: guestNameStr,
-                        role: 'guest', // User role 'guest' so UI explicitly flags it
+                        role: 'guest',
                         avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(guestNameStr || 'زائر') + '&background=random',
                         email: 'guest@local'
                     };
@@ -684,6 +691,103 @@ router.delete('/messages/conversation/:userId', (req, res) => {
     const adminId = req.user.id;
     try {
         db.prepare('DELETE FROM messages WHERE (senderId = ? AND receiverId = ?) OR (senderId = ? AND receiverId = ?)').run(adminId, targetId, targetId, adminId);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ============================================================================
+// GROUP CHAT — Section-based group messaging
+// ============================================================================
+
+// Get group messages for a section
+router.get('/group/:sectionId/messages', authenticateToken, (req, res) => {
+    const { sectionId } = req.params;
+    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    try {
+        // Auth: User must be a member of this section or admin
+        const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
+        if (!section) return res.status(404).json({ error: 'الشعبة غير موجودة' });
+
+        if (req.user.role !== 'admin') {
+            const user = db.prepare('SELECT section_id, role FROM users WHERE id = ?').get(userId);
+            const isSupervisor = section.supervisor_id === userId;
+            const isStudent = user && user.section_id === sectionId;
+            if (!isSupervisor && !isStudent) {
+                return res.status(403).json({ error: 'لا يمكنك الوصول لمحادثات هذه الشعبة' });
+            }
+        }
+
+        const messages = db.prepare(`
+            SELECT gm.*, u.name as senderName, u.avatar as senderAvatar, u.role as senderRole
+            FROM group_messages gm
+            JOIN users u ON gm.sender_id = u.id
+            WHERE gm.section_id = ?
+            ORDER BY gm.created_at DESC
+            LIMIT ? OFFSET ?
+        `).all(sectionId, limit, offset);
+
+        const total = db.prepare('SELECT COUNT(*) as count FROM group_messages WHERE section_id = ?').get(sectionId).count;
+
+        res.json({ messages: messages.reverse(), total, page, limit });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Send a group message
+router.post('/group/:sectionId/messages', authenticateToken, (req, res) => {
+    const { sectionId } = req.params;
+    const { content, attachmentUrl, attachmentType, attachmentName } = req.body;
+    const senderId = req.user.id;
+
+    if (!content && !attachmentUrl) {
+        return res.status(400).json({ error: 'محتوى الرسالة مطلوب' });
+    }
+
+    try {
+        const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
+        if (!section) return res.status(404).json({ error: 'الشعبة غير موجودة' });
+
+        // Auth check
+        if (req.user.role !== 'admin') {
+            const user = db.prepare('SELECT section_id FROM users WHERE id = ?').get(senderId);
+            const isSupervisor = section.supervisor_id === senderId;
+            const isStudent = user && user.section_id === sectionId;
+            if (!isSupervisor && !isStudent) {
+                return res.status(403).json({ error: 'لا يمكنك إرسال رسائل في هذه الشعبة' });
+            }
+        }
+
+        const id = 'gmsg_' + crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO group_messages (id, section_id, sender_id, content, attachment_url, attachment_type, attachment_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, sectionId, senderId, (content || '').trim(), attachmentUrl || null, attachmentType || null, attachmentName || null);
+
+        res.status(201).json({ success: true, id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Delete a group message (Supervisor or Admin only)
+router.delete('/group/:sectionId/messages/:messageId', authenticateToken, (req, res) => {
+    const { sectionId, messageId } = req.params;
+    try {
+        const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
+        if (!section) return res.status(404).json({ error: 'الشعبة غير موجودة' });
+
+        if (req.user.role !== 'admin' && req.user.id !== section.supervisor_id) {
+            return res.status(403).json({ error: 'المشرف أو الإدارة فقط يمكنه حذف الرسائل' });
+        }
+
+        db.prepare('DELETE FROM group_messages WHERE id = ? AND section_id = ?').run(messageId, sectionId);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });

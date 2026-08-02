@@ -112,8 +112,10 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
         // Move courses out of folder before deleting
         const coursesInFolder = db.prepare('SELECT COUNT(*) as count FROM courses WHERE folder_id = ?').get(id);
 
-        db.prepare('UPDATE courses SET folder_id = NULL WHERE folder_id = ?').run(id);
-        db.prepare('DELETE FROM course_folders WHERE id = ?').run(id);
+        db.transaction(() => {
+            db.prepare('UPDATE courses SET folder_id = NULL WHERE folder_id = ?').run(id);
+            db.prepare('DELETE FROM course_folders WHERE id = ?').run(id);
+        })();
 
         console.log(`[FOLDER_DELETED] Admin ${req.user.id} deleted folder ${id} (${coursesInFolder.count} courses moved)`);
         res.json({ success: true, movedCourses: coursesInFolder.count });

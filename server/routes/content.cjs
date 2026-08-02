@@ -23,23 +23,23 @@ router.get('/library', async (req, res) => {
         const resources = db.prepare('SELECT * FROM library_resources ORDER BY createdAt DESC').all();
 
         // Sign URLs if they are R2 keys or contain R2 patterns
-        const signedResources = await Promise.all(resources.map(async (res) => {
-            if (res.url) {
+        const signedResources = await Promise.all(resources.map(async (resource) => {
+            if (resource.url) {
                 try {
                     // If it's a full URL including our R2 domain, extract the key
-                    const uploadsIdx = res.url.indexOf('Books/');
-                    const genIdx = res.url.indexOf('uploads/');
+                    const uploadsIdx = resource.url.indexOf('Books/');
+                    const genIdx = resource.url.indexOf('uploads/');
                     const targetIdx = uploadsIdx !== -1 ? uploadsIdx : genIdx;
 
                     if (targetIdx !== -1) {
-                        const key = res.url.substring(targetIdx);
-                        res.url = await generateDownloadUrl(key);
+                        const key = resource.url.substring(targetIdx);
+                        resource.url = await generateDownloadUrl(key);
                     }
                 } catch (e) {
-                    console.error('Failed to sign library URL:', res.id, e);
+                    console.error('Failed to sign library URL:', resource.id, e);
                 }
             }
-            return res;
+            return resource;
         }));
 
         res.json(signedResources);

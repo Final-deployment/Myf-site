@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, ArrowLeft, ArrowRight, BookOpen, Users, Globe, Mail, ChevronDown, PlayCircle } from 'lucide-react';
+import { articlesApi, Article } from '../services/api/articles';
+import { initiativesApi, Initiative } from '../services/api/initiatives';
 
 interface LandingPageProps {
   onLoginClick: () => void;
@@ -11,172 +14,294 @@ interface LandingPageProps {
 const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }) => {
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [initiatives, setInitiatives] = useState<Initiative[]>([]);
+  
+  // Theme classes for general layout
+  const bgClass = theme === 'day' ? 'bg-[#f4f7f6]' : 'bg-[#0a192f]';
+  const textClass = theme === 'day' ? 'text-gray-800' : 'text-gray-100';
 
-  const themeClasses = theme === 'day'
-    ? 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/muslim_youth_forum_landing_page.png")] bg-cover bg-center bg-fixed'
-    : 'bg-[url("https://raw.githubusercontent.com/NinjaWorld1234/Files/main/Dark.png")] bg-cover bg-center bg-fixed';
+  useEffect(() => {
+    // Fetch dynamic content
+    const fetchContent = async () => {
+      try {
+        const fetchedArticles = await articlesApi.getAll();
+        setArticles(fetchedArticles);
+      } catch (err) {
+        console.error('Error fetching articles', err);
+      }
+      try {
+        const fetchedInit = await initiativesApi.getAll();
+        setInitiatives(fetchedInit);
+      } catch (err) {
+        console.error('Error fetching initiatives', err);
+      }
+    };
+    fetchContent();
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  };
 
   return (
-    <div className={`font-sans text-white min-h-screen w-full relative flex flex-col ${themeClasses}`}>
+    <div className={`font-sans w-full h-screen overflow-y-auto overflow-x-hidden relative ${bgClass} ${textClass} transition-colors duration-500`}>
 
-      {/* BEGIN: Top Bar */}
-      <header className="relative z-10 flex justify-between items-center px-6 py-4 md:px-12 md:py-6 w-full">
-        {/* Right: Brand Name (First in RTL) */}
-        <div className="flex items-center gap-3 text-white">
+      {/* --- HEADER NAVIGATION --- */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-4 md:px-12 py-4 w-full bg-black/20 backdrop-blur-md border-b border-white/10 shadow-sm transition-all duration-300">
+        <div className="flex items-center gap-3 text-white cursor-pointer" onClick={() => scrollToSection('hero')}>
           <img
             src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg"
             alt="Muslim Youth Forum Logo"
-            className="w-10 h-10 rounded-full border-2 border-white/20 shadow-md object-cover"
+            className="w-10 h-10 rounded-full border-2 border-[#d4a045] shadow-md object-cover"
           />
-          <span className="text-xl font-bold tracking-wide">{t('landing.brandName')}</span>
+          <span className="text-xl font-bold tracking-wide">ملتقى الشباب المسلم</span>
         </div>
 
-        {/* Left: Actions (Theme + Language) */}
+        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/90">
+          <button onClick={() => scrollToSection('about')} className="hover:text-[#d4a045] transition">من نحن</button>
+          <button onClick={() => scrollToSection('initiatives')} className="hover:text-[#d4a045] transition">المبادرات</button>
+          <button onClick={() => scrollToSection('articles')} className="hover:text-[#d4a045] transition">المقالات</button>
+          <button onClick={() => scrollToSection('mastaba')} className="hover:text-[#d4a045] transition">المصطبة العلمية</button>
+          <button onClick={() => scrollToSection('contact')} className="hover:text-[#d4a045] transition">تواصل معنا</button>
+        </nav>
+
         <div className="flex items-center gap-4">
-          {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="w-10 h-10 rounded-full glass-panel flex items-center justify-center hover:bg-white/10 transition-all border border-white/10 text-white/70 hover:text-yellow-400"
-            title={theme === 'day' ? 'Switch to Night Mode' : 'Switch to Day Mode'}
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 text-white"
           >
             {theme === 'day' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
-
-          {/* Language Switcher */}
-          <div className="glass-panel rounded-full px-1 py-1 flex items-center gap-1">
-            <button
-              onClick={() => setLanguage('en')}
-              className={`text-sm font-medium px-3 py-1.5 transition ${language === 'en' ? 'bg-accent-gold text-black font-bold rounded-full shadow-md' : 'text-white/70 hover:text-white'}`}
-            >
-              EN
-            </button>
-            <button
-              onClick={() => setLanguage('ar')}
-              className={`text-sm font-medium px-3 py-1.5 transition ${language === 'ar' ? 'bg-accent-gold text-black font-bold rounded-full shadow-md' : 'text-white/70 hover:text-white'}`}
-            >
-              عربي
-            </button>
-          </div>
+          
+          <button onClick={onLoginClick} className="hidden md:flex items-center gap-2 bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold px-5 py-2 rounded-full transition-transform hover:scale-105">
+            تسجيل الدخول
+          </button>
         </div>
       </header>
-      {/* END: Top Bar */}
 
-      {/* BEGIN: Main Content */}
-      <main className="relative z-10 flex flex-col items-center justify-center flex-grow w-full px-4 py-6 md:py-12 overflow-y-auto">
-        {/* Glassmorphism Card */}
-        <div className="glass-panel-heavy rounded-3xl p-5 md:p-12 w-full max-w-3xl flex flex-col items-center text-center shadow-2xl border-t border-white/30" data-purpose="main-card">
-          {/* Card Language Toggle (Responsive positioning) */}
-          <div className="absolute -top-4 right-4 md:-top-5 md:right-8 glass-panel rounded-full px-1 py-1 flex items-center gap-1 border border-white/30 bg-[#4a7266]">
-            <button
-              onClick={() => setLanguage('ar')}
-              className={`px-3 text-sm font-medium transition ${language === 'ar' ? 'text-white' : 'text-white/60'}`}
-            >
-              عربي
-            </button>
-            <button
-              onClick={() => setLanguage('en')}
-              className={`text-sm font-bold px-3 py-1 rounded-full transition ${language === 'en' ? 'bg-[#d4a045] text-white' : 'text-white/60'}`}
-            >
-              EN
-            </button>
+      {/* --- 1. HERO SECTION (VIDEO BACKGROUND) --- */}
+      <section id="hero" className="relative w-full h-screen flex items-center justify-center overflow-hidden">
+        {/* Placeholder High-Quality Video */}
+        <video 
+          autoPlay 
+          loop 
+          muted 
+          playsInline 
+          className="absolute inset-0 w-full h-full object-cover z-0 opacity-80 mix-blend-screen"
+        >
+          {/* Using a beautiful ink drop / abstract video as a placeholder */}
+          <source src="https://assets.mixkit.co/videos/preview/mixkit-ink-swirling-in-water-23640-large.mp4" type="video/mp4" />
+        </video>
+        
+        {/* Overlay Gradients */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#022c22]/80 via-[#022c22]/60 to-[#0a192f] z-0"></div>
+        <div className="absolute inset-0 mashrabiya-pattern opacity-10 z-0"></div>
+
+        <div className="relative z-10 flex flex-col items-center text-center px-4 max-w-4xl mt-16">
+          <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-[#d4a045] shadow-[0_0_30px_rgba(212,160,69,0.3)] mb-6 animate-pulse-slow">
+            <img src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg" alt="Logo" className="w-full h-full object-cover transform scale-110" />
           </div>
-          {/* Logo Container */}
-          <div className="logo-box overflow-hidden bg-[#033a2c] relative rounded-full">
-            <img
-              src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg"
-              alt="Muslim Youth Forum Logo"
-              className="w-full h-full object-cover transform scale-110"
-            />
-          </div>
-          {/* Text Content */}
-          <h1 className="font-bold text-white mb-1 text-[1.4rem] md:text-[1.8rem]">{t('landing.brandName')}</h1>
-          <h2 className="text-white/70 font-medium mb-4 md:mb-6 text-sm md:text-[1.1rem]">{t('landing.subtitle')}</h2>
-          <div className="mb-4 md:mb-6">
-            <h3 className="text-4xl sm:text-5xl md:text-7xl font-extrabold text-gradient-gold mb-2 leading-tight font-cairo py-2">{t('landing.comingSoon')}</h3>
-          </div>
-          <p className="text-[#e0e0e0] text-sm md:text-lg leading-relaxed max-w-lg mb-10 text-center">
-            {t('landing.description')}
+          <h1 className="text-4xl md:text-7xl font-extrabold text-white mb-4 drop-shadow-lg font-cairo">
+            ملتقى الشباب <span className="text-gradient-gold">المسلم</span>
+          </h1>
+          <p className="text-lg md:text-2xl text-gray-200 mb-8 max-w-2xl leading-relaxed">
+            مساحة رائدة تجمع الشباب على أسس راسخة من العلم والتربية، لبناء جيل واعٍ، مثقف، ومؤثر.
           </p>
-          {/* Action Buttons */}
-          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-center justify-center">
-            {/* Register Interest Button (Right in RTL - Gold) */}
-            <button
-              onClick={onSignupClick}
-              className="bg-gradient-to-r from-[#d4a045] to-[#b8860b] hover:brightness-110 text-black font-bold py-3 px-8 rounded-full shadow-lg flex items-center gap-3 transition-transform transform hover:scale-105 active:scale-95 w-full md:w-auto justify-center group"
-            >
-              <span>{t('landing.registerInterest')}</span>
-              <i className={`fas ${language === 'ar' ? 'fa-arrow-left' : 'fa-arrow-right'} group-hover:${language === 'ar' ? '-translate-x-1' : 'translate-x-1'} transition-transform`}></i>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button onClick={() => scrollToSection('about')} className="bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold py-3 px-8 rounded-full shadow-lg flex items-center justify-center gap-2 transition-transform transform hover:scale-105">
+              اكتشف الملتقى <ChevronDown size={20} />
             </button>
-            {/* Member Login Button (Left in RTL - Dark Green) */}
-            <button
-              onClick={onLoginClick}
-              className="bg-[#0b3b32] hover:bg-[#14463a] border border-white/10 text-white font-medium py-3 px-8 rounded-full shadow-lg flex items-center gap-3 transition-all w-full md:w-auto justify-center backdrop-blur-sm"
-            >
-              <span>{t('landing.memberLogin')}</span>
-              <i className="fas fa-sign-in-alt"></i>
+            <button onClick={() => scrollToSection('mastaba')} className="bg-white/10 backdrop-blur-md hover:bg-white/20 border border-white/30 text-white font-medium py-3 px-8 rounded-full flex items-center justify-center gap-2 transition-transform transform hover:scale-105">
+              المصطبة العلمية <BookOpen size={20} />
             </button>
           </div>
         </div>
+      </section>
 
-        {/* Small hint text below card */}
-      </main>
-      {/* END: Main Content */}
+      {/* --- 2. ABOUT US --- */}
+      <section id="about" className="relative py-24 px-6 md:px-12 w-full flex justify-center">
+        <div className="max-w-6xl w-full flex flex-col md:flex-row items-center gap-12">
+          <div className="flex-1 space-y-6">
+            <div className="inline-block px-4 py-1 rounded-full bg-[#047857]/20 border border-[#047857]/50 text-[#10b981] font-semibold text-sm mb-2">من نحن</div>
+            <h2 className="text-3xl md:text-5xl font-bold font-cairo text-gradient-gold">رؤية تنبض بالحياة</h2>
+            <p className={`text-lg leading-relaxed ${theme === 'day' ? 'text-gray-600' : 'text-gray-300'}`}>
+              ملتقى الشباب المسلم هو مركز بحثي مستقل تأسس في مدينة نابلس، فلسطين، عام 2022. 
+              يُعنى بالبحث والأنشطة الفكرية والثقافية ذات البعد المجتمعي، حيث يركّز على قضايا الشباب وتأثيرهم.
+              ويعتمد الملتقى منهجًا إسلاميًا وسطيًا، مستندًا إلى التراث الإسلامي الأصيل وملتزمًا وفقًا للمذاهب الأربعة المعتبرة.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+              <div className={`p-4 rounded-2xl ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'}`}>
+                <Globe className="text-[#047857] mb-2" size={30} />
+                <h4 className="font-bold text-lg mb-1">تأثير عالمي</h4>
+                <p className="text-sm opacity-70">نصل للشباب أينما كانوا</p>
+              </div>
+              <div className={`p-4 rounded-2xl ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'}`}>
+                <Users className="text-[#d4a045] mb-2" size={30} />
+                <h4 className="font-bold text-lg mb-1">مجتمع متكاتف</h4>
+                <p className="text-sm opacity-70">بيئة تفاعلية داعمة</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-[#047857] to-[#0f766e] transform rotate-3 rounded-[3rem] opacity-20 blur-xl"></div>
+            <img src="https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=800&h=600&fit=crop" alt="Islamic Architecture" className="relative rounded-[2rem] shadow-2xl object-cover w-full h-[400px] border-4 border-white/10" />
+          </div>
+        </div>
+      </section>
 
-      {/* BEGIN: Footer */}
-      <footer className="relative w-full z-10 mt-auto">
-        {/* SVG Curved Notch */}
-        <svg
-          className="absolute bottom-full left-0 w-full h-12 md:h-16"
-          viewBox="0 0 400 60"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* Deep organic curve with smooth wave */}
-          <path
-            d="M0,60 L0,35 C40,35 80,35 120,35 C150,35 165,45 185,55 Q200,62 215,55 C235,45 250,35 280,35 C320,35 360,35 400,35 L400,60 Z"
-            fill="rgba(255, 255, 255, 0.02)"
-            className="backdrop-blur-sm"
-          />
-          {/* Subtle highlight on the curve edge */}
-          <path
-            d="M120,35 C150,35 165,45 185,55 Q200,62 215,55 C235,45 250,35 280,35"
-            fill="none"
-            stroke="rgba(255,255,255,0.15)"
-            strokeWidth="1"
-          />
-        </svg>
-        {/* Footer Content */}
-        <div className="relative bg-white/[0.03] backdrop-blur-md px-6 py-5 border-t border-white/10">
-          <div className="flex flex-col-reverse md:flex-row justify-between items-center gap-4 w-full">
-            {/* Copyright - Right side */}
-            <div className="text-sm text-white/40">Muslim Youth Forum © 2026</div>
-            {/* Social Icons - Centered */}
-            <div className="flex items-start justify-center gap-8">
-              <a className="flex flex-col items-center gap-1.5 group" href="https://www.facebook.com/MYF.PAL" target="_blank" rel="noopener noreferrer" title="ملتقى الشباب المسلم - فيسبوك">
-                <div className="bg-[#1877F2] w-9 h-9 flex items-center justify-center rounded-full group-hover:brightness-125 transition-all group-hover:scale-110 shadow-lg shadow-[#1877F2]/30">
-                  <i className="fab fa-facebook-f text-white text-sm"></i>
+      {/* --- 3. INITIATIVES (المبادرات) --- */}
+      <section id="initiatives" className={`py-24 px-6 md:px-12 w-full ${theme === 'day' ? 'bg-gray-100' : 'bg-[#021812]'}`}>
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-bold font-cairo mb-4">مبادراتنا <span className="text-[#047857]">الرئيسية</span></h2>
+            <p className="text-lg opacity-70 max-w-2xl mx-auto">مجموعة من البرامج والأنشطة المصممة خصيصاً لتلبية تطلعات الشباب وبناء قدراتهم.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Fallback Static Initiatives if DB is empty */}
+            {(initiatives.length > 0 ? initiatives : [
+              { id: '1', title: 'أكاديمية فتوة/فلسطين', description: 'تهدف إلى ترسيخ القيم والأخلاق الإسلامية الأساسية لد￯ الرجال والنساء.', image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=500&h=300&fit=crop' },
+              { id: '2', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=500&h=300&fit=crop' },
+              { id: '3', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
+              { id: '4', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع المتأثرين بالصدمات.', image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop' },
+              { id: '5', title: 'مبادرة اهدنا', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية.', image: 'https://images.unsplash.com/photo-1590076214580-c0818274718f?w=500&h=300&fit=crop' }
+            ]).map((init, i) => (
+              <div 
+                key={i} 
+                onClick={() => navigate(`/initiative/${init.id}`)}
+                className={`group rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-xl cursor-pointer ${theme === 'day' ? 'bg-white shadow-lg' : 'bg-white/5 border border-white/10'}`}
+              >
+                <div className="h-48 overflow-hidden relative">
+                  <img src={init.image || 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=500&h=300&fit=crop'} alt={init.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                 </div>
-                <span className="text-[10px] text-white/50 group-hover:text-white/80 transition text-center leading-tight">ملتقى الشباب المسلم</span>
+                <div className="p-6 relative -mt-10 bg-gradient-to-t from-black/80 to-transparent pt-12">
+                  <h3 className="text-xl font-bold text-white mb-2">{init.title}</h3>
+                  <p className="text-gray-300 text-sm">{init.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* --- 4. MASTABA SECTION (المصطبة العلمية) --- */}
+      <section id="mastaba" className="relative py-24 px-6 md:px-12 w-full flex justify-center bg-gradient-to-br from-[#047857] to-[#022c22] text-white overflow-hidden">
+        <div className="absolute inset-0 mashrabiya-pattern opacity-10"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#d4a045] rounded-full blur-[100px] opacity-20"></div>
+        
+        <div className="max-w-6xl w-full flex flex-col md:flex-row items-center gap-12 relative z-10">
+          <div className="flex-1">
+            <img src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg" alt="Mastaba" className="w-full max-w-md mx-auto rounded-[2rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] border-4 border-white/20 transform -rotate-3 hover:rotate-0 transition-all duration-500" />
+          </div>
+          <div className="flex-1 space-y-6 text-center md:text-right">
+            <h2 className="text-4xl md:text-5xl font-bold font-cairo text-[#d4a045]">المصطبة العلمية</h2>
+            <p className="text-xl text-gray-200 leading-relaxed">
+              منصتنا التعليمية الرائدة. نقدم مسارات منهجية متدرجة في العلوم الشرعية، باختبارات وتقييمات دورية، وبإشراف مباشر لضمان أفضل تجربة تعليمية.
+            </p>
+            <ul className="space-y-3 text-right inline-block">
+              <li className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-[#d4a045]"></div> دورات منهجية مسجلة</li>
+              <li className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-[#d4a045]"></div> اختبارات وشهادات معتمدة</li>
+              <li className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-[#d4a045]"></div> متابعة من مشرفين متخصصين</li>
+            </ul>
+            <div className="pt-6">
+              <button onClick={onLoginClick} className="bg-white text-[#047857] hover:bg-gray-100 font-bold py-3 px-8 rounded-full shadow-lg flex items-center justify-center gap-3 transition-transform transform hover:scale-105 w-full md:w-auto">
+                <span>الدخول للمصطبة</span>
+                <PlayCircle size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- 5. LATEST ARTICLES (المقالات) --- */}
+      <section id="articles" className="py-24 px-6 md:px-12 w-full">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-end mb-12 border-b border-gray-500/20 pb-4">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold font-cairo">أحدث <span className="text-[#047857]">المقالات</span></h2>
+              <p className="opacity-70 mt-2">إصدارات ومقالات فكرية وتربوية.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {articles.length > 0 ? articles.slice(0, 3).map((article, idx) => (
+              <div 
+                key={article.id} 
+                onClick={() => navigate(`/article/${article.id}`)}
+                className={`rounded-2xl overflow-hidden ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'} group cursor-pointer`}
+              >
+                <div className="h-48 overflow-hidden">
+                  <img src={article.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500&h=300&fit=crop'} alt={article.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                </div>
+                <div className="p-6">
+                  <h3 className="text-xl font-bold mb-3 line-clamp-2">{article.title}</h3>
+                  <p className="opacity-70 text-sm line-clamp-3 mb-4">{article.content}</p>
+                  <div className="flex justify-between items-center text-xs opacity-60">
+                    <span>{new Date(article.created_at).toLocaleDateString('ar-EG')}</span>
+                    <span className="text-[#d4a045] font-bold">اقرأ المزيد ←</span>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              // Empty State
+              <div className="col-span-full text-center py-12 opacity-50">لا توجد مقالات منشورة حالياً.</div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* --- 6. CONTACT US & FOOTER --- */}
+      <footer id="contact" className={`relative pt-24 pb-8 px-6 md:px-12 w-full ${theme === 'day' ? 'bg-[#0f172a]' : 'bg-[#020617]'} text-white`}>
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16">
+            <div>
+              <h2 className="text-3xl font-bold font-cairo mb-4 text-[#d4a045]">تواصل معنا</h2>
+              <p className="text-gray-400 mb-8 max-w-md">نحن هنا للإجابة على استفساراتك ومقترحاتك. لا تتردد في التواصل معنا عبر قنواتنا الرسمية.</p>
+              
+              <div className="space-y-4">
+                <a href="mailto:info@myf.com" className="flex items-center gap-3 text-gray-300 hover:text-white transition">
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Mail size={18} /></div>
+                  info@myf.com
+                </a>
+              </div>
+            </div>
+            
+            {/* Quick Contact Form (Visual Only for now) */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+              <form className="space-y-4" onSubmit={e => e.preventDefault()}>
+                <div>
+                  <input type="text" placeholder="الاسم الكريم" className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4a045] transition" />
+                </div>
+                <div>
+                  <input type="email" placeholder="البريد الإلكتروني" className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4a045] transition" />
+                </div>
+                <div>
+                  <textarea placeholder="رسالتك..." rows={4} className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4a045] transition resize-none"></textarea>
+                </div>
+                <button className="w-full bg-[#047857] hover:bg-[#0369a1] text-white font-bold py-3 rounded-xl transition shadow-lg">إرسال الرسالة</button>
+              </form>
+            </div>
+          </div>
+          
+          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="text-sm text-gray-500">ملتقى الشباب المسلم © 2026. جميع الحقوق محفوظة.</div>
+            <div className="flex gap-4">
+              <a href="https://www.facebook.com/MYF.PAL" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-[#1877F2] transition">
+                <i className="fab fa-facebook-f text-white"></i>
               </a>
-              <a className="flex flex-col items-center gap-1.5 group" href="https://www.facebook.com/ihdina.islam" target="_blank" rel="noopener noreferrer" title="مبادرة على هدي الحبيب - فيسبوك">
-                <div className="bg-[#1877F2] w-9 h-9 flex items-center justify-center rounded-full group-hover:brightness-125 transition-all group-hover:scale-110 shadow-lg shadow-[#1877F2]/30">
-                  <i className="fab fa-facebook-f text-white text-sm"></i>
-                </div>
-                <span className="text-[10px] text-white/50 group-hover:text-white/80 transition text-center leading-tight">على هدي الحبيب</span>
-              </a>
-              <a className="flex flex-col items-center gap-1.5 group" href="https://t.me/Majalis_al_Noor" target="_blank" rel="noopener noreferrer" title="مجالس النور - تيلغرام">
-                <div className="bg-[#26A5E4] w-9 h-9 flex items-center justify-center rounded-full group-hover:brightness-125 transition-all group-hover:scale-110 shadow-lg shadow-[#26A5E4]/30">
-                  <i className="fab fa-telegram-plane text-white text-sm"></i>
-                </div>
-                <span className="text-[10px] text-white/50 group-hover:text-white/80 transition text-center leading-tight">مجالس النور</span>
+              <a href="https://t.me/Majalis_al_Noor" target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-[#26A5E4] transition">
+                <i className="fab fa-telegram-plane text-white"></i>
               </a>
             </div>
-            {/* Spacer for centering on desktop */}
-            <div className="hidden md:block text-xs text-transparent select-none">Muslim Youth Forum © 2026</div>
           </div>
         </div>
       </footer>
-      {/* END: Footer */}
+
     </div>
   );
 };

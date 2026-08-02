@@ -65,6 +65,8 @@ router.post('/login', authLimiter, async (req, res) => {
             SECRET_KEY,
             { expiresIn }
         );
+        // Update last_login timestamp
+        try { db.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(new Date().toISOString(), user.id); } catch(e) {}
         res.json({ accessToken, user: userWithoutPassword });
     } catch (e) {
         console.error('[LOGIN_ERROR]:', e.message);
@@ -109,6 +111,10 @@ router.post('/google-login', authLimiter, (req, res) => {
 
         // Check if user exists
         let user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(cleanEmail);
+
+        if (user && user.role !== 'student') {
+            return res.status(403).json({ error: 'عذراً، هذا الحساب غير مصرح له بتسجيل الدخول عبر جوجل. يرجى استخدام كلمة المرور.' });
+        }
 
         if (user) {
             // Existing user — update auth_provider if needed
@@ -162,13 +168,13 @@ router.post('/complete-profile', authenticateToken, (req, res) => {
     if (!educationLevel) return res.status(400).json({ error: 'المستوى التعليمي مطلوب', field: 'educationLevel' });
 
     try {
-        db.prepare(`
-            UPDATE users SET name = ?, nameEn = ?, whatsapp = ?, country = ?, age = ?, gender = ?, educationLevel = ?, profile_completed = 1
-            WHERE id = ?
-        `).run(name.trim(), (nameEn || name).trim(), whatsapp.trim(), country, parseInt(age), gender, educationLevel, userId);
+        const completeProfileTx = db.transaction(() => {
+            db.prepare(`
+                UPDATE users SET name = ?, nameEn = ?, whatsapp = ?, country = ?, age = ?, gender = ?, educationLevel = ?, profile_completed = 1
+                WHERE id = ?
+            `).run(name.trim(), (nameEn || name).trim(), whatsapp.trim(), country, parseInt(age), gender, educationLevel, userId);
 
-        // Auto-enroll in foundational course
-        try {
+            // Auto-enroll in foundational course
             const foundationalCourseId = 'course_madkhal';
             const fCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
             if (fCourse) {
@@ -182,23 +188,17 @@ router.post('/complete-profile', authenticateToken, (req, res) => {
                 if (enrollResult.changes > 0) {
                     db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(foundationalCourseId);
                 }
-                console.log(`[PROFILE] Auto-enrolled user ${userId} in ${foundationalCourseId}`);
             }
-        } catch (enrollErr) {
-            console.error('[PROFILE] Failed to auto-enroll:', enrollErr.message);
-        }
 
-        // Find and assign supervisor
-        try {
-            const supervisors = db.prepare(`
-                SELECT id, supervisor_capacity, supervisor_priority 
-                FROM users 
-                WHERE role = 'supervisor'
-            `).all();
-            const candidates = supervisors.map(sv => {
-                const count = db.prepare('SELECT COUNT(*) as count FROM users WHERE supervisor_id = ?').get(sv.id).count;
-                return { ...sv, count };
-            }).filter(sv => sv.count < (sv.supervisor_capacity || 0));
+            // Find and assign supervisor
+            const candidates = db.prepare(`
+                SELECT s.id, s.supervisor_capacity, s.supervisor_priority,
+                       COUNT(u.id) as count
+                FROM users s
+                LEFT JOIN users u ON u.supervisor_id = s.id
+                WHERE s.role = 'supervisor'
+                GROUP BY s.id
+            `).all().filter(sv => sv.count < (sv.supervisor_capacity || 0));
             candidates.sort((a, b) => {
                 if (a.count !== b.count) return a.count - b.count;
                 return (a.supervisor_priority || 999) - (b.supervisor_priority || 999);
@@ -206,9 +206,9 @@ router.post('/complete-profile', authenticateToken, (req, res) => {
             if (candidates.length > 0) {
                 db.prepare('UPDATE users SET supervisor_id = ? WHERE id = ?').run(candidates[0].id, userId);
             }
-        } catch (svErr) {
-            console.error('[PROFILE] Supervisor assignment failed:', svErr.message);
-        }
+        });
+        
+        completeProfileTx();
 
         const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
         const { password: _, verificationCode, verificationExpiry, ...userWithoutPassword } = updatedUser;
@@ -242,16 +242,14 @@ router.post('/register', authLimiter, async (req, res) => {
         // Find available supervisor
         let supervisorId = null;
         try {
-            const supervisors = db.prepare(`
-                SELECT id, supervisor_capacity, supervisor_priority 
-                FROM users 
-                WHERE role = 'supervisor'
-            `).all();
-
-            const candidates = supervisors.map(sv => {
-                const count = db.prepare('SELECT COUNT(*) as count FROM users WHERE supervisor_id = ?').get(sv.id).count;
-                return { ...sv, count };
-            }).filter(sv => sv.count < (sv.supervisor_capacity || 0));
+            const candidates = db.prepare(`
+                SELECT s.id, s.supervisor_capacity, s.supervisor_priority,
+                       COUNT(u.id) as count
+                FROM users s
+                LEFT JOIN users u ON u.supervisor_id = s.id
+                WHERE s.role = 'supervisor'
+                GROUP BY s.id
+            `).all().filter(sv => sv.count < (sv.supervisor_capacity || 0));
 
             // Sort by count (ASC) then priority (ASC)
             candidates.sort((a, b) => {
@@ -267,10 +265,10 @@ router.post('/register', authLimiter, async (req, res) => {
         }
 
         const newUser = {
-            id, email, password: hashedPassword, name, nameEn: nameEn || name, role,
+            id, email: (email || '').trim(), password: hashedPassword, name: (name || '').trim(), nameEn: (nameEn || name || '').trim(), role,
             points: 0, level: 1, joinDate: new Date().toISOString().split('T')[0],
             verificationCode: otp, verificationExpiry: expiry, emailVerified: 0,
-            whatsapp: whatsapp || '', country: country || '', age: age || 0,
+            whatsapp: (whatsapp || '').trim(), country: country || '', age: age || 0,
             gender: gender || '', educationLevel: educationLevel || '',
             supervisor_id: supervisorId
         };

@@ -66,6 +66,55 @@ function initDatabase() {
   // Auto-mark all existing users as profile_completed (they registered through the old form)
   try { db.prepare("UPDATE users SET profile_completed = 1 WHERE profile_completed = 0 AND name IS NOT NULL AND name != ''").run(); } catch (e) { }
 
+  // Migration: last_login for supervisor inactivity tracking
+  try { db.prepare('ALTER TABLE users ADD COLUMN last_login TEXT').run(); } catch (e) { }
+  // Migration: section_id to link students to sections
+  try { db.prepare('ALTER TABLE users ADD COLUMN section_id TEXT').run(); } catch (e) { }
+
+  // --- Sections Table ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sections (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        supervisor_id TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(supervisor_id) REFERENCES users(id)
+    )
+  `);
+
+  // --- In-App Notifications Table ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS in_app_notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        link TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_user ON in_app_notifications(user_id, is_read)'); } catch(e){}
+
+  // --- Group Messages Table ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS group_messages (
+        id TEXT PRIMARY KEY,
+        section_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        content TEXT,
+        attachment_url TEXT,
+        attachment_type TEXT,
+        attachment_name TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(section_id) REFERENCES sections(id) ON DELETE CASCADE,
+        FOREIGN KEY(sender_id) REFERENCES users(id)
+    )
+  `);
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_group_messages_section ON group_messages(section_id, created_at)'); } catch(e){}
+
   // Indexes for Users
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)'); } catch(e){}
 
@@ -227,16 +276,12 @@ function initDatabase() {
     { key: 'backup_retention_days', value: '30' }
   ];
 
-  defaultSettings.forEach(setting => {
-    try {
-      const exists = db.prepare('SELECT 1 FROM system_settings WHERE key = ?').get(setting.key);
-      if (!exists) {
-        db.prepare('INSERT INTO system_settings (key, value) VALUES (?, ?)').run(setting.key, setting.value);
-      }
-    } catch (e) {
-      console.error('[DB_INIT_SETTINGS_ERROR]:', e.message);
+  const insertSetting = db.prepare('INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)');
+  db.transaction(() => {
+    for (const setting of defaultSettings) {
+      insertSetting.run(setting.key, setting.value);
     }
-  });
+  })();
 
   // Migration for certificates table
   try { db.prepare('ALTER TABLE certificates ADD COLUMN user_name TEXT').run(); } catch (e) { }
@@ -306,6 +351,32 @@ function initDatabase() {
   try { db.prepare('ALTER TABLE books ADD COLUMN courseId TEXT').run(); } catch (e) { }
 
 
+
+  // --- Articles Table ---
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS articles (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            image TEXT,
+            author_id TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(author_id) REFERENCES users(id)
+        )
+    `);
+
+  // --- Initiatives Table ---
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS initiatives (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            image TEXT,
+            link TEXT,
+            status TEXT DEFAULT 'active',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
 
   // --- Other Tables ---
   db.exec(`CREATE TABLE IF NOT EXISTS announcements (id TEXT PRIMARY KEY, title TEXT, content TEXT, type TEXT, date TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
@@ -451,9 +522,8 @@ function initDatabase() {
         updateDaysStmt.run(days, courseId);
       }
 
-      // 2. Enroll all existing students who aren't enrolled in the foundational course
-      const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
       const foundCourse = db.prepare('SELECT days_available FROM courses WHERE id = ?').get(foundationalCourseId);
+      const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all();
       const daysForFoundational = (foundCourse && foundCourse.days_available) || 5;
 
       const enrollStmt = db.prepare(`
@@ -466,10 +536,13 @@ function initDatabase() {
       const deadline = deadlineDate.toISOString();
 
       let enrollmentCount = 0;
-      for (const student of students) {
-        const result = enrollStmt.run(student.id, foundationalCourseId, deadline);
-        if (result.changes > 0) enrollmentCount++;
-      }
+      const seedEnrollments = db.transaction((studentsToEnroll) => {
+        for (const student of studentsToEnroll) {
+          const result = enrollStmt.run(student.id, foundationalCourseId, deadline);
+          if (result.changes > 0) enrollmentCount++;
+        }
+      });
+      seedEnrollments(students);
 
       if (enrollmentCount > 0) {
         console.log(`Auto-enrolled ${enrollmentCount} students in ${foundationalCourseId}.`);

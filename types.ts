@@ -92,6 +92,8 @@ export interface User {
   supervisorPriority?: number;
   /** Whether this user is a tester with free navigation */
   is_tester?: boolean | number;
+  /** ID of the section the student is assigned to */
+  section_id?: string;
 }
 
 // ============================================================================

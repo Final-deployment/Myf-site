@@ -28,6 +28,7 @@ import CoursesGrid from './components/CoursesGrid';
 import { ProtectedRoute, AdminRoute, PublicRoute, SupervisorRoute } from './components/RouteGuards';
 import { Course } from './types';
 import SupportChatBubble from './components/SupportChatBubble';
+import AskSupervisorBubble from './components/AskSupervisorBubble';
 import { StudentJourneyMap } from './components/StudentJourneyMap';
 
 // ============================================================================
@@ -109,6 +110,8 @@ const SupervisorStudents = lazy(() => import('./components/SupervisorStudents'))
 const LandingPage = lazy(ROUTE_IMPORTS.landing);
 const Auth = lazy(ROUTE_IMPORTS.auth);
 const CompleteProfile = lazy(ROUTE_IMPORTS['complete-profile']);
+const ArticlePage = lazy(() => import('./components/ArticlePage'));
+const InitiativePage = lazy(() => import('./components/InitiativePage'));
 
 // ============================================================================
 // Types
@@ -315,9 +318,21 @@ const AppContent: React.FC = () => {
         <Route path="/login" element={
           <PublicRoute>
               <Auth
-              onLoginSuccess={() => navigate('/dashboard')}
+              onLoginSuccess={() => {}}
               onProfileRequired={() => navigate('/complete-profile')}
             />
+          </PublicRoute>
+        } />
+
+        <Route path="/article/:id" element={
+          <PublicRoute>
+            <ArticlePage />
+          </PublicRoute>
+        } />
+
+        <Route path="/initiative/:id" element={
+          <PublicRoute>
+            <InitiativePage />
           </PublicRoute>
         } />
 
@@ -346,7 +361,6 @@ const AppContent: React.FC = () => {
           </ProtectedRoute>
         } />
       </Routes>
-      <SupportChatBubble />
     </>
   );
 };
@@ -646,6 +660,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({
           </RouteErrorBoundary>
         </div>
       </main>
+
+      {/* Floating Buttons */}
+      <SupportChatBubble />
+      <AskSupervisorBubble />
     </div>
   );
 };

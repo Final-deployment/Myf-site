@@ -32,6 +32,8 @@ export const supervisorApi = {
     getMyStudents: () => apiFetch('/supervisors/my-students'),
     getStudentsProgress: (supervisorId?: string) =>
         apiFetch(`/supervisors/students-progress${supervisorId ? `?supervisorId=${supervisorId}` : ''}`),
-    unlockCourse: (userId: string, courseId: string, extraDays: number = 7) =>
-        apiFetch(`/supervisors/students/${userId}/courses/${courseId}/unlock`, { method: 'POST', body: JSON.stringify({ extraDays }) })
+    unlockCourse: (userId: string, courseId: string, extraDays: number = 2) =>
+        apiFetch(`/supervisors/students/${userId}/courses/${courseId}/unlock`, { method: 'POST', body: JSON.stringify({ extraDays }) }),
+    resetCourseExams: (userId: string, courseId: string, extraDays: number = 2) =>
+        apiFetch(`/supervisors/students/${userId}/courses/${courseId}/reset-exams`, { method: 'POST', body: JSON.stringify({ extraDays }) })
 };

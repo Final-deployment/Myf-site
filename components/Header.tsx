@@ -12,11 +12,12 @@
  * @module components/Header
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState, useEffect } from 'react';
 import { Search, Bell, Sun, Moon } from 'lucide-react';
 import { useLanguage } from './LanguageContext';
 import { useAuth } from './AuthContext';
 import { useTheme } from './ThemeContext';
+import { notificationsApi } from '../services/api/notifications';
 
 // ============================================================================
 // Types
@@ -40,6 +41,24 @@ const Header: React.FC<HeaderProps> = memo(({ setActiveTab }) => {
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
+  
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      notificationsApi.getUnreadCount()
+        .then(count => setUnreadCount(count))
+        .catch(err => console.error('Error fetching unread count:', err));
+      
+      // Optionally poll every 60 seconds
+      const interval = setInterval(() => {
+        notificationsApi.getUnreadCount()
+          .then(count => setUnreadCount(count))
+          .catch(() => {});
+      }, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   /**
    * Handles search input enter key
@@ -107,7 +126,11 @@ const Header: React.FC<HeaderProps> = memo(({ setActiveTab }) => {
           aria-label="Notifications"
         >
           <Bell className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
-          <span className="absolute top-3 right-3.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0a1815]" aria-label="New notifications" />
+          {unreadCount > 0 && (
+            <span className="absolute top-2 right-2 min-w-[20px] h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#0a1815]">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
           <span className="absolute inset-0 rounded-full border border-emerald-500/0 group-hover:border-emerald-500/20 transition-all duration-500 scale-110" />
         </button>
 

@@ -47,11 +47,17 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess, onProfileRequired }) => {
         const result = await loginWithGoogle(idToken);
         
         if (result.success) {
-          if (result.profileCompleted) {
+          // Do not navigate manually! React 18 batches state updates. 
+          // Setting user state will trigger AppContent's useEffect which handles 
+          // the safe redirect to /dashboard or /complete-profile based on role.
+          if (!result.profileCompleted && onProfileRequired) {
+            onProfileRequired();
+          } else if (result.profileCompleted && onLoginSuccess) {
+            // We just call the callback for side effects, but it shouldn't navigate imperatively.
+            // App.tsx handles the actual ProtectedRoute transition.
             onLoginSuccess();
-          } else {
-            onProfileRequired ? onProfileRequired() : navigate('/complete-profile');
           }
+
         } else {
           setError('فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.');
         }

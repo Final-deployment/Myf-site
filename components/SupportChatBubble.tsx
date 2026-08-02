@@ -451,7 +451,7 @@ export default function SupportChatBubble() {
     }
 
     return (
-        <div className="fixed bottom-20 left-6 z-50 flex flex-col items-start font-cairo" dir="rtl">
+        <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start font-cairo" dir="rtl">
             {/* Chat Window */}
             {isOpen && (
                 <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl shadow-2xl mb-4 w-[350px] sm:w-[400px] h-[500px] flex flex-col overflow-hidden backdrop-blur-xl animate-in slide-in-from-bottom-5">

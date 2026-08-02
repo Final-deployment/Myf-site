@@ -95,11 +95,17 @@ export const usersApi = {
         return await response.json();
     },
 
-    deleteUser: async (id: string): Promise<void> => {
+    deleteUser: async (id: string, masterPin?: string): Promise<void> => {
         const token = getAuthToken();
+        const headers: Record<string, string> = {
+            'Authorization': `Bearer ${token}`
+        };
+        if (masterPin) {
+            headers['x-master-pin'] = masterPin;
+        }
         const response = await fetch(getApiUrl(`/users/${id}`), {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers
         });
         if (!response.ok) throw new Error('Failed to delete user');
     },

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { db } = require('../database.cjs');
 const { generateDownloadUrl } = require('../r2.cjs');
 const { authenticateToken, optionalAuth, requireAdmin } = require('../middleware.cjs');
+const { createNotification } = require('./notifications_internal.cjs');
 
 // ============================================================================
 // SHARED: Check if a user has "passed" a specific course
@@ -52,21 +53,10 @@ function checkCoursePrerequisite(userId, courseId) {
 }
 
 // Get all courses (Optionally authenticated to get progress)
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
     try {
-        // Optional Auth check
-        let userId = null;
-        const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1];
-        if (token) {
-            const jwt = require('jsonwebtoken');
-            try {
-                const decoded = jwt.verify(token, process.env.SECRET_KEY);
-                userId = decoded.id;
-            } catch (err) {
-                // Ignore invalid token for public listing
-            }
-        }
+        // BUG-V2-06 fix: Use optionalAuth middleware instead of inline JWT verification
+        const userId = req.user?.id || null;
 
         const courses = db.prepare(`
             SELECT c.*, b.path as book_path 
@@ -83,13 +73,20 @@ router.get('/', async (req, res) => {
                 SELECT courseId, COUNT(*) as quiz_count FROM quizzes GROUP BY courseId
             `).all();
 
+            const allPassedCounts = db.prepare(`
+                SELECT q.courseId, COUNT(DISTINCT q.id) as c FROM quiz_results qr
+                JOIN quizzes q ON qr.quizId = q.id
+                WHERE qr.userId = ? AND qr.percentage >= q.passing_score
+                GROUP BY q.courseId
+            `).all(userId);
+
+            const passedCountsMap = new Map();
+            for (const row of allPassedCounts) {
+                passedCountsMap.set(row.courseId, row.c);
+            }
+
             for (const cq of coursesWithQuizzes) {
-                const passedCount = db.prepare(`
-                    SELECT COUNT(DISTINCT q.id) as c FROM quiz_results qr
-                    JOIN quizzes q ON qr.quizId = q.id
-                    WHERE qr.userId = ? AND q.courseId = ? AND qr.percentage >= q.passing_score
-                `).get(userId, cq.courseId).c;
-                if (passedCount >= cq.quiz_count) {
+                if ((passedCountsMap.get(cq.courseId) || 0) >= cq.quiz_count) {
                     passedCourseIds.add(String(cq.courseId));
                 }
             }
@@ -207,6 +204,31 @@ router.get('/', async (req, res) => {
                 // Fix #5: Also check enrollment.completed — completed courses are never locked
                 if (!isLockedByDeadline && deadline && new Date() > new Date(deadline) && progress < 100 && !enrollment.completed) {
                     isLockedByDeadline = true;
+
+                    // Send notifications when we first detect the lock
+                    if (!enrollment.is_locked && userId) {
+                        try {
+                            // Notify the student
+                            createNotification(userId, 'course_locked',
+                                'انتهت مهلة المساق',
+                                `انتهت مهلة مساق "${c.title}". تواصل مع مشرفك لإعادة الفتح.`,
+                                '/courses'
+                            );
+                            // Notify the supervisor
+                            const studentRecord = db.prepare('SELECT supervisor_id, name FROM users WHERE id = ?').get(userId);
+                            if (studentRecord && studentRecord.supervisor_id) {
+                                createNotification(studentRecord.supervisor_id, 'student_course_locked',
+                                    'انتهت مهلة طالب',
+                                    `انتهت مهلة الطالب "${studentRecord.name}" في مساق "${c.title}".`,
+                                    '/supervisor/students'
+                                );
+                            }
+                            // Mark as locked in DB so we don't re-notify
+                            db.prepare('UPDATE enrollments SET is_locked = 1 WHERE user_id = ? AND course_id = ?').run(userId, String(c.id));
+                        } catch (notifErr) {
+                            console.error('[LOCK_NOTIFICATION_ERROR]:', notifErr.message);
+                        }
+                    }
                 }
 
                 if (req.user?.role === 'admin' || req.user?.role === 'supervisor') {
@@ -330,16 +352,17 @@ router.post('/enroll', authenticateToken, (req, res) => {
             deadline = date.toISOString();
         }
 
-        // Insert enrollment
-        const insertResult = db.prepare(`
-            INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
-            VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
-        `).run(userId, courseId, deadline);
+        db.transaction(() => {
+            const insertResult = db.prepare(`
+                INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
+                VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
+            `).run(userId, courseId, deadline);
 
-        // Fix #9: Only increment students_count after successful INSERT
-        if (insertResult.changes > 0) {
-            db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(courseId);
-        }
+            // Fix #9: Only increment students_count after successful INSERT
+            if (insertResult.changes > 0) {
+                db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(courseId);
+            }
+        })();
 
         res.json({ success: true, message: 'Enrolled successfully' });
     } catch (e) {
@@ -468,12 +491,14 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
                             const deadline = new Date();
                             deadline.setDate(deadline.getDate() + daysAvailable);
 
-                            db.prepare(`
-                                INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
-                                VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
-                            `).run(req.user.id, nextCourse.id, deadline.toISOString());
+                            db.transaction(() => {
+                                db.prepare(`
+                                    INSERT INTO enrollments (user_id, course_id, enrolled_at, progress, completed, deadline, is_locked)
+                                    VALUES (?, ?, CURRENT_TIMESTAMP, 0, 0, ?, 0)
+                                `).run(req.user.id, nextCourse.id, deadline.toISOString());
 
-                            db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(nextCourse.id);
+                                db.prepare('UPDATE courses SET students_count = students_count + 1 WHERE id = ?').run(nextCourse.id);
+                            })();
                             console.log(`[AUTO_ENROLL_NEXT_EP] Auto-enrolled user ${req.user.id} in next course "${nextCourse.title}" (${nextCourse.id}) after completing all episodes.`);
                         }
                     }
@@ -494,59 +519,85 @@ router.post('/episode-progress', authenticateToken, (req, res) => {
 router.post('/', authenticateToken, requireAdmin, (req, res) => {
     const course = req.body;
     try {
-        const stmt = db.prepare(`
-            INSERT INTO courses(id, title, title_en, instructor, instructor_en, category, category_en, duration, duration_en, thumbnail, description, description_en, lessons_count, students_count, video_url, status, passing_score, quiz_frequency, folder_id, order_index, days_available)
-            VALUES(@id, @title, @title_en, @instructor, @instructor_en, @category, @category_en, @duration, @duration_en, @thumbnail, @description, @description_en, @lessons_count, @students_count, @video_url, @status, @passing_score, @quiz_frequency, @folder_id, @order_index, @days_available)
-                `);
+        db.transaction(() => {
+            const stmt = db.prepare(`
+                INSERT INTO courses(id, title, title_en, instructor, instructor_en, category, category_en, duration, duration_en, thumbnail, description, description_en, lessons_count, students_count, video_url, status, passing_score, quiz_frequency, folder_id, order_index, days_available)
+                VALUES(@id, @title, @title_en, @instructor, @instructor_en, @category, @category_en, @duration, @duration_en, @thumbnail, @description, @description_en, @lessons_count, @students_count, @video_url, @status, @passing_score, @quiz_frequency, @folder_id, @order_index, @days_available)
+            `);
 
-        stmt.run({
-            id: String(course.id),
-            title: course.title,
-            title_en: course.titleEn || course.title,
-            instructor: course.instructor,
-            instructor_en: course.instructorEn || course.instructor,
-            category: course.category,
-            category_en: course.categoryEn || course.category,
-            duration: course.duration,
-            duration_en: course.durationEn || course.duration,
-            thumbnail: course.thumbnail,
-            description: course.description || '',
-            description_en: course.descriptionEn || course.description || '',
-            lessons_count: course.lessonsCount || (course.episodes ? course.episodes.length : 0),
-            students_count: course.studentsCount || 0,
-            video_url: course.videoUrl || '',
-            status: course.status || 'published',
-            passing_score: course.passingScore || 80,
-            quiz_frequency: course.quizFrequency || 0,
-            folder_id: course.folderId || null,
-            order_index: course.orderIndex != null ? course.orderIndex : 0,
-            days_available: course.daysAvailable || null
-        });
+            stmt.run({
+                id: String(course.id).trim(),
+                title: (course.title || '').trim(),
+                title_en: (course.titleEn || course.title || '').trim(),
+                instructor: (course.instructor || '').trim(),
+                instructor_en: (course.instructorEn || course.instructor || '').trim(),
+                category: (course.category || '').trim(),
+                category_en: (course.categoryEn || course.category || '').trim(),
+                duration: (course.duration || '').trim(),
+                duration_en: (course.durationEn || course.duration || '').trim(),
+                thumbnail: course.thumbnail,
+                description: (course.description || '').trim(),
+                description_en: (course.descriptionEn || course.description || '').trim(),
+                lessons_count: course.lessonsCount || (course.episodes ? course.episodes.length : 0),
+                students_count: course.studentsCount || 0,
+                video_url: course.videoUrl || '',
+                status: course.status || 'published',
+                passing_score: course.passingScore || 80,
+                quiz_frequency: course.quizFrequency || 0,
+                folder_id: course.folderId || null,
+                order_index: course.orderIndex != null ? course.orderIndex : 0,
+                days_available: course.daysAvailable || null
+            });
 
-        // Insert Episodes if any
-        if (course.episodes && Array.isArray(course.episodes)) {
-            const epStmt = db.prepare(`
-                INSERT INTO episodes(id, courseId, title, title_en, duration, videoUrl, orderIndex, isLocked)
-        VALUES(@id, @courseId, @title, @title_en, @duration, @videoUrl, @orderIndex, @isLocked)
+            // Insert Episodes if any
+            if (course.episodes && Array.isArray(course.episodes)) {
+                const epStmt = db.prepare(`
+                    INSERT INTO episodes(id, courseId, title, title_en, duration, videoUrl, orderIndex, isLocked)
+                    VALUES(@id, @courseId, @title, @title_en, @duration, @videoUrl, @orderIndex, @isLocked)
                 `);
-            for (const ep of course.episodes) {
-                epStmt.run({
-                    id: ep.id ? String(ep.id) : ('ep_' + crypto.randomUUID()),
-                    courseId: String(course.id),
-                    title: ep.title,
-                    title_en: ep.titleEn || ep.title,
-                    duration: ep.duration || '',
-                    videoUrl: ep.videoUrl || '',
-                    orderIndex: ep.orderIndex || 0,
-                    isLocked: ep.isLocked ? 1 : 0
-                });
+                for (const ep of course.episodes) {
+                    epStmt.run({
+                        id: ep.id ? String(ep.id) : ('ep_' + crypto.randomUUID()),
+                        courseId: String(course.id),
+                        title: ep.title,
+                        title_en: ep.titleEn || ep.title,
+                        duration: ep.duration || '',
+                        videoUrl: ep.videoUrl || '',
+                        orderIndex: ep.orderIndex || 0,
+                        isLocked: ep.isLocked ? 1 : 0
+                    });
+                }
             }
-        }
+        })();
 
         res.status(201).json({ success: true, id: course.id });
     } catch (e) {
         console.error('[COURSE_CREATE_ERROR]:', e.message);
         res.status(500).json({ error: 'حدث خطأ أثناء إنشاء المساق' });
+    }
+});
+
+// Bulk update course order
+// IMPORTANT: This MUST be registered BEFORE /:id to avoid Express route collision
+router.put('/reorder', authenticateToken, requireAdmin, (req, res) => {
+    const { updates } = req.body;
+    if (!updates || !Array.isArray(updates)) {
+        return res.status(400).json({ error: 'مصفوفة التحديثات مطلوبة' });
+    }
+
+    try {
+        db.transaction(() => {
+            const stmt = db.prepare('UPDATE courses SET order_index = ? WHERE id = ?');
+            for (const item of updates) {
+                if (item.id && item.order_index !== undefined) {
+                    stmt.run(item.order_index, item.id);
+                }
+            }
+        })();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('[COURSES_REORDER_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء حفظ ترتيب المساقات' });
     }
 });
 
@@ -557,56 +608,78 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
     try {
         // Update basic course info
         const allowedFields = ['title', 'title_en', 'instructor', 'instructor_en', 'category', 'category_en', 'duration', 'duration_en', 'thumbnail', 'description', 'description_en', 'lessons_count', 'students_count', 'video_url', 'status', 'passing_score', 'quiz_frequency', 'folder_id', 'order_index', 'days_available'];
-        const fieldsToUpdate = Object.keys(updates).filter(k => allowedFields.includes(k) || k === 'titleEn' || k === 'instructorEn' || k === 'quizFrequency' || k === 'folderId' || k === 'orderIndex' || k === 'daysAvailable');
 
-        if (fieldsToUpdate.length > 0) {
-            const setClause = fieldsToUpdate.map(k => {
-                const dbKey = k === 'titleEn' ? 'title_en' : k === 'instructorEn' ? 'instructor_en' : k === 'quizFrequency' ? 'quiz_frequency' : k === 'folderId' ? 'folder_id' : k === 'orderIndex' ? 'order_index' : k === 'daysAvailable' ? 'days_available' : k;
-                return `${dbKey} = ?`;
-            }).join(', ');
-            const values = fieldsToUpdate.map(k => updates[k]);
-            db.prepare(`UPDATE courses SET ${setClause} WHERE id = ? `).run(...values, id);
-        }
+        // Complete camelCase → snake_case mapping table (BUG-V2-02 fix)
+        const CAMEL_TO_SNAKE = {
+            titleEn: 'title_en',
+            instructorEn: 'instructor_en',
+            categoryEn: 'category_en',
+            durationEn: 'duration_en',
+            descriptionEn: 'description_en',
+            lessonsCount: 'lessons_count',
+            studentsCount: 'students_count',
+            videoUrl: 'video_url',
+            passingScore: 'passing_score',
+            quizFrequency: 'quiz_frequency',
+            folderId: 'folder_id',
+            orderIndex: 'order_index',
+            daysAvailable: 'days_available'
+        };
 
-        // Sync Episodes — SMART UPSERT to preserve student progress
-        if (updates.episodes && Array.isArray(updates.episodes)) {
-            // Collect the IDs of episodes being sent in the update
-            const incomingIds = updates.episodes.map(ep => ep.id).filter(Boolean);
+        const fieldsToUpdate = Object.keys(updates).filter(k => 
+            allowedFields.includes(k) || CAMEL_TO_SNAKE[k]
+        );
 
-            // Delete ONLY episodes that are no longer in the updated list
-            if (incomingIds.length > 0) {
-                const placeholders = incomingIds.map(() => '?').join(',');
-                db.prepare(`DELETE FROM episodes WHERE courseId = ? AND id NOT IN (${placeholders})`).run(id, ...incomingIds);
-            } else {
-                // No IDs provided — delete all old episodes (backwards compatible)
-                db.prepare('DELETE FROM episodes WHERE courseId = ?').run(id);
+        db.transaction(() => {
+            if (fieldsToUpdate.length > 0) {
+                const setClause = fieldsToUpdate.map(k => {
+                    const dbKey = CAMEL_TO_SNAKE[k] || k;
+                    return `${dbKey} = ?`;
+                }).join(', ');
+                const values = fieldsToUpdate.map(k => updates[k]);
+                db.prepare(`UPDATE courses SET ${setClause} WHERE id = ? `).run(...values, id);
             }
 
-            // UPSERT each episode: update if exists, insert if new
-            const upsertStmt = db.prepare(`
-                INSERT INTO episodes(id, courseId, title, title_en, duration, videoUrl, orderIndex, isLocked)
-                VALUES(@id, @courseId, @title, @title_en, @duration, @videoUrl, @orderIndex, @isLocked)
-                ON CONFLICT(id) DO UPDATE SET
-                    title = excluded.title,
-                    title_en = excluded.title_en,
-                    duration = excluded.duration,
-                    videoUrl = excluded.videoUrl,
-                    orderIndex = excluded.orderIndex,
-                    isLocked = excluded.isLocked
-            `);
-            for (const ep of updates.episodes) {
-                upsertStmt.run({
-                    id: ep.id || ('ep_' + crypto.randomUUID()),
-                    courseId: id,
-                    title: ep.title,
-                    title_en: ep.titleEn || ep.title,
-                    duration: ep.duration || '',
-                    videoUrl: ep.videoUrl || '',
-                    orderIndex: ep.orderIndex || 0,
-                    isLocked: ep.isLocked ? 1 : 0
-                });
+            // Sync Episodes — SMART UPSERT to preserve student progress
+            if (updates.episodes && Array.isArray(updates.episodes)) {
+                // Collect the IDs of episodes being sent in the update
+                const incomingIds = updates.episodes.map(ep => ep.id).filter(Boolean);
+
+                // Delete ONLY episodes that are no longer in the updated list
+                if (incomingIds.length > 0) {
+                    const placeholders = incomingIds.map(() => '?').join(',');
+                    db.prepare(`DELETE FROM episodes WHERE courseId = ? AND id NOT IN (${placeholders})`).run(id, ...incomingIds);
+                } else {
+                    // No IDs provided — delete all old episodes (backwards compatible)
+                    db.prepare('DELETE FROM episodes WHERE courseId = ?').run(id);
+                }
+
+                // UPSERT each episode: update if exists, insert if new
+                const upsertStmt = db.prepare(`
+                    INSERT INTO episodes(id, courseId, title, title_en, duration, videoUrl, orderIndex, isLocked)
+                    VALUES(@id, @courseId, @title, @title_en, @duration, @videoUrl, @orderIndex, @isLocked)
+                    ON CONFLICT(id) DO UPDATE SET
+                        title = excluded.title,
+                        title_en = excluded.title_en,
+                        duration = excluded.duration,
+                        videoUrl = excluded.videoUrl,
+                        orderIndex = excluded.orderIndex,
+                        isLocked = excluded.isLocked
+                `);
+                for (const ep of updates.episodes) {
+                    upsertStmt.run({
+                        id: ep.id || ('ep_' + crypto.randomUUID()),
+                        courseId: id,
+                        title: ep.title,
+                        title_en: ep.titleEn || ep.title,
+                        duration: ep.duration || '',
+                        videoUrl: ep.videoUrl || '',
+                        orderIndex: ep.orderIndex || 0,
+                        isLocked: ep.isLocked ? 1 : 0
+                    });
+                }
             }
-        }
+        })();
 
         res.json({ success: true });
     } catch (e) {
@@ -637,28 +710,7 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     }
 });
 
-// Bulk update course order
-router.put('/reorder', authenticateToken, requireAdmin, (req, res) => {
-    const { updates } = req.body;
-    if (!updates || !Array.isArray(updates)) {
-        return res.status(400).json({ error: 'مصفوفة التحديثات مطلوبة' });
-    }
-
-    try {
-        db.transaction(() => {
-            const stmt = db.prepare('UPDATE courses SET order_index = ? WHERE id = ?');
-            for (const item of updates) {
-                if (item.id && item.order_index !== undefined) {
-                    stmt.run(item.order_index, item.id);
-                }
-            }
-        })();
-        res.json({ success: true });
-    } catch (e) {
-        console.error('[COURSES_REORDER_ERROR]:', e.message);
-        res.status(500).json({ error: 'حدث خطأ أثناء حفظ ترتيب المساقات' });
-    }
-});
+// NOTE: /reorder route has been moved BEFORE /:id to prevent Express route collision
 
 // ============================================================================
 // Self-Extend Deadline (Student — One-Time Only)
@@ -729,6 +781,21 @@ router.post('/self-extend', authenticateToken, (req, res) => {
         })();
 
         console.log(`[SELF-EXTEND] User ${userId} extended course ${courseId} by 2 days. New deadline: ${newDeadline.toISOString()}`);
+
+        // Notify the supervisor about the extension request
+        try {
+            const studentRecord = db.prepare('SELECT supervisor_id, name FROM users WHERE id = ?').get(userId);
+            const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId);
+            if (studentRecord && studentRecord.supervisor_id) {
+                createNotification(studentRecord.supervisor_id, 'reopen_request',
+                    'طلب إعادة فتح مساق',
+                    `الطالب "${studentRecord.name}" قام بتمديد مساق "${course?.title || courseId}" يومين إضافيين (الفرصة الوحيدة).`,
+                    '/supervisor/students'
+                );
+            }
+        } catch (notifErr) {
+            console.error('[EXTEND_NOTIFICATION_ERROR]:', notifErr.message);
+        }
 
         res.json({ 
             success: true, 

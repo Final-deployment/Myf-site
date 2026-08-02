@@ -69,6 +69,22 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
         }
     };
 
+    const handleResetExams = async (courseId: string, courseTitle: string) => {
+        if (!studentId) return;
+        const confirmMsg = `تحذير: هل أنت متأكد من إعادة فتح مساق "${courseTitle}" ومسح كافة نتائج الاختبارات الخاصة به لهذا الطالب؟\nهذا الإجراء لا يمكن التراجع عنه ويجب أن يكون بموافقة الطالب.`;
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            const res = await api.supervisors.resetCourseExams(studentId, courseId, 5); // Default 5 days to retake
+            if (res.success) {
+                alert(res.message);
+                loadDetails();
+            }
+        } catch (e: any) {
+            alert(e.message || 'فشل في إعادة فتح المساق');
+        }
+    };
+
     if (!isOpen || !studentId) return null;
 
     return (
@@ -336,6 +352,15 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({ isOpen, onClo
                                                             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors"
                                                         >
                                                             تمديد (يومين)
+                                                        </button>
+                                                    )}
+                                                    {(user?.role === 'supervisor' || user?.role === 'admin') && (
+                                                        <button
+                                                            onClick={() => handleResetExams(course.course_id, course.courseTitle)}
+                                                            className="px-3 py-1.5 bg-red-600/20 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 rounded-lg text-xs font-bold transition-colors"
+                                                            title="إعادة فتح المساق ومسح كافة نتائج الاختبارات"
+                                                        >
+                                                            إعادة الاختبارات
                                                         </button>
                                                     )}
                                                 </div>

@@ -1,49 +1,95 @@
-import React, { useState } from 'react';
-import { Bell, BookOpen, Award, Users, MessageSquare, Calendar, Check, X, Settings, Trash2, Filter } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, BookOpen, Award, Users, MessageSquare, Calendar, Check, X, Settings, Trash2, Filter, Info } from 'lucide-react';
+import { notificationsApi, AppNotification } from '../services/api/notifications';
 
 const Notifications: React.FC = () => {
     const [filter, setFilter] = useState('all');
     const [showSettings, setShowSettings] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     // Notifications State
-    const [notificationList, setNotificationList] = useState([
-        { id: 1, type: 'course', title: 'دورة جديدة متاحة', message: 'تم إضافة دورة "شرح كتاب التوحيد" للمنصة', time: 'منذ 5 دقائق', read: false, icon: BookOpen },
-        { id: 2, type: 'achievement', title: 'إنجاز جديد! 🎉', message: 'لقد أكملت 100 ساعة من التعلم', time: 'منذ ساعة', read: false, icon: Award },
-        { id: 4, type: 'reminder', title: 'تذكير: وقت الورد اليومي', message: 'لا تنس قراءة وردك اليومي من القرآن', time: 'منذ 5 ساعات', read: true, icon: Calendar },
-        { id: 5, type: 'course', title: 'تم تحديث الدورة', message: 'تمت إضافة حلقات جديدة لدورة "تفسير جزء عم"', time: 'منذ يوم', read: true, icon: BookOpen },
-        { id: 7, type: 'achievement', title: 'شهادة جاهزة للتحميل', message: 'شهادة إتمام دورة "فقه الصلاة" جاهزة', time: 'منذ 3 أيام', read: true, icon: Award },
-    ]);
+    const [notificationList, setNotificationList] = useState<AppNotification[]>([]);
+    const [total, setTotal] = useState(0);
 
-    const typeColors: Record<string, { bg: string; text: string; iconBg: string }> = {
-        course: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', iconBg: 'from-emerald-500 to-teal-600' },
-        achievement: { bg: 'bg-amber-500/10', text: 'text-amber-400', iconBg: 'from-amber-500 to-orange-600' },
-        reminder: { bg: 'bg-purple-500/10', text: 'text-purple-400', iconBg: 'from-purple-500 to-pink-600' },
-    };
-
-    const handleRead = (id: number) => {
-        setNotificationList(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-        const notification = notificationList.find(n => n.id === id);
-        if (notification) alert(`فتح الإشعار: ${notification.title}\n${notification.message}`);
-    };
-
-    const handleDelete = (id: number, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (confirm('حذف هذا الإشعار؟')) {
-            setNotificationList(prev => prev.filter(n => n.id !== id));
+    const loadNotifications = async () => {
+        try {
+            setLoading(true);
+            const data = await notificationsApi.getNotifications(1, 50);
+            setNotificationList(data.notifications);
+            setTotal(data.total);
+        } catch (error) {
+            console.error('Failed to load notifications:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const markAllRead = () => {
-        setNotificationList(prev => prev.map(n => ({ ...n, read: true })));
+    useEffect(() => {
+        loadNotifications();
+    }, []);
+
+    const typeColors: Record<string, { bg: string; text: string; iconBg: string; icon: React.ElementType }> = {
+        course: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', iconBg: 'from-emerald-500 to-teal-600', icon: BookOpen },
+        achievement: { bg: 'bg-amber-500/10', text: 'text-amber-400', iconBg: 'from-amber-500 to-orange-600', icon: Award },
+        reminder: { bg: 'bg-purple-500/10', text: 'text-purple-400', iconBg: 'from-purple-500 to-pink-600', icon: Calendar },
+        inactivity_reminder: { bg: 'bg-purple-500/10', text: 'text-purple-400', iconBg: 'from-purple-500 to-pink-600', icon: Calendar },
+        supervisor_inactive: { bg: 'bg-red-500/10', text: 'text-red-400', iconBg: 'from-red-500 to-orange-600', icon: Users },
+        info: { bg: 'bg-blue-500/10', text: 'text-blue-400', iconBg: 'from-blue-500 to-cyan-600', icon: Info },
+    };
+
+    // Fallback style for unknown types
+    const getStyleForType = (type: string) => {
+        return typeColors[type] || { bg: 'bg-gray-500/10', text: 'text-gray-400', iconBg: 'from-gray-500 to-slate-600', icon: Bell };
+    };
+
+    const handleRead = async (id: string, is_read: boolean, link: string | null) => {
+        if (!is_read) {
+            setNotificationList(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+            try {
+                await notificationsApi.markAsRead(id);
+            } catch (e) {
+                console.error('Failed to mark as read', e);
+            }
+        }
+        if (link) {
+            window.location.href = link; // Or use react-router navigate if available
+        }
+    };
+
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (confirm('حذف هذا الإشعار؟')) {
+            setNotificationList(prev => prev.filter(n => n.id !== id));
+            try {
+                await notificationsApi.deleteNotification(id);
+            } catch (e) {
+                console.error('Failed to delete notification', e);
+            }
+        }
+    };
+
+    const markAllRead = async () => {
+        setNotificationList(prev => prev.map(n => ({ ...n, is_read: true })));
+        try {
+            await notificationsApi.markAllAsRead();
+        } catch (e) {
+            console.error('Failed to mark all as read', e);
+        }
     };
 
     const filteredNotifications = filter === 'all'
         ? notificationList
         : filter === 'unread'
-            ? notificationList.filter(n => !n.read)
+            ? notificationList.filter(n => !n.is_read)
             : notificationList.filter(n => n.type === filter);
 
-    const unreadCount = notificationList.filter(n => !n.read).length;
+    const unreadCount = notificationList.filter(n => !n.is_read).length;
+
+    // Helper to format date
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
 
     return (
         <div className="animate-fade-in space-y-6 relative">
@@ -115,39 +161,45 @@ const Notifications: React.FC = () => {
 
             {/* Notifications List */}
             <div className="space-y-3">
-                {filteredNotifications.map((notification) => {
-                    const colors = typeColors[notification.type];
-                    return (
-                        <div
-                            key={notification.id}
-                            onClick={() => handleRead(notification.id)}
-                            className={`glass-panel p-5 rounded-2xl flex items-start gap-4 transition-all cursor-pointer hover:border-emerald-500/30 ${!notification.read ? 'border-r-4 border-emerald-500 bg-emerald-500/5' : ''
-                                }`}
-                        >
-                            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colors.iconBg} flex items-center justify-center flex-shrink-0`}>
-                                <notification.icon className="w-6 h-6 text-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <h4 className={`font-bold ${!notification.read ? 'text-white' : 'text-gray-300'}`}>
-                                            {notification.title}
-                                        </h4>
-                                        <p className="text-gray-400 text-sm mt-1">{notification.message}</p>
-                                    </div>
-                                    <span className="text-xs text-gray-500 whitespace-nowrap">{notification.time}</span>
+                {loading ? (
+                    <div className="text-center text-gray-400 py-8">جاري التحميل...</div>
+                ) : filteredNotifications.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8">لا توجد إشعارات</div>
+                ) : (
+                    filteredNotifications.map((notification) => {
+                        const style = getStyleForType(notification.type);
+                        const Icon = style.icon;
+                        return (
+                            <div
+                                key={notification.id}
+                                onClick={() => handleRead(notification.id, notification.is_read, notification.link)}
+                                className={`glass-panel p-5 rounded-2xl flex items-start gap-4 transition-all cursor-pointer hover:border-emerald-500/30 ${!notification.is_read ? 'border-r-4 border-emerald-500 bg-emerald-500/5' : ''
+                                    }`}
+                            >
+                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${style.iconBg} flex items-center justify-center flex-shrink-0`}>
+                                    <Icon className="w-6 h-6 text-white" />
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                                {!notification.read && (
-                                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
-                                )}
-                                <button
-                                    onClick={(e) => handleDelete(notification.id, e)}
-                                    className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <h4 className={`font-bold ${!notification.is_read ? 'text-white' : 'text-gray-300'}`}>
+                                                {notification.title}
+                                            </h4>
+                                            <p className="text-gray-400 text-sm mt-1">{notification.body}</p>
+                                        </div>
+                                        <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(notification.created_at)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    {!notification.is_read && (
+                                        <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+                                    )}
+                                    <button
+                                        onClick={(e) => handleDelete(notification.id, e)}
+                                        className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                             </div>
                         </div>
                     );

@@ -35,7 +35,7 @@ router.post('/subscribe', authenticateToken, (req, res) => {
     const { subscription } = req.body;
     const userId = req.user.id;
 
-    if (!subscription || !subscription.endpoint) {
+    if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
         return res.status(400).json({ error: 'Invalid subscription object' });
     }
 
@@ -70,10 +70,16 @@ router.post('/send', authenticateToken, requireAdmin, async (req, res) => {
 
     try {
         let subscriptions = [];
-        if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
-            const placeholders = targetUserIds.map(() => '?').join(',');
-            subscriptions = db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${placeholders})`).all(...targetUserIds);
+        if (targetUserIds !== undefined) {
+            if (Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+                const placeholders = targetUserIds.map(() => '?').join(',');
+                subscriptions = db.prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${placeholders})`).all(...targetUserIds);
+            } else {
+                // targetUserIds is an empty array, so no targets.
+                subscriptions = [];
+            }
         } else {
+            // targetUserIds is undefined, default to broadcast
             subscriptions = db.prepare(`SELECT * FROM push_subscriptions`).all();
         }
 
@@ -85,28 +91,32 @@ router.post('/send', authenticateToken, requireAdmin, async (req, res) => {
             badge: '/icons/icon-192x192.png'
         });
 
-        const promises = subscriptions.map(sub => {
-            const pushSubscription = {
-                endpoint: sub.endpoint,
-                keys: {
-                    p256dh: sub.p256dh,
-                    auth: sub.auth
-                }
-            };
+        // Process in chunks to avoid socket exhaustion
+        const CHUNK_SIZE = 100;
+        let successCount = 0;
 
-            return webpush.sendNotification(pushSubscription, payload)
-                .catch(err => {
-                    if (err.statusCode === 404 || err.statusCode === 410) {
-                        // Subscription has expired or is no longer valid, remove it
-                        db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
-                    } else {
-                        console.error('[PUSH_SEND_ERROR]:', err);
-                    }
-                });
-        });
+        for (let i = 0; i < subscriptions.length; i += CHUNK_SIZE) {
+            const chunk = subscriptions.slice(i, i + CHUNK_SIZE);
+            const promises = chunk.map(sub => {
+                const pushSubscription = {
+                    endpoint: sub.endpoint,
+                    keys: { p256dh: sub.p256dh, auth: sub.auth }
+                };
 
-        await Promise.all(promises);
-        res.json({ success: true, count: subscriptions.length });
+                return webpush.sendNotification(pushSubscription, payload)
+                    .then(() => { successCount++; })
+                    .catch(err => {
+                        if (err.statusCode === 404 || err.statusCode === 410) {
+                            db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
+                        } else {
+                            console.error('[PUSH_SEND_ERROR]:', err.statusCode, err.body);
+                        }
+                    });
+            });
+            await Promise.all(promises);
+        }
+
+        res.json({ success: true, count: successCount, total: subscriptions.length });
     } catch (error) {
         console.error('[PUSH_BROADCAST_ERROR]:', error);
         res.status(500).json({ error: 'Failed to send notifications' });

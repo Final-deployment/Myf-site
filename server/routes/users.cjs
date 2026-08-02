@@ -184,15 +184,15 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         if (role === 'student') {
             try {
                 const supervisors = db.prepare(`
-                    SELECT id, supervisor_capacity, supervisor_priority 
-                    FROM users 
-                    WHERE role = 'supervisor'
+                    SELECT s.id, s.supervisor_capacity, s.supervisor_priority,
+                           COUNT(u.id) as count
+                    FROM users s
+                    LEFT JOIN users u ON u.supervisor_id = s.id
+                    WHERE s.role = 'supervisor'
+                    GROUP BY s.id
                 `).all();
 
-                const candidates = supervisors.map(sv => {
-                    const count = db.prepare('SELECT COUNT(*) as count FROM users WHERE supervisor_id = ?').get(sv.id).count;
-                    return { ...sv, count };
-                }).filter(sv => sv.count < (sv.supervisor_capacity || 0));
+                const candidates = supervisors.filter(sv => sv.count < (sv.supervisor_capacity || 0));
 
                 candidates.sort((a, b) => {
                     if (a.count !== b.count) return a.count - b.count;
@@ -324,26 +324,27 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     }
 
     try {
-        try {
-            db.transaction(() => {
-                const cleanup = [
-                    { t: 'enrollments', c: 'user_id' },
-                    { t: 'episode_progress', c: 'user_id' },
-                    { t: 'quiz_results', c: 'userId' },
-                    { t: 'certificates', c: 'user_id' },
-                    { t: 'favorites', c: 'userId' },
-                    { t: 'ratings', c: 'userId' },
-                    { t: 'messages', c: 'senderId' },
-                    { t: 'messages', c: 'receiverId' },
-                    { t: 'system_activity_logs', c: 'userId' }
-                ];
-                for (let {t, c} of cleanup) {
-                    try { db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id); } catch(ex) {}
-                }
-            })();
-        } catch(e) { console.error('[USER_CLEANUP_WARN]:', e.message); }
-
-        const result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
+        let result;
+        const deleteUserTx = db.transaction(() => {
+            const cleanup = [
+                { t: 'enrollments', c: 'user_id' },
+                { t: 'episode_progress', c: 'user_id' },
+                { t: 'quiz_results', c: 'userId' },
+                { t: 'certificates', c: 'user_id' },
+                { t: 'favorites', c: 'userId' },
+                { t: 'ratings', c: 'userId' },
+                { t: 'messages', c: 'senderId' },
+                { t: 'messages', c: 'receiverId' },
+                { t: 'system_activity_logs', c: 'userId' }
+            ];
+            for (let {t, c} of cleanup) {
+                try { db.prepare(`DELETE FROM ${t} WHERE ${c} = ?`).run(id); } catch(ex) {}
+            }
+            
+            result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
+        });
+        
+        deleteUserTx();
 
         if (result.changes === 0) {
             return res.status(404).json({ error: 'User not found' });
@@ -663,8 +664,16 @@ router.get('/:id/journey', authenticateToken, (req, res) => {
             
             let status = 'locked'; // default gray
             if (enrollment) {
+                // BUG-V2-03 fix: Compute deadline-lock at read-time (same logic as GET /courses)
+                // Without this, courses whose deadline passed while the student was offline
+                // would still show as 'active' instead of 'locked_failed'
+                let effectivelyLocked = !!enrollment.is_locked;
+                if (!effectivelyLocked && enrollment.deadline && new Date() > new Date(enrollment.deadline) && enrollment.progress < 100 && !enrollment.completed) {
+                    effectivelyLocked = true;
+                }
+
                 if (enrollment.completed) status = 'completed'; // green
-                else if (enrollment.is_locked) status = 'locked_failed'; // gray/red
+                else if (effectivelyLocked) status = 'locked_failed'; // gray/red
                 else status = 'active'; // blue
             }
 

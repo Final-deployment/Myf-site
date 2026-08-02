@@ -112,7 +112,7 @@ router.get('/system-activity-logs', authenticateToken, requireAdmin, (req, res) 
     }
 });
 
-router.post('/system-activity-logs', authenticateToken, (req, res) => {
+router.post('/system-activity-logs', authenticateToken, requireAdmin, (req, res) => {
     const { userId, action, details } = req.body;
 
     if (!userId || !action) {
@@ -158,11 +158,13 @@ router.post('/settings/backup', authenticateToken, requireAdmin, (req, res) => {
     try {
         const { auto_backup_enabled, cloud_backup_enabled, backup_retention_days } = req.body;
 
-        const update = db.prepare('UPDATE system_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?');
+        db.transaction(() => {
+            const update = db.prepare('UPDATE system_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?');
 
-        if (auto_backup_enabled !== undefined) update.run(auto_backup_enabled ? '1' : '0', 'auto_backup_enabled');
-        if (cloud_backup_enabled !== undefined) update.run(cloud_backup_enabled ? '1' : '0', 'cloud_backup_enabled');
-        if (backup_retention_days !== undefined) update.run(String(backup_retention_days), 'backup_retention_days');
+            if (auto_backup_enabled !== undefined) update.run(auto_backup_enabled ? '1' : '0', 'auto_backup_enabled');
+            if (cloud_backup_enabled !== undefined) update.run(cloud_backup_enabled ? '1' : '0', 'cloud_backup_enabled');
+            if (backup_retention_days !== undefined) update.run(String(backup_retention_days), 'backup_retention_days');
+        })();
 
         res.json({ success: true });
     } catch (e) {

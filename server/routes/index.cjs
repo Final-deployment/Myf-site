@@ -16,7 +16,9 @@ const folderRoutes = require('./folders.cjs');
 const ratingRoutes = require('./ratings.cjs');
 const booksRoutes = require('./books.cjs');
 const notificationsRoutes = require('./notifications.cjs');
-
+const notificationsInternalRoutes = require('./notifications_internal.cjs');
+const articlesRoutes = require('./articles.cjs');
+const initiativesRoutes = require('./initiatives.cjs');
 // Middleware for authentication will be handled in server.cjs or specifically in modules
 // But we can define the mount structure here
 
@@ -35,6 +37,9 @@ router.use('/folders', folderRoutes);
 router.use('/ratings', ratingRoutes);
 router.use('/books', booksRoutes);
 router.use('/notifications', notificationsRoutes);
+router.use('/in-app-notifications', notificationsInternalRoutes);
+router.use('/articles', articlesRoutes);
+router.use('/initiatives', initiativesRoutes);
 
 // Export the centralized router
 module.exports = router;

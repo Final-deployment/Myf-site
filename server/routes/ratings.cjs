@@ -14,9 +14,17 @@ router.get('/', async (req, res) => {
             ORDER BY r.createdAt DESC
         `).all();
 
+        const allReplies = db.prepare('SELECT * FROM rating_replies ORDER BY createdAt ASC').all();
+        const repliesByRating = new Map();
+        for (const reply of allReplies) {
+            if (!repliesByRating.has(reply.ratingId)) {
+                repliesByRating.set(reply.ratingId, []);
+            }
+            repliesByRating.get(reply.ratingId).push(reply);
+        }
+
         const processedRatings = ratings.map(rating => {
-            const replies = db.prepare('SELECT * FROM rating_replies WHERE ratingId = ? ORDER BY createdAt ASC').all(rating.id);
-            return { ...rating, replies };
+            return { ...rating, replies: repliesByRating.get(rating.id) || [] };
         });
 
         res.json(processedRatings);
@@ -29,12 +37,16 @@ router.get('/', async (req, res) => {
 router.post('/', authenticateToken, (req, res) => {
     const { rating, comment } = req.body;
     const userId = req.user.id;
-    const userName = req.user.name;
+
+    if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'التقييم يجب أن يكون بين 1 و 5' });
+    }
 
     try {
-        // Fetch user country for display
-        const user = db.prepare('SELECT country FROM users WHERE id = ?').get(userId);
-        const country = user ? user.country : '';
+        // Fix: Fetch name + country in one query (was 2 separate queries)
+        const userRecord = db.prepare('SELECT name, country FROM users WHERE id = ?').get(userId);
+        const userName = userRecord?.name || 'مستخدم';
+        const country = userRecord?.country || '';
 
         const id = 'rate_' + crypto.randomUUID();
         db.prepare(`
@@ -53,10 +65,18 @@ router.post('/:id/reply', authenticateToken, (req, res) => {
     const { id: ratingId } = req.params;
     const { content } = req.body;
     const userId = req.user.id;
-    const userName = req.user.name;
     const role = req.user.role;
 
     try {
+        const ratingExists = db.prepare('SELECT id FROM ratings WHERE id = ?').get(ratingId);
+        if (!ratingExists) {
+            return res.status(404).json({ error: 'التقييم غير موجود' });
+        }
+
+        // Fix: Fetch name from DB — JWT payload does not contain 'name'
+        const userRecord = db.prepare('SELECT name FROM users WHERE id = ?').get(userId);
+        const userName = userRecord?.name || 'مستخدم';
+
         const id = 'reply_' + crypto.randomUUID();
         db.prepare(`
             INSERT INTO rating_replies (id, ratingId, userId, userName, role, content)
@@ -77,7 +97,10 @@ router.delete('/:id', authenticateToken, (req, res) => {
 
     const { id } = req.params;
     try {
-        db.prepare('DELETE FROM ratings WHERE id = ?').run(id);
+        db.transaction(() => {
+            db.prepare('DELETE FROM rating_replies WHERE ratingId = ?').run(id);
+            db.prepare('DELETE FROM ratings WHERE id = ?').run(id);
+        })();
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });

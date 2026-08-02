@@ -10,6 +10,9 @@
  */
 
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const { db } = require('./database.cjs');
+
 const SECRET_KEY = process.env.SECRET_KEY;
 if (!SECRET_KEY) {
     console.error('[FATAL] SECRET_KEY environment variable is not set! Server cannot start securely.');
@@ -139,10 +142,48 @@ const requireOwnerOrAdmin = (req, res, next) => {
     });
 };
 
+/**
+ * Require Master PIN for Destructive Actions (Zero-Trust Architecture)
+ * Checks the 'x-master-pin' header.
+ */
+const requireMasterPin = (req, res, next) => {
+    // Admins and supervisors only
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'supervisor')) {
+        return res.status(403).json({ error: 'Privileged access required.', code: 'PRIVILEGED_ACCESS_REQUIRED' });
+    }
+
+    const providedPin = req.headers['x-master-pin'] || req.body.master_pin;
+
+    if (!providedPin) {
+        return res.status(403).json({ error: 'يرجى إدخال الرمز السري للإدارة لتأكيد العملية.', code: 'MASTER_PIN_REQUIRED' });
+    }
+
+    try {
+        const pinRecord = db.prepare("SELECT value FROM system_settings WHERE key = 'master_admin_pin'").get();
+        
+        // If no PIN is set up yet, allow the action OR require them to set it up first.
+        // Let's enforce that if it's not set, it defaults to '0000'.
+        const hashToCompare = pinRecord ? pinRecord.value : bcrypt.hashSync('0000', 10);
+
+        if (!bcrypt.compareSync(providedPin, hashToCompare)) {
+            console.warn(`[Security] Failed Master PIN attempt by user ${req.user.id}`);
+            return res.status(403).json({ error: 'الرمز السري غير صحيح.', code: 'MASTER_PIN_INVALID' });
+        }
+
+        // Attach flag so subsequent routes know it was pin-verified
+        req.isMasterPinVerified = true;
+        next();
+    } catch (e) {
+        console.error('[PIN_AUTH_ERROR]:', e.message);
+        res.status(500).json({ error: 'حدث خطأ في التحقق من الرمز السري' });
+    }
+};
+
 module.exports = {
     authenticateToken,
     optionalAuth,
     requireAdmin,
     requireAdminOrSupervisor,
-    requireOwnerOrAdmin
+    requireOwnerOrAdmin,
+    requireMasterPin
 };

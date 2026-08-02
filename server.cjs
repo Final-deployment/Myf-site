@@ -28,6 +28,7 @@ initDatabase();
 // Start Background Services
 const { startBackupScheduler } = require('./server/services/backupService.cjs');
 startBackupScheduler();
+require('./server/agent_bot.cjs'); // Start Telegram AI Bot
 
 const app = express();
 
@@ -247,4 +248,68 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`  CORS: Restricted to allowed origins`);
     console.log(`  Rate Limit: 1000 req/min`);
     console.log('========================================\n');
+
+    // ======================================================================
+    // Scheduled Task: Check for inactive supervisors every 24 hours
+    // ======================================================================
+    const { createNotification } = require('./server/routes/notifications_internal.cjs');
+
+    function checkInactiveSupervisors() {
+        try {
+            const twoDaysAgo = new Date();
+            twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+            const cutoff = twoDaysAgo.toISOString();
+
+            const inactiveSupervisors = db.prepare(`
+                SELECT id, name, email, last_login
+                FROM users
+                WHERE role = 'supervisor'
+                  AND (last_login IS NULL OR last_login < ?)
+            `).all(cutoff);
+
+            if (inactiveSupervisors.length > 0) {
+                const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all();
+
+                for (const sup of inactiveSupervisors) {
+                    const daysSince = sup.last_login
+                        ? Math.ceil((Date.now() - new Date(sup.last_login).getTime()) / (1000 * 3600 * 24))
+                        : '\u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641';
+
+                    for (const admin of admins) {
+                        createNotification(admin.id, 'supervisor_inactive',
+                            '\u0645\u0634\u0631\u0641 \u063a\u0627\u0626\u0628',
+                            `\u0627\u0644\u0645\u0634\u0631\u0641 "${sup.name}" \u0644\u0645 \u064a\u0633\u062c\u0644 \u062f\u062e\u0648\u0644\u0647 \u0645\u0646\u0630 ${daysSince} \u0623\u064a\u0627\u0645.`,
+                            '/admin/supervisors'
+                        );
+                    }
+
+                    createNotification(sup.id, 'inactivity_reminder',
+                        '\u062a\u0630\u0643\u064a\u0631 \u0628\u0627\u0644\u062f\u062e\u0648\u0644',
+                        `\u0644\u0645 \u062a\u0633\u062c\u0644 \u062f\u062e\u0648\u0644\u0643 \u0645\u0646\u0630 ${daysSince} \u0623\u064a\u0627\u0645. \u0637\u0644\u0627\u0628\u0643 \u0628\u062d\u0627\u062c\u0629 \u0644\u0645\u062a\u0627\u0628\u0639\u062a\u0643.`,
+                        '/supervisor/students'
+                    );
+                }
+                console.log(`[SUPERVISOR_CHECK] Found ${inactiveSupervisors.length} inactive supervisor(s).`);
+            }
+        } catch (e) {
+            console.error('[SUPERVISOR_INACTIVITY_CHECK_ERROR]:', e.message);
+        }
+    }
+
+    setTimeout(checkInactiveSupervisors, 60 * 1000);
+    setInterval(checkInactiveSupervisors, 24 * 60 * 60 * 1000);
+
+    // ======================================================================
+    // Scheduled Task: Al-Mastaba Smart Guardian (AI Watchman)
+    // ======================================================================
+    const { runWatchman } = require('./server/ai_watchman.cjs');
+    const cron = require('node-cron');
+    
+    // Run exactly at midnight every day
+    cron.schedule('0 0 * * *', () => {
+        runWatchman();
+    });
+    
+    // Run once after 2 minutes of startup for testing/initial run
+    setTimeout(runWatchman, 2 * 60 * 1000);
 });

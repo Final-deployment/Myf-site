@@ -148,6 +148,39 @@ export const socialApi = {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!response.ok) throw new Error('Failed to delete conversation');
+    },
+
+    getGroupMessages: async (sectionId: string, page: number = 1, limit: number = 50): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/social/group/${sectionId}/messages?page=${page}&limit=${limit}`), {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('فشل جلب رسائل المجموعة');
+        return await response.json();
+    },
+
+    sendGroupMessage: async (sectionId: string, content: string, attachmentUrl?: string, attachmentType?: string, attachmentName?: string): Promise<any> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/social/group/${sectionId}/messages`), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content, attachmentUrl, attachmentType, attachmentName })
+        });
+        if (response.status === 401) throw new Error('انتهت صلاحية الجلسة');
+        if (!response.ok) throw new Error('فشل إرسال رسالة المجموعة');
+        return await response.json();
+    },
+
+    deleteGroupMessage: async (sectionId: string, messageId: string): Promise<void> => {
+        const token = getAuthToken();
+        const response = await fetch(getApiUrl(`/social/group/${sectionId}/messages/${messageId}`), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('فشل حذف الرسالة');
     }
 };
 
