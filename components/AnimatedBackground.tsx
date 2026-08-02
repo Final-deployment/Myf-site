@@ -57,8 +57,11 @@ const AnimatedBackground: React.FC = () => {
       constructor() {
         this.theta = Math.random() * Math.PI * 2; // Longitude
         this.phi = Math.acos((Math.random() * 2) - 1); // Latitude (even distribution)
-        // Widen the network across the screen
-        this.radius = Math.max(canvas.width, canvas.height) * 0.45; // Wider Globe radius
+        // Widen the network across the screen, adapt for mobile portrait
+        const isMobile = window.innerWidth < 768;
+        this.radius = isMobile 
+          ? window.innerWidth * 0.8  // Scale for mobile portrait
+          : Math.max(canvas.width, canvas.height) * 0.45; // Wider Globe radius for desktop
         
         this.size = Math.random() * 2 + 0.5;
         this.density = (Math.random() * 20) + 1;
@@ -130,8 +133,11 @@ const AnimatedBackground: React.FC = () => {
 
     function init() {
       particlesArray = [];
-      // Adjust particle count depending on screen size
-      const numberOfParticles = Math.min(600, (canvas.width * canvas.height) / 10000);
+      // Adjust particle count depending on screen size, limit heavily on mobile for performance
+      const isMobile = window.innerWidth < 768;
+      const numberOfParticles = isMobile 
+        ? 100 
+        : Math.min(600, (canvas.width * canvas.height) / 10000);
       for (let i = 0; i < numberOfParticles; i++) {
         particlesArray.push(new Particle());
       }
@@ -216,8 +222,8 @@ const AnimatedBackground: React.FC = () => {
   return (
     <div className="absolute inset-0 overflow-hidden z-0 bg-transparent pointer-events-none">
       {/* 3D gradient glowing orbs for depth */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#047857]/10 blur-[120px] mix-blend-screen pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#d4a045]/10 blur-[150px] mix-blend-screen pointer-events-none" />
+      <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] min-w-[300px] min-h-[300px] rounded-full bg-[#047857]/10 blur-[120px] mix-blend-screen pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[60vw] h-[60vw] min-w-[350px] min-h-[350px] rounded-full bg-[#d4a045]/10 blur-[150px] mix-blend-screen pointer-events-none" />
       
       {/* The Interactive Particle Canvas */}
       <canvas 
