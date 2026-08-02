@@ -203,7 +203,7 @@ const Notifications: React.FC = () => {
                             </div>
                         </div>
                     );
-                })}
+                }))}
             </div>
 
             {filteredNotifications.length === 0 && (
