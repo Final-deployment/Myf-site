@@ -481,6 +481,31 @@ function initDatabase() {
     }
   }
 
+  // --- Seed Default Initiatives ---
+  const initCount = db.prepare('SELECT COUNT(*) as count FROM initiatives').get();
+  if (initCount.count === 0) {
+    console.log('Seeding default initiatives...');
+    const insertInit = db.prepare('INSERT INTO initiatives (id, title, description, image) VALUES (?, ?, ?, ?)');
+    const defaultInitiatives = [
+      { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'تهدف إلى ترسيخ القيم والأخلاق الإسلامية الأساسية لد￯ الرجال والنساء.', image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=500&h=300&fit=crop' },
+      { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=500&h=300&fit=crop' },
+      { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
+      { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع المتأثرين بالصدمات.', image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop' },
+      { id: 'init_ehdena', title: 'مبادرة اهدنا', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية.', image: 'https://images.unsplash.com/photo-1590076214580-c0818274718f?w=500&h=300&fit=crop' }
+    ];
+    for (const init of defaultInitiatives) {
+      insertInit.run(init.id, init.title, init.description, init.image);
+    }
+  }
+
+  // --- Seed Default Articles ---
+  const artCount = db.prepare('SELECT COUNT(*) as count FROM articles').get();
+  if (artCount.count === 0) {
+    console.log('Seeding default articles...');
+    const insertArt = db.prepare('INSERT INTO articles (id, title, content, image) VALUES (?, ?, ?, ?)');
+    insertArt.run('art_default1', 'مرحباً بكم في الموقع', 'هذا مقال تجريبي للترحيب بالزوار الجدد في موقعنا.', 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop');
+  }
+
   // --- Seed Initial Folder if not exists ---
   const initialFolderId = 'foundation_shariah';
   const folderExists = db.prepare('SELECT id FROM course_folders WHERE id = ?').get(initialFolderId);
