@@ -12,7 +12,7 @@ export const AboutUs: React.FC = () => {
   }, []);
 
   return (
-    <div className={`min-[#0a192f] min-h-screen ${theme === 'day' ? 'bg-slate-50 text-slate-800' : 'bg-[#0a192f] text-slate-100'} font-cairo transition-colors duration-300`}>
+    <div className={`h-screen overflow-y-auto overflow-x-hidden ${theme === 'day' ? 'bg-slate-50 text-slate-800' : 'bg-[#0a192f] text-slate-100'} font-cairo transition-colors duration-300 pb-24`}>
       {/* --- TOP NAVBAR --- */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a192f]/90 border-b border-amber-500/20 px-4 md:px-8 py-4 flex items-center justify-between shadow-lg">
         <button
