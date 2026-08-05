@@ -192,6 +192,7 @@ app.use('/api', (req, res, next) => {
 // Static assets
 // ============================================================================
 app.use(express.static(path.join(__dirname, 'dist')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================================
 // API 404 Handler

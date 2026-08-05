@@ -28,6 +28,7 @@ jobs:
       run: |
         zip -r deploy_production_latest.zip \
           dist \
+          public \
           server \
           services \
           utils \
@@ -49,6 +50,8 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         source: "deploy_production_latest.zip"
         target: "/var/www/apps/scientific-bench"
+        overwrite: true
+        timeout: 180s
 
     - name: Execute deployment script on VPS
       uses: appleboy/ssh-action@v1.0.3
