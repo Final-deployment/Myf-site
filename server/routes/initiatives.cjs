@@ -27,7 +27,17 @@ router.get('/:id', (req, res) => {
         `).get(req.params.id);
         
         if (!initiative) return res.status(404).json({ error: 'Initiative not found' });
-        res.json(initiative);
+        
+        const activities = db.prepare(`
+            SELECT * FROM initiative_activities
+            WHERE initiative_id = ?
+            ORDER BY created_at DESC
+        `).all().map(act => ({
+            ...act,
+            images: act.images ? JSON.parse(act.images) : []
+        }));
+        
+        res.json({ ...initiative, activities });
     } catch (error) {
         console.error('Error fetching initiative:', error);
         res.status(500).json({ error: 'Failed to fetch initiative' });

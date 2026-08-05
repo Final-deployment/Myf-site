@@ -192,9 +192,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
               { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'برنامج إعداد قيادي شبابي يهدف إلى بناء الشخصية الإسلامية المتكاملة من خلال التربية الإيمانية، والوعي الفكري، والمهارات الحياتية.', image: '/logos/فتوة.png' },
               { id: 'init_ehdena', title: 'مبادرة اهدنا (على هدي الحبيب)', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية ومجالس الصلاة على النبي.', image: '/logos/على هدي الحبيب.png' },
               { id: 'init_meraj', title: 'مبادرة معراج', description: 'مبادرة تعني بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', image: '/logos/معراج.png' },
-              { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=500&h=300&fit=crop' },
-              { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
-              { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع المتأثرين بالصدمات.', image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop' }
+              { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: '/logos/ نبض الحياة.png' },
+              { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: '/logos/ نبض الأمان.png' },
+              { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل (المصطبة العلمية)', description: 'مبادرة دعم نفسي واجتماعي ودورات علمية وتثقيفية موجهة لتطوير قدرات الشباب.', image: '/logos/ بسمة أمل.png' }
             ]).map((init, i) => (
               <div 
                 key={i} 

@@ -378,6 +378,20 @@ function initDatabase() {
         )
     `);
 
+  // --- Initiative Activities Table ---
+  db.exec(`
+        CREATE TABLE IF NOT EXISTS initiative_activities (
+            id TEXT PRIMARY KEY,
+            initiative_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            date TEXT,
+            description TEXT NOT NULL,
+            images TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE
+        )
+    `);
+
   // --- Other Tables ---
   db.exec(`CREATE TABLE IF NOT EXISTS announcements (id TEXT PRIMARY KEY, title TEXT, content TEXT, type TEXT, date TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
 
@@ -493,9 +507,9 @@ function initDatabase() {
       { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'برنامج إعداد قيادي شبابي يهدف إلى بناء الشخصية الإسلامية المتكاملة من خلال التربية الإيمانية، والوعي الفكري، والمهارات الحياتية.', image: '/logos/فتوة.png' },
       { id: 'init_ehdena', title: 'مبادرة اهدنا (على هدي الحبيب)', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية ومجالس الصلاة على النبي.', image: '/logos/على هدي الحبيب.png' },
       { id: 'init_meraj', title: 'مبادرة معراج', description: 'مبادرة تعني بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', image: '/logos/معراج.png' },
-      { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=500&h=300&fit=crop' },
-      { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
-      { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع المتأثرين بالصدمات.', image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop' }
+      { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: '/logos/ نبض الحياة.png' },
+      { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: '/logos/ نبض الأمان.png' },
+      { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل (المصطبة العلمية)', description: 'مبادرة دعم نفسي واجتماعي ودورات علمية وتثقيفية موجهة لتطوير قدرات الشباب.', image: '/logos/ بسمة أمل.png' }
     ];
     for (const init of defaultInitiatives) {
       insertInit.run(init.id, init.title, init.description, init.image);
@@ -504,7 +518,10 @@ function initDatabase() {
     // Ensure initiative logos are updated
     db.prepare("UPDATE initiatives SET image = '/logos/فتوة.png' WHERE id = 'init_futuwwa' OR title LIKE '%فتوة%'").run();
     db.prepare("UPDATE initiatives SET image = '/logos/على هدي الحبيب.png' WHERE id = 'init_ehdena' OR title LIKE '%اهدنا%'").run();
-    db.prepare("INSERT OR REPLACE INTO initiatives (id, title, description, image, status, created_at) VALUES ('init_meraj', 'مبادرة معراج', 'مبادرة تعني بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', '/logos/معراج.png', 'active', CURRENT_TIMESTAMP)").run();
+    db.prepare("UPDATE initiatives SET image = '/logos/معراج.png' WHERE id = 'init_meraj' OR title LIKE '%معراج%'").run();
+    db.prepare("UPDATE initiatives SET image = '/logos/ نبض الحياة.png' WHERE id = 'init_nabd_hayat' OR title LIKE '%نبض الحياة%'").run();
+    db.prepare("UPDATE initiatives SET image = '/logos/ نبض الأمان.png' WHERE id = 'init_nabd_aman' OR title LIKE '%نبض الأمان%'").run();
+    db.prepare("UPDATE initiatives SET image = '/logos/ بسمة أمل.png' WHERE id = 'init_basmat_amal' OR title LIKE '%بسمة أمل%'").run();
   }
 
   // --- Seed Official 14 Articles ---
@@ -521,6 +538,22 @@ function initDatabase() {
       console.log(`Successfully seeded ${officialArticles.length} official articles into SQLite DB.`);
     } catch (err) {
       console.error('Error seeding official articles:', err);
+    }
+  }
+
+  // --- Seed Official Initiative Activities ---
+  const actCount = db.prepare('SELECT COUNT(*) as count FROM initiative_activities').get();
+  if (actCount.count < 10) {
+    console.log('Seeding official initiative activities into SQLite DB...');
+    try {
+      const officialActivities = require('./officialActivities.cjs');
+      const insertAct = db.prepare('INSERT OR REPLACE INTO initiative_activities (id, initiative_id, title, date, description, images) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const act of officialActivities) {
+        insertAct.run(act.id, act.initiative_id, act.title, act.date, act.description, JSON.stringify(act.images));
+      }
+      console.log(`Successfully seeded ${officialActivities.length} initiative activities into SQLite DB.`);
+    } catch (err) {
+      console.error('Error seeding initiative activities:', err);
     }
   }
 
