@@ -524,21 +524,17 @@ function initDatabase() {
     db.prepare("UPDATE initiatives SET image = '/logos/ بسمة أمل.png' WHERE id = 'init_basmat_amal' OR title LIKE '%بسمة أمل%'").run();
   }
 
-  // --- Seed Official 14 Articles ---
-  const artCount = db.prepare("SELECT COUNT(*) as count FROM articles WHERE id != 'art_default1'").get();
-  if (artCount.count < 14) {
-    console.log('Seeding official 14 articles into SQLite DB...');
-    try {
-      const officialArticles = require('./officialArticles.cjs');
-      db.exec("DELETE FROM articles WHERE id = 'art_default1'");
-      const insertArt = db.prepare('INSERT OR REPLACE INTO articles (id, title, content, image, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
-      for (const art of officialArticles) {
-        insertArt.run(art.id, art.title, art.content, art.image || null, art.author_id || 'admin_mohammad', art.created_at);
-      }
-      console.log(`Successfully seeded ${officialArticles.length} official articles into SQLite DB.`);
-    } catch (err) {
-      console.error('Error seeding official articles:', err);
+  // --- Seed Official Articles ---
+  try {
+    const officialArticles = require('./officialArticles.cjs');
+    db.exec("DELETE FROM articles WHERE id = 'art_default1'");
+    const insertArt = db.prepare('INSERT OR REPLACE INTO articles (id, title, content, image, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    for (const art of officialArticles) {
+      insertArt.run(art.id, art.title, art.content, art.image || null, art.author_id || 'admin_mohammad', art.created_at);
     }
+    console.log(`Successfully synced ${officialArticles.length} official articles into SQLite DB.`);
+  } catch (err) {
+    console.error('Error syncing official articles:', err);
   }
 
   // --- Seed Official Initiative Activities ---

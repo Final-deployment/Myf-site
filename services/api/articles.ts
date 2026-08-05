@@ -16,13 +16,24 @@ export const articlesApi = {
         try {
             const response = await fetch('/api/articles');
             if (!response.ok) throw new Error('Failed to fetch articles');
-            const data = await response.json();
-            if (Array.isArray(data) && data.length > 0) {
-                return data;
+            const data: Article[] = await response.json();
+            
+            // Map by ID
+            const apiMap = new Map((Array.isArray(data) ? data : []).map(a => [a.id, a]));
+            
+            // Merge with INITIAL_OFFICIAL_ARTICLES so no official article is missing
+            for (const official of INITIAL_OFFICIAL_ARTICLES) {
+                if (!apiMap.has(official.id)) {
+                    apiMap.set(official.id, official as Article);
+                }
             }
-            return INITIAL_OFFICIAL_ARTICLES;
+
+            const combined = Array.from(apiMap.values());
+            // Sort by created_at DESC
+            combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            return combined;
         } catch {
-            return INITIAL_OFFICIAL_ARTICLES;
+            return INITIAL_OFFICIAL_ARTICLES as Article[];
         }
     },
 

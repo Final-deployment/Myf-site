@@ -7,6 +7,16 @@ const { authenticateToken, requireAdmin } = require('../middleware.cjs');
 // Get all articles (public)
 router.get('/', (req, res) => {
     try {
+        try {
+            const officialArticles = require('../officialArticles.cjs');
+            const insertArt = db.prepare('INSERT OR REPLACE INTO articles (id, title, content, image, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+            for (const art of officialArticles) {
+                insertArt.run(art.id, art.title, art.content, art.image || null, art.author_id || 'admin_mohammad', art.created_at);
+            }
+        } catch (e) {
+            console.error('Auto sync articles error:', e);
+        }
+
         const articles = db.prepare(`
             SELECT a.*, u.name as author_name 
             FROM articles a
