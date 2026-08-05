@@ -76,9 +76,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/90">
-          <button onClick={() => scrollToSection('about')} className="hover:text-[#d4a045] transition">من نحن</button>
+          <button onClick={() => navigate('/about')} className="hover:text-[#d4a045] transition">من نحن</button>
           <button onClick={() => scrollToSection('initiatives')} className="hover:text-[#d4a045] transition">المبادرات</button>
-          <button onClick={() => scrollToSection('articles')} className="hover:text-[#d4a045] transition">المقالات</button>
+          <button onClick={() => navigate('/articles')} className="hover:text-[#d4a045] transition">المقالات</button>
           <button onClick={() => scrollToSection('mastaba')} className="hover:text-[#d4a045] transition">المصطبة العلمية</button>
           <button onClick={() => scrollToSection('contact')} className="hover:text-[#d4a045] transition">تواصل معنا</button>
         </nav>
@@ -104,7 +104,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
       {/* --- MOBILE DROPDOWN MENU --- */}
       {mobileMenuOpen && (
         <div className="fixed inset-x-0 top-20 z-40 bg-[#0a192f]/95 backdrop-blur-2xl border-b border-white/10 p-6 flex flex-col gap-4 text-white md:hidden animate-fade-in-down shadow-2xl">
-          <button onClick={() => { scrollToSection('about'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">من نحن</button>
+          <button onClick={() => { navigate('/about'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">من نحن</button>
           <button onClick={() => { scrollToSection('initiatives'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المبادرات</button>
           <button onClick={() => { navigate('/articles'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المقالات</button>
           <button onClick={() => { scrollToSection('mastaba'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المصطبة العلمية</button>
@@ -170,6 +170,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
                 <p className="text-sm opacity-70">بيئة تفاعلية داعمة</p>
               </div>
             </div>
+
+            <button
+              onClick={() => navigate('/about')}
+              className="mt-4 bg-gradient-to-r from-[#d4a045] to-[#b8860b] hover:from-[#b8860b] hover:to-[#966d07] text-[#0a192f] font-bold py-3 px-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 inline-flex items-center gap-2"
+            >
+              <span>معرفة المزيد (عن الملتقى، الرؤية، الإدارة)</span>
+              <ArrowLeft size={18} />
+            </button>
           </div>
           <div className="flex-1 relative">
             <div className="absolute inset-0 bg-gradient-to-r from-[#047857] to-[#0f766e] transform rotate-3 rounded-[3rem] opacity-20 blur-xl"></div>

@@ -113,6 +113,7 @@ const CompleteProfile = lazy(ROUTE_IMPORTS['complete-profile']);
 const ArticlePage = lazy(() => import('./components/ArticlePage'));
 const ArticlesList = lazy(() => import('./components/ArticlesList'));
 const InitiativePage = lazy(() => import('./components/InitiativePage'));
+const AboutUs = lazy(() => import('./components/AboutUs'));
 
 // ============================================================================
 // Types
@@ -342,6 +343,14 @@ const AppContent: React.FC = () => {
             <InitiativePage />
           </PublicRoute>
         } />
+
+        <Route path="/about" element={
+          <PublicRoute>
+            <AboutUs />
+          </PublicRoute>
+        } />
+
+        <Route path="/about-us" element={<Navigate to="/about" replace />} />
 
         <Route path="/complete-profile" element={
           <ProtectedRoute>
