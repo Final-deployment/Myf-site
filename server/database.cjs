@@ -487,23 +487,77 @@ function initDatabase() {
     console.log('Seeding default initiatives...');
     const insertInit = db.prepare('INSERT INTO initiatives (id, title, description, image) VALUES (?, ?, ?, ?)');
     const defaultInitiatives = [
-      { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'تهدف إلى ترسيخ القيم والأخلاق الإسلامية الأساسية لد￯ الرجال والنساء.', image: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?w=500&h=300&fit=crop' },
+      { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'برنامج إعداد قيادي شبابي يهدف إلى بناء الشخصية الإسلامية المتكاملة من خلال التربية الإيمانية، والوعي الفكري، والمهارات الحياتية.', image: '/logos/فتوة.png' },
+      { id: 'init_ehdena', title: 'مبادرة اهدنا (على هدي الحبيب)', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية ومجالس الصلاة على النبي.', image: '/logos/على هدي الحبيب.png' },
+      { id: 'init_meraj', title: 'مبادرة معراج', description: 'مبادرة تعني بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', image: '/logos/معراج.png' },
       { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=500&h=300&fit=crop' },
-      { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
-      { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع المتأثرين بالصدمات.', image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop' },
-      { id: 'init_ehdena', title: 'مبادرة اهدنا', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية.', image: 'https://images.unsplash.com/photo-1590076214580-c0818274718f?w=500&h=300&fit=crop' }
+      { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
+      { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع المتأثرين بالصدمات.', image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop' }
     ];
     for (const init of defaultInitiatives) {
       insertInit.run(init.id, init.title, init.description, init.image);
     }
+  } else {
+    // Ensure initiative logos are updated
+    db.prepare("UPDATE initiatives SET image = '/logos/فتوة.png' WHERE id = 'init_futuwwa' OR title LIKE '%فتوة%'").run();
+    db.prepare("UPDATE initiatives SET image = '/logos/على هدي الحبيب.png' WHERE id = 'init_ehdena' OR title LIKE '%اهدنا%'").run();
+    db.prepare("INSERT OR REPLACE INTO initiatives (id, title, description, image, status, created_at) VALUES ('init_meraj', 'مبادرة معراج', 'مبادرة تعني بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', '/logos/معراج.png', 'active', CURRENT_TIMESTAMP)").run();
   }
 
-  // --- Seed Default Articles ---
-  const artCount = db.prepare('SELECT COUNT(*) as count FROM articles').get();
+  // --- Seed Official 14 Articles ---
+  const artCount = db.prepare("SELECT COUNT(*) as count FROM articles WHERE id != 'art_default1'").get();
   if (artCount.count === 0) {
-    console.log('Seeding default articles...');
-    const insertArt = db.prepare('INSERT INTO articles (id, title, content, image) VALUES (?, ?, ?, ?)');
-    insertArt.run('art_default1', 'مرحباً بكم في الموقع', 'هذا مقال تجريبي للترحيب بالزوار الجدد في موقعنا.', 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=500&h=300&fit=crop');
+    console.log('Seeding official 14 articles from articles.txt...');
+    try {
+      const articlesFilePath = path.join(__dirname, '../articles.txt');
+      if (fs.existsSync(articlesFilePath)) {
+        const rawText = fs.readFileSync(articlesFilePath, 'utf-8');
+        const lines = rawText.split('\n');
+        let parsedArticles = [];
+        let currentArticle = null;
+        let expectingTitle = true;
+
+        for (let line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          if (expectingTitle && /^[\u0660-\u06690-9]+\.\s*(.*)/.test(trimmedLine)) {
+            const titleMatch = trimmedLine.match(/^[\u0660-\u06690-9]+\.\s*(.*)/);
+            currentArticle = { title: titleMatch[1].trim(), content: [] };
+            parsedArticles.push(currentArticle);
+            expectingTitle = false;
+          } else if (trimmedLine.includes('-ملتقى الشباب المسلم')) {
+            expectingTitle = true;
+          } else if (currentArticle) {
+            currentArticle.content.push(trimmedLine);
+          }
+        }
+
+        const facebookDates = [
+          '2026-04-25T12:00:00.000Z', '2026-04-23T12:00:00.000Z', '2026-04-20T12:00:00.000Z',
+          '2026-04-17T12:00:00.000Z', '2026-04-12T12:00:00.000Z', '2026-04-05T12:00:00.000Z',
+          '2026-03-27T12:00:00.000Z', '2026-03-20T12:00:00.000Z', '2026-03-14T12:00:00.000Z',
+          '2026-03-08T12:00:00.000Z', '2026-03-01T12:00:00.000Z', '2026-02-22T12:00:00.000Z',
+          '2026-02-15T12:00:00.000Z', '2026-02-08T12:00:00.000Z'
+        ];
+
+        db.exec("DELETE FROM articles WHERE id = 'art_default1'");
+        const insertArt = db.prepare('INSERT OR REPLACE INTO articles (id, title, content, image, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+        
+        parsedArticles.filter(a => a.title && a.content.length > 0).forEach((a, idx) => {
+          insertArt.run(
+            'art_auto_' + idx,
+            a.title,
+            a.content.join('\n\n'),
+            null,
+            'admin_mohammad',
+            facebookDates[idx] || new Date().toISOString()
+          );
+        });
+        console.log(`Seeded ${parsedArticles.length} official articles into SQLite DB.`);
+      }
+    } catch (err) {
+      console.error('Error seeding official articles:', err);
+    }
   }
 
   // --- Seed Initial Folder if not exists ---
