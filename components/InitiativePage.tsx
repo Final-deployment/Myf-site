@@ -94,12 +94,42 @@ const InitiativePage: React.FC = () => {
         setActivities(fallbackActs);
         
         const defaultInits: Record<string, Initiative> = {
-          'init_futuwwa': { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'برنامج إعداد قيادي شبابي يهدف إلى بناء الشخصية الإسلامية المتكاملة من خلال التربية الإيمانية والوعي الفكري والمهارات الحياتية.', image: '/logos/فتوة.png' },
-          'init_ehdena': { id: 'init_ehdena', title: 'مبادرة اهدنا (على هدي الحبيب)', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية ومجالس الصلاة على النبي.', image: '/logos/على هدي الحبيب.png' },
-          'init_meraj': { id: 'init_meraj', title: 'مبادرة معراج', description: 'مبادرة تعني بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', image: '/logos/معراج.png' },
-          'init_nabd_hayat': { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?w=500&h=300&fit=crop' },
-          'init_nabd_aman': { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: 'https://images.unsplash.com/photo-1605814523789-9154b5dfd9d5?w=500&h=300&fit=crop' },
-          'init_basmat_amal': { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل (المصطبة العلمية)', description: 'مبادرة دعم نفسي واجتماعي ودورات علمية وتثقيفية موجهة لتطوير قدرات الشباب.', image: '/logos/المصطبة.png' }
+          'init_futuwwa': { 
+            id: 'init_futuwwa', 
+            title: 'أكاديمية فتوة/فلسطين', 
+            description: 'بدأت العمل في فلسطين عام 2024م، وتهدف إلى ترسيخ القيم والأخلاق الإسلامية الأساسية لدى الرجال والنساء، والتي تتجذر في القرآن الكريم والسنة النبوية. تقوم الأكاديمية على تعزيز خمسة عناصر أساسية للفتوة: العلم، الأدب، الخدمة، الصحة البدنية والنفسية، والحرفية. تشمل أنشطتها بناء قدرات مجتمعية فعالة لمواجهة التحديات التي يواجهها الشعب الفلسطيني بسبب الاحتلال وعنف المستوطنين لا سيما في المخيمات وأطراف المدن والمناطق الحضرية.', 
+            image: '/logos/فتوة.png' 
+          },
+          'init_ehdena': { 
+            id: 'init_ehdena', 
+            title: 'مبادرة اهدنا (على هدي الحبيب)', 
+            description: 'مبادرة دعوية تهدف إلى نشر تعاليم الدين الإسلامي، من خلال الدورات، المحاضرات، المواد العلمية على وسائل التواصل الاجتماعي، وإحياء المناسبات الدينية ومجالس الذكر. يعقد الملتقى من خلال هذه المبادرة مجلساً أسبوعياً للذكر والصلاة على النبي، ومجالس شهرية مع بداية كل شهر في مساجد (رجال العمود، الشهداء، وسعد بن أبي وقاص) في مدينة نابلس.', 
+            image: '/logos/على هدي الحبيب.png' 
+          },
+          'init_meraj': { 
+            id: 'init_meraj', 
+            title: 'مقرأة معراج', 
+            description: 'منصة تهدف لتحفيظ وتصحيح تلاوة القرآن الكريم، تتخذ مسارين: إلكتروني ووجاهي في مدرسة المسجد الحنبلي بالبلدة القديمة بنابلس. تجمع مشاركين من جميع أنحاء العالم، وشعارها: «من أرض المعراج، نعرج معاً نحو العلا برفقة كتاب الله تعالى».', 
+            image: '/logos/معراج.png' 
+          },
+          'init_nabd_hayat': { 
+            id: 'init_nabd_hayat', 
+            title: 'مبادرة نبض الحياة', 
+            description: 'مبادرة تدريبية رائدة تهدف إلى تزويد الشباب والمتطوعين في المناطق عالية الخطورة بمهارات الإسعافات الأولية والاستجابة الطارئة لإنقاذ الأرواح وتعزيز الأمن الصحي في المجتمع الفلسطيني، تم تنظيمها تحت رعاية محافظة نابلس.', 
+            image: '/logos/ نبض الحياة.png' 
+          },
+          'init_nabd_aman': { 
+            id: 'init_nabd_aman', 
+            title: 'مبادرة نبض الأمان', 
+            description: 'تركز على تعزيز السلامة العامة في المجتمع من خلال تدريب الشباب على التعامل مع حالات الطوارئ وتعزيز جاهزية المجتمع لها وتقليل الخسائر البشرية حال حدوثها، وقد تم تنظيمها بالتعاون مع إطفائية نابلس والدفاع المدني.', 
+            image: '/logos/ نبض الأمان.png' 
+          },
+          'init_basmat_amal': { 
+            id: 'init_basmat_amal', 
+            title: 'مبادرة بسمة أمل', 
+            description: 'مبادرة دعم نفسي واجتماعي تستهدف توعية المتدربين على سبل التعامل مع النساء والأطفال المتأثرين بالصدمات النفسية، وتشمل أنشطة ميدانية كزيارة أطفال مرضى السرطان في مستشفى النجاح الوطني الجامعي.', 
+            image: '/logos/ بسمة أمل.png' 
+          }
         };
         
         if (id && defaultInits[id]) {
@@ -193,19 +223,58 @@ const InitiativePage: React.FC = () => {
         <div className={`rounded-3xl overflow-hidden shadow-2xl ${isDark ? 'bg-slate-900 border border-white/10' : 'bg-white'} mb-16 flex flex-col md:flex-row`}>
           <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
             <h2 className={`text-3xl font-bold font-cairo mb-6 ${isDark ? 'text-[#d4a045]' : 'text-[#047857]'}`}>
-              عن المبادرة
+              عن المبادرة (من الواقع الفعلي)
             </h2>
-            <p className="text-lg leading-relaxed opacity-80 mb-8 text-justify">
-              تعتبر مبادرة "{initiative.title}" من أهم البرامج التي يقدمها ملتقى الشباب المسلم، حيث تم تصميمها بعناية لتتناسب مع احتياجات الجيل وتواكب التطورات المعاصرة برؤية إسلامية أصيلة.
+            <p className="text-base md:text-lg leading-relaxed opacity-90 mb-6 text-justify">
+              {initiative.description}
             </p>
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold font-cairo mb-4 flex items-center gap-2">
+
+            {/* Initiative Specific Highlights */}
+            {initiative.id === 'init_futuwwa' && (
+              <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                <h4 className="font-bold text-amber-400 mb-2 text-sm">عناصر الفتوة الخمسة الأساسية:</h4>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold text-white">
+                  <span className="px-3 py-1 bg-amber-500/20 rounded-lg">📖 العلم</span>
+                  <span className="px-3 py-1 bg-amber-500/20 rounded-lg">🤝 الأدب</span>
+                  <span className="px-3 py-1 bg-amber-500/20 rounded-lg">🌱 الخدمة</span>
+                  <span className="px-3 py-1 bg-amber-500/20 rounded-lg">🏋️ الصحة البدنية والنفسية</span>
+                  <span className="px-3 py-1 bg-amber-500/20 rounded-lg">🛠️ الحرفية</span>
+                </div>
+              </div>
+            )}
+
+            {initiative.id === 'init_meraj' && (
+              <div className="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                <p className="text-sm font-bold text-emerald-400 italic mb-2">«من أرض المعراج، نعرج معاً نحو العلا برفقة كتاب الله تعالى»</p>
+                <div className="flex flex-wrap gap-2 text-xs font-semibold text-white">
+                  <span className="px-3 py-1 bg-emerald-500/20 rounded-lg">🕌 المسار الوجاهي: مدرسة المسجد الحنبلي - نابلس</span>
+                  <span className="px-3 py-1 bg-emerald-500/20 rounded-lg">🌐 المسار الإلكتروني: مشاركون من أنحاء العالم</span>
+                </div>
+              </div>
+            )}
+
+            {initiative.id === 'init_nabd_hayat' && (
+              <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/30">
+                <span className="text-xs font-bold text-red-400 block mb-1">🏛️ برعاية محافظة نابلس</span>
+                <p className="text-xs opacity-90">تدريب المتطوعين على الإسعافات الأولية والاستجابة الطارئة في المناطق عالية الخطورة.</p>
+              </div>
+            )}
+
+            {initiative.id === 'init_nabd_aman' && (
+              <div className="mb-6 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30">
+                <span className="text-xs font-bold text-blue-400 block mb-1">🚒 بالشراكة مع إطفائية نابلس والدفاع المدني</span>
+                <p className="text-xs opacity-90">التدريب على أساسيات الإطفاء والسلامة العامة والتعامل مع حالات الطوارئ.</p>
+              </div>
+            )}
+
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xl font-bold font-cairo mb-3 flex items-center gap-2">
                 <Star size={20} className="text-[#d4a045]" /> أهداف المبادرة
               </h3>
               {objectives.map((obj, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <CheckCircle size={20} className="text-[#10b981] mt-1 shrink-0" />
-                  <span className="opacity-90">{obj}</span>
+                  <CheckCircle size={18} className="text-[#10b981] mt-1 shrink-0" />
+                  <span className="opacity-90 text-sm md:text-base">{obj}</span>
                 </div>
               ))}
             </div>
