@@ -111,6 +111,7 @@ const LandingPage = lazy(ROUTE_IMPORTS.landing);
 const Auth = lazy(ROUTE_IMPORTS.auth);
 const CompleteProfile = lazy(ROUTE_IMPORTS['complete-profile']);
 const ArticlePage = lazy(() => import('./components/ArticlePage'));
+const ArticlesList = lazy(() => import('./components/ArticlesList'));
 const InitiativePage = lazy(() => import('./components/InitiativePage'));
 
 // ============================================================================
@@ -321,6 +322,12 @@ const AppContent: React.FC = () => {
               onLoginSuccess={() => {}}
               onProfileRequired={() => navigate('/complete-profile')}
             />
+          </PublicRoute>
+        } />
+
+        <Route path="/articles" element={
+          <PublicRoute>
+            <ArticlesList />
           </PublicRoute>
         } />
 

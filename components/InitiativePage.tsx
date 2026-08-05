@@ -131,13 +131,12 @@ const InitiativePage: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="md:w-1/2 h-64 md:h-auto relative">
+          <div className={`md:w-1/2 min-h-[300px] md:h-auto relative flex items-center justify-center p-8 ${isDark ? 'bg-slate-950' : 'bg-slate-100'}`}>
             <img 
-              src={initiative.image || 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=800&h=800&fit=crop'} 
+              src={initiative.image || '/logos/الملتقى.png'} 
               alt={initiative.title} 
-              className="w-full h-full object-cover" 
+              className="max-h-80 max-w-full object-contain filter drop-shadow-lg" 
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent" />
           </div>
         </div>
 

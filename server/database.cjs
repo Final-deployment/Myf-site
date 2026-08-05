@@ -445,7 +445,7 @@ function initDatabase() {
   const defaultUsers = [
     {
       id: "admin_mohammad", email: "mohammadaydi93@gmail.com", passwordPlain: "12345678",
-      role: "admin", name: "محمد العايدي"
+      role: "admin", name: "إدارة الملتقى"
     },
     {
       id: "admin_ikhlas", email: "ikhlasali19972018@gmail.com", passwordPlain: "12345678",

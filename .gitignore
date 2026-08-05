@@ -29,6 +29,7 @@ temp_deploy/
 
 # Database
 *.sqlite
+!data/db.sqlite
 database.sqlite
 main.db
 *.db-journal

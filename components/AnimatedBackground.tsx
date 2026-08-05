@@ -133,11 +133,11 @@ const AnimatedBackground: React.FC = () => {
 
     function init() {
       particlesArray = [];
-      // Adjust particle count depending on screen size, limit heavily on mobile for performance
+      // Reduce particle count significantly to improve performance
       const isMobile = window.innerWidth < 768;
       const numberOfParticles = isMobile 
-        ? 100 
-        : Math.min(600, (canvas.width * canvas.height) / 10000);
+        ? 60 
+        : Math.min(150, (canvas.width * canvas.height) / 20000);
       for (let i = 0; i < numberOfParticles; i++) {
         particlesArray.push(new Particle());
       }
@@ -156,11 +156,13 @@ const AnimatedBackground: React.FC = () => {
           const dx = p1.x3d - p2.x3d;
           const dy = p1.y3d - p2.y3d;
           const dz = p1.z3d - p2.z3d;
-          const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          const distSq = dx * dx + dy * dy + dz * dz;
+          const limit = p1.radius * 0.3;
           
-          // Connect if close enough in 3D space
-          if (distance < p1.radius * 0.3) {
-            let opacityValue = 1 - (distance / (p1.radius * 0.3));
+          // Connect if close enough in 3D space (use squared distance for performance)
+          if (distSq < limit * limit) {
+            const distance = Math.sqrt(distSq);
+            let opacityValue = 1 - (distance / limit);
             
             // Average depth to scale line width and opacity
             const avgZ = (p1.z3d + p2.z3d) / 2;
