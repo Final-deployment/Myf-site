@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, Calendar, User, Clock, Share2, ZoomIn, ZoomOut, Hand } from 'lucide-react';
 import { useTheme } from './ThemeContext';
+import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
 import LoadingSpinner from './LoadingSpinner';
 
 interface Article {
@@ -44,7 +45,13 @@ const ArticlePage: React.FC = () => {
         setArticle(data);
       } catch (err) {
         console.error(err);
-        setError('تعذر تحميل المقالة. قد تكون محذوفة أو الرابط غير صحيح.');
+        const fallback = INITIAL_OFFICIAL_ARTICLES.find(a => a.id === id);
+        if (fallback) {
+          setArticle(fallback);
+          setError('');
+        } else {
+          setError('تعذر تحميل المقالة. قد تكون محذوفة أو الرابط غير صحيح.');
+        }
       } finally {
         setLoading(false);
       }

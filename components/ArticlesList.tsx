@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Search, Calendar } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import { articlesApi, Article } from '../services/api/articles';
+import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
 import LoadingSpinner from './LoadingSpinner';
 
 const ArticlesList: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
   
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [articles, setArticles] = useState<Article[]>(INITIAL_OFFICIAL_ARTICLES);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 

@@ -506,55 +506,16 @@ function initDatabase() {
 
   // --- Seed Official 14 Articles ---
   const artCount = db.prepare("SELECT COUNT(*) as count FROM articles WHERE id != 'art_default1'").get();
-  if (artCount.count === 0) {
-    console.log('Seeding official 14 articles from articles.txt...');
+  if (artCount.count < 14) {
+    console.log('Seeding official 14 articles into SQLite DB...');
     try {
-      const articlesFilePath = path.join(__dirname, '../articles.txt');
-      if (fs.existsSync(articlesFilePath)) {
-        const rawText = fs.readFileSync(articlesFilePath, 'utf-8');
-        const lines = rawText.split('\n');
-        let parsedArticles = [];
-        let currentArticle = null;
-        let expectingTitle = true;
-
-        for (let line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-          if (expectingTitle && /^[\u0660-\u06690-9]+\.\s*(.*)/.test(trimmedLine)) {
-            const titleMatch = trimmedLine.match(/^[\u0660-\u06690-9]+\.\s*(.*)/);
-            currentArticle = { title: titleMatch[1].trim(), content: [] };
-            parsedArticles.push(currentArticle);
-            expectingTitle = false;
-          } else if (trimmedLine.includes('-ملتقى الشباب المسلم')) {
-            expectingTitle = true;
-          } else if (currentArticle) {
-            currentArticle.content.push(trimmedLine);
-          }
-        }
-
-        const facebookDates = [
-          '2026-04-25T12:00:00.000Z', '2026-04-23T12:00:00.000Z', '2026-04-20T12:00:00.000Z',
-          '2026-04-17T12:00:00.000Z', '2026-04-12T12:00:00.000Z', '2026-04-05T12:00:00.000Z',
-          '2026-03-27T12:00:00.000Z', '2026-03-20T12:00:00.000Z', '2026-03-14T12:00:00.000Z',
-          '2026-03-08T12:00:00.000Z', '2026-03-01T12:00:00.000Z', '2026-02-22T12:00:00.000Z',
-          '2026-02-15T12:00:00.000Z', '2026-02-08T12:00:00.000Z'
-        ];
-
-        db.exec("DELETE FROM articles WHERE id = 'art_default1'");
-        const insertArt = db.prepare('INSERT OR REPLACE INTO articles (id, title, content, image, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
-        
-        parsedArticles.filter(a => a.title && a.content.length > 0).forEach((a, idx) => {
-          insertArt.run(
-            'art_auto_' + idx,
-            a.title,
-            a.content.join('\n\n'),
-            null,
-            'admin_mohammad',
-            facebookDates[idx] || new Date().toISOString()
-          );
-        });
-        console.log(`Seeded ${parsedArticles.length} official articles into SQLite DB.`);
+      const officialArticles = require('./officialArticles.cjs');
+      db.exec("DELETE FROM articles WHERE id = 'art_default1'");
+      const insertArt = db.prepare('INSERT OR REPLACE INTO articles (id, title, content, image, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const art of officialArticles) {
+        insertArt.run(art.id, art.title, art.content, art.image || null, art.author_id || 'admin_mohammad', art.created_at);
       }
+      console.log(`Successfully seeded ${officialArticles.length} official articles into SQLite DB.`);
     } catch (err) {
       console.error('Error seeding official articles:', err);
     }

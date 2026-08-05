@@ -1,4 +1,5 @@
 import { getAuthToken } from './auth';
+import { INITIAL_OFFICIAL_ARTICLES } from './officialArticles';
 
 export interface Article {
     id: string;
@@ -12,9 +13,17 @@ export interface Article {
 
 export const articlesApi = {
     getAll: async (): Promise<Article[]> => {
-        const response = await fetch('/api/articles');
-        if (!response.ok) throw new Error('Failed to fetch articles');
-        return response.json();
+        try {
+            const response = await fetch('/api/articles');
+            if (!response.ok) throw new Error('Failed to fetch articles');
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                return data;
+            }
+            return INITIAL_OFFICIAL_ARTICLES;
+        } catch {
+            return INITIAL_OFFICIAL_ARTICLES;
+        }
     },
 
     create: async (data: { title: string; content: string; image?: string }): Promise<Article> => {

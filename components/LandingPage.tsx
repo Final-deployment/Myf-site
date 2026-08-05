@@ -4,6 +4,7 @@ import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
 import { Sun, Moon, ArrowLeft, ArrowRight, BookOpen, Users, Globe, Mail, ChevronDown, PlayCircle, ChevronRight, ChevronLeft, Home, Compass, GraduationCap, UserCheck, Menu, X } from 'lucide-react';
 import { articlesApi, Article } from '../services/api/articles';
+import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
 import { initiativesApi, Initiative } from '../services/api/initiatives';
 import AnimatedBackground from './AnimatedBackground';
 
@@ -17,7 +18,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<Article[]>(INITIAL_OFFICIAL_ARTICLES);
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const articlesScrollRef = useRef<HTMLDivElement>(null);
