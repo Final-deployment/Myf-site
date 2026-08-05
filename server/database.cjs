@@ -481,6 +481,9 @@ function initDatabase() {
     }
   }
 
+  // Force update any existing admin user name from 'محمد العايدي' to 'إدارة الملتقى'
+  db.prepare("UPDATE users SET name = 'إدارة الملتقى' WHERE id = 'admin_mohammad' OR name = 'محمد العايدي'").run();
+
   // --- Seed Default Initiatives ---
   const initCount = db.prepare('SELECT COUNT(*) as count FROM initiatives').get();
   if (initCount.count === 0) {
