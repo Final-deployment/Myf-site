@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, BookOpen, Compass, Award, Users, HeartHandshake, Lightbulb, ShieldCheck, Landmark, AcademicCapIcon } from 'lucide-react';
+import { ArrowRight, BookOpen, Compass, Award, Users, HeartHandshake, Lightbulb, ShieldCheck, Landmark, GraduationCap } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 
 export const AboutUs: React.FC = () => {
@@ -171,7 +171,7 @@ export const AboutUs: React.FC = () => {
           <div className={`relative p-6 md:p-10 rounded-3xl ${theme === 'day' ? 'bg-white border border-slate-200 shadow-xl' : 'bg-slate-900/90 border border-slate-800 shadow-2xl'} space-y-6`}>
             <div className="flex items-center gap-3 border-b border-amber-500/20 pb-4">
               <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                <AcademicCapIcon size={28} />
+                <GraduationCap size={28} />
               </div>
               <div>
                 <span className="text-xs font-semibold text-amber-400 uppercase tracking-widest">القيادة والأكاديمية</span>
