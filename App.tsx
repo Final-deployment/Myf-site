@@ -30,6 +30,7 @@ import { Course } from './types';
 import SupportChatBubble from './components/SupportChatBubble';
 import AskSupervisorBubble from './components/AskSupervisorBubble';
 import { StudentJourneyMap } from './components/StudentJourneyMap';
+import { MobileBottomNav } from './components/MobileBottomNav';
 
 // ============================================================================
 // Lazy-loaded Components (Code Splitting)
@@ -377,6 +378,7 @@ const AppContent: React.FC = () => {
           </ProtectedRoute>
         } />
       </Routes>
+      <MobileBottomNav />
     </>
   );
 };

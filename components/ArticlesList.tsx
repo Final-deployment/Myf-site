@@ -105,12 +105,17 @@ const ArticlesList: React.FC = () => {
           <div className="text-center text-red-500 py-20">{error}</div>
         ) : filteredArticles.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredArticles.map((article) => (
+            {filteredArticles.map((article, idx) => (
               <div 
                 key={article.id} 
                 onClick={() => navigate(`/article/${article.id}`)}
-                className={`rounded-2xl overflow-hidden ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white shadow-xl'} group cursor-pointer transition-transform duration-300 hover:-translate-y-2 flex flex-col h-full`}
+                className={`rounded-2xl overflow-hidden ${idx === 0 ? 'border-2 border-amber-400 shadow-2xl ring-2 ring-amber-400/20' : ''} ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white shadow-xl'} group cursor-pointer transition-transform duration-300 hover:-translate-y-2 flex flex-col h-full relative`}
               >
+                {idx === 0 && (
+                  <div className="absolute top-3 left-3 z-10 bg-amber-500 text-black text-xs font-extrabold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
+                    ✨ المقال الأحدث
+                  </div>
+                )}
                 <div className="h-56 overflow-hidden relative">
                   <img src={article.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500&h=300&fit=crop'} alt={article.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                   <div className="absolute top-4 right-4 bg-[#047857]/90 text-white text-xs font-bold px-3 py-1 rounded-full backdrop-blur-sm shadow-md">

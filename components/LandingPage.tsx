@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
@@ -21,10 +21,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   const [articles, setArticles] = useState<Article[]>(INITIAL_OFFICIAL_ARTICLES);
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentCardIndex, setCurrentCardIndex] = useState(6);
+  const [isTransitioning, setIsTransitioning] = useState(true);
   const [isArticlesPaused, setIsArticlesPaused] = useState(false);
-  const articlesScrollRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
-  const featuredArticles = articles.slice(0, 6);
+  const featuredArticles = useMemo(() => articles.slice(0, 6), [articles]);
+  const tripleArticles = useMemo(
+    () => (featuredArticles.length > 0 ? [...featuredArticles, ...featuredArticles, ...featuredArticles] : []),
+    [featuredArticles]
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     // Fetch dynamic content
@@ -45,29 +57,34 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
     fetchContent();
   }, []);
 
-  // Smooth Auto-Slide Effect for 6 Articles (Looping 1 to 6 without duplicates)
+  // Continuous Forward Infinite Auto-Slide (1 follows 6 seamlessly forever in middle set)
   useEffect(() => {
     if (isArticlesPaused || featuredArticles.length === 0) return;
-    const container = articlesScrollRef.current;
-    if (!container) return;
 
-    const interval = setInterval(() => {
-      if (!container) return;
-      const maxScroll = Math.abs(container.scrollWidth - container.clientWidth);
-      const currentScroll = Math.abs(container.scrollLeft);
+    const timer = setInterval(() => {
+      setIsTransitioning(true);
+      setCurrentCardIndex((prev) => prev + 1);
+    }, 3200);
 
-      if (currentScroll >= maxScroll - 15) {
-        // Reached article 6 -> Loop back smoothly to article 1
-        container.scrollTo({ left: 0, behavior: 'smooth' });
-      } else {
-        // Slide to next article card
-        const cardWidth = container.clientWidth > 768 ? 360 : 300;
-        container.scrollBy({ left: cardWidth, behavior: 'smooth' });
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
+    return () => clearInterval(timer);
   }, [isArticlesPaused, featuredArticles.length]);
+
+  const handleTransitionEnd = () => {
+    if (currentCardIndex >= 12) {
+      setIsTransitioning(false);
+      setCurrentCardIndex(6);
+    }
+  };
+
+  const handleNextArticle = () => {
+    setIsTransitioning(true);
+    setCurrentCardIndex((prev) => prev + 1);
+  };
+
+  const handlePrevArticle = () => {
+    setIsTransitioning(true);
+    setCurrentCardIndex((prev) => (prev > 0 ? prev - 1 : 11));
+  };
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -75,16 +92,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const scrollArticles = (direction: 'left' | 'right') => {
-    if (articlesScrollRef.current) {
-      const cardWidth = articlesScrollRef.current.clientWidth > 768 ? 360 : 300;
-      articlesScrollRef.current.scrollBy({
-        left: direction === 'left' ? -cardWidth : cardWidth,
-        behavior: 'smooth'
-      });
     }
   };
 
@@ -105,7 +112,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           <button onClick={() => navigate('/about')} className="hover:text-[#d4a045] transition">من نحن</button>
           <button onClick={() => scrollToSection('initiatives')} className="hover:text-[#d4a045] transition">المبادرات</button>
           <button onClick={() => navigate('/articles')} className="hover:text-[#d4a045] transition">المقالات</button>
-          <button onClick={() => scrollToSection('mastaba')} className="hover:text-[#d4a045] transition">المصطبة العلمية</button>
+          <button onClick={() => navigate('/login')} className="hover:text-[#d4a045] transition">المصطبة العلمية</button>
           <button onClick={() => scrollToSection('contact')} className="hover:text-[#d4a045] transition">تواصل معنا</button>
         </nav>
 
@@ -145,7 +152,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
             <button onClick={() => { navigate('/about'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">من نحن</button>
             <button onClick={() => { scrollToSection('initiatives'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المبادرات</button>
             <button onClick={() => { navigate('/articles'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المقالات</button>
-            <button onClick={() => { scrollToSection('mastaba'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المصطبة العلمية</button>
+            <button onClick={() => { navigate('/login'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المصطبة العلمية</button>
             <button onClick={() => { scrollToSection('contact'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">تواصل معنا</button>
             <button onClick={() => { onLoginClick(); setMobileMenuOpen(false); }} className="bg-[#d4a045] text-black font-bold py-3 rounded-xl mt-2 text-center text-lg shadow-lg">تسجيل الدخول / المصطبة</button>
           </div>
@@ -226,11 +233,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
       </section>
 
       {/* --- 3. INITIATIVES (المبادرات) --- */}
-      <section id="initiatives" className={`py-24 px-6 md:px-12 w-full ${theme === 'day' ? 'bg-gray-100' : 'bg-[#021812]'}`}>
+      <section id="initiatives" className={`py-24 px-6 md:px-12 w-full ${theme === 'day' ? 'bg-slate-100/90 text-slate-800' : 'bg-[#021812] text-slate-100'}`}>
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold font-cairo mb-4">مبادراتنا <span className="text-[#047857]">الرئيسية</span></h2>
-            <p className="text-lg opacity-70 max-w-2xl mx-auto">مجموعة من البرامج والأنشطة المصممة خصيصاً لتلبية تطلعات الشباب وبناء قدراتهم.</p>
+            <h2 className={`text-3xl md:text-5xl font-bold font-cairo mb-4 ${theme === 'day' ? 'text-slate-900' : 'text-white'}`}>مبادراتنا <span className="text-[#047857]">الرئيسية</span></h2>
+            <p className={`text-lg max-w-2xl mx-auto ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>مجموعة من البرامج والأنشطة المصممة خصيصاً لتلبية تطلعات الشباب وبناء قدراتهم.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -246,15 +253,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
               <div 
                 key={i} 
                 onClick={() => navigate(`/initiative/${init.id}`)}
-                className={`group rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-xl cursor-pointer ${theme === 'day' ? 'bg-white shadow-lg' : 'bg-white/5 border border-white/10'}`}
+                className={`group rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-xl cursor-pointer ${theme === 'day' ? 'bg-white border border-slate-200 shadow-md' : 'bg-white/5 border border-white/10'}`}
               >
-                <div className="h-48 overflow-hidden relative bg-[#01140e] flex items-center justify-center p-6">
+                <div className={`h-48 overflow-hidden relative flex items-center justify-center p-6 ${theme === 'day' ? 'bg-slate-50' : 'bg-[#01140e]'}`}>
                   <img src={init.image || '/logos/الملتقى.png'} alt={init.title} className="max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
                 </div>
-                <div className="p-6 relative -mt-10 bg-gradient-to-t from-black/80 to-transparent pt-12">
-                  <h3 className="text-xl font-bold text-white mb-2">{init.title}</h3>
-                  <p className="text-gray-300 text-sm">{init.description}</p>
+                <div className={`p-6 ${theme === 'day' ? 'bg-white' : 'bg-slate-900/90'}`}>
+                  <h3 className={`text-xl font-bold mb-2 ${theme === 'day' ? 'text-slate-900 group-hover:text-[#047857]' : 'text-white group-hover:text-amber-400'} transition-colors`}>{init.title}</h3>
+                  <p className={`text-sm leading-relaxed ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>{init.description}</p>
                 </div>
               </div>
             ))}
@@ -292,19 +298,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
       </section>
 
       {/* --- 5. LATEST ARTICLES (المقالات) --- */}
-      <section id="articles" className="py-24 px-6 md:px-12 w-full">
+      <section id="articles" className={`py-24 px-6 md:px-12 w-full ${theme === 'day' ? 'bg-slate-50 text-slate-800' : 'bg-[#0a192f] text-slate-100'}`}>
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 border-b border-gray-500/20 pb-4 gap-4">
             <div>
-              <h2 className="text-3xl md:text-4xl font-bold font-cairo">أحدث <span className="text-[#047857]">المقالات</span></h2>
-              <p className="opacity-70 mt-2">إصدارات ومقالات فكرية وتربوية.</p>
+              <h2 className={`text-3xl md:text-4xl font-bold font-cairo ${theme === 'day' ? 'text-slate-900' : 'text-white'}`}>أحدث <span className="text-[#047857]">المقالات</span></h2>
+              <p className={`mt-2 ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>إصدارات ومقالات فكرية وتربوية.</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2" dir="ltr">
-                <button onClick={() => scrollArticles('left')} className="w-10 h-10 rounded-full border border-[#d4a045] text-[#d4a045] flex items-center justify-center hover:bg-[#d4a045] hover:text-white transition">
+                <button onClick={handlePrevArticle} className="w-10 h-10 rounded-full border border-[#d4a045] text-[#d4a045] flex items-center justify-center hover:bg-[#d4a045] hover:text-white transition shadow-sm">
                   <ChevronLeft size={20} />
                 </button>
-                <button onClick={() => scrollArticles('right')} className="w-10 h-10 rounded-full border border-[#d4a045] text-[#d4a045] flex items-center justify-center hover:bg-[#d4a045] hover:text-white transition">
+                <button onClick={handleNextArticle} className="w-10 h-10 rounded-full border border-[#d4a045] text-[#d4a045] flex items-center justify-center hover:bg-[#d4a045] hover:text-white transition shadow-sm">
                   <ChevronRight size={20} />
                 </button>
               </div>
@@ -319,39 +325,76 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           </div>
 
           <div 
-            ref={articlesScrollRef} 
             onMouseEnter={() => setIsArticlesPaused(true)}
             onMouseLeave={() => setIsArticlesPaused(false)}
             onTouchStart={() => setIsArticlesPaused(true)}
             onTouchEnd={() => setIsArticlesPaused(false)}
-            className="flex overflow-x-auto hide-scrollbar gap-6 pb-8 -mx-6 px-6 md:mx-0 md:px-0 select-none cursor-pointer scroll-smooth"
+            className="overflow-hidden w-full relative pb-6 select-none cursor-pointer"
           >
-            {featuredArticles.length > 0 ? featuredArticles.map((article) => (
-              <div 
-                key={article.id} 
-                onClick={() => navigate(`/article/${article.id}`)}
-                className={`shrink-0 w-[82vw] sm:w-[320px] md:w-[350px] lg:w-[380px] rounded-2xl overflow-hidden ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'} group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-amber-500/40`}
-              >
-                <div className="h-48 overflow-hidden relative">
-                  <img src={article.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500&h=300&fit=crop'} alt={article.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                    <span className="text-xs font-bold text-amber-400">انقر بقراءة المقالة ←</span>
+            <div 
+              onTransitionEnd={handleTransitionEnd}
+              className="flex gap-4 md:gap-6 w-full"
+              style={{
+                transform: isMobile 
+                  ? `translateX(calc(${currentCardIndex} * (100vw - 2rem)))`
+                  : `translateX(calc(${currentCardIndex} * (350px + 1.5rem)))`,
+                transition: isTransitioning ? 'transform 700ms cubic-bezier(0.25, 1, 0.5, 1)' : 'none'
+              }}
+            >
+              {tripleArticles.length > 0 ? tripleArticles.map((article, idx) => {
+                const isLatestArticle = article.id === featuredArticles[0]?.id;
+                return (
+                  <div 
+                    key={`${article.id}_${idx}`} 
+                    onClick={() => navigate(`/article/${article.id}`)}
+                    className={`shrink-0 w-[calc(100vw-3rem)] sm:w-[320px] md:w-[350px] lg:w-[380px] rounded-2xl overflow-hidden ${isLatestArticle ? 'border-2 border-amber-400 shadow-2xl ring-2 ring-amber-400/20' : theme === 'day' ? 'bg-white shadow-md border border-slate-200' : 'bg-white/5 border border-white/10'} group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl relative`}
+                  >
+                    {isLatestArticle && (
+                      <div className="absolute top-3 left-3 z-10 bg-amber-500 text-black text-xs font-extrabold px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
+                        ✨ المقال الأحدث
+                      </div>
+                    )}
+                    <div className="h-48 overflow-hidden relative">
+                      <img src={article.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500&h=300&fit=crop'} alt={article.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                        <span className="text-xs font-bold text-amber-400">انقر بقراءة المقالة ←</span>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <h3 className={`text-lg md:text-xl font-bold mb-3 line-clamp-2 leading-snug transition-colors ${theme === 'day' ? 'text-slate-900 group-hover:text-amber-600' : 'text-white group-hover:text-amber-400'}`}>{article.title}</h3>
+                      <p className={`text-sm line-clamp-3 mb-4 leading-relaxed ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>{article.content}</p>
+                      <div className={`flex justify-between items-center text-xs pt-2 border-t ${theme === 'day' ? 'text-slate-500 border-slate-200' : 'text-slate-400 border-white/10'}`}>
+                        <span>{new Date(article.created_at).toLocaleDateString('ar-EG')}</span>
+                        <span className="text-[#d4a045] font-bold group-hover:underline">اقرأ المزيد</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="p-6">
-                  <h3 className="text-lg md:text-xl font-bold mb-3 line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">{article.title}</h3>
-                  <p className="opacity-70 text-sm line-clamp-3 mb-4 leading-relaxed">{article.content}</p>
-                  <div className="flex justify-between items-center text-xs opacity-60 pt-2 border-t border-white/10">
-                    <span>{new Date(article.created_at).toLocaleDateString('ar-EG')}</span>
-                    <span className="text-[#d4a045] font-bold group-hover:underline">اقرأ المزيد</span>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              // Empty State
-              <div className="w-full text-center py-12 opacity-50">لا توجد مقالات منشورة حالياً.</div>
-            )}
+                );
+              }) : (
+                // Empty State
+                <div className="w-full text-center py-12 opacity-50">لا توجد مقالات منشورة حالياً.</div>
+              )}
+            </div>
           </div>
+
+          {/* Active Article Indicators */}
+          {featuredArticles.length > 0 && (
+            <div className="flex justify-center items-center gap-2 mt-4" dir="ltr">
+              {featuredArticles.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setIsTransitioning(true);
+                    setCurrentCardIndex(6 + idx);
+                  }}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${
+                    (currentCardIndex % featuredArticles.length) === idx ? 'w-8 bg-[#d4a045]' : 'w-2.5 bg-gray-500/40 hover:bg-gray-500/70'
+                  }`}
+                  aria-label={`المقال ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -401,31 +444,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           </div>
         </div>
       </footer>
-
-      {/* --- MOBILE BOTTOM APP BAR (Native Mobile Experience) --- */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#0a192f]/95 backdrop-blur-xl border-t border-white/10 px-3 py-2 flex justify-around items-center text-white pb-safe shadow-[0_-10px_25px_rgba(0,0,0,0.5)]">
-        <button onClick={() => scrollToSection('hero')} className="flex flex-col items-center gap-1 text-xs opacity-80 hover:opacity-100 hover:text-[#d4a045] transition active:scale-95">
-          <Home size={20} />
-          <span>الرئيسية</span>
-        </button>
-        <button onClick={() => scrollToSection('initiatives')} className="flex flex-col items-center gap-1 text-xs opacity-80 hover:opacity-100 hover:text-[#d4a045] transition active:scale-95">
-          <Compass size={20} />
-          <span>المبادرات</span>
-        </button>
-        <button onClick={() => navigate('/articles')} className="flex flex-col items-center gap-1 text-xs opacity-80 hover:opacity-100 hover:text-[#d4a045] transition active:scale-95">
-          <BookOpen size={20} />
-          <span>المقالات</span>
-        </button>
-        <button onClick={() => scrollToSection('mastaba')} className="flex flex-col items-center gap-1 text-xs opacity-80 hover:opacity-100 hover:text-[#d4a045] transition active:scale-95">
-          <GraduationCap size={20} />
-          <span>المصطبة</span>
-        </button>
-        <button onClick={() => scrollToSection('contact')} className="flex flex-col items-center gap-1 text-xs font-bold text-[#d4a045] transition active:scale-95 bg-[#d4a045]/10 px-3 py-1 rounded-xl border border-[#d4a045]/30">
-          <MessageCircle size={20} />
-          <span>تواصل معنا</span>
-        </button>
-      </div>
-
     </div>
   );
 };
