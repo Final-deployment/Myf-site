@@ -155,7 +155,7 @@ const ArticlePage: React.FC = () => {
   return (
     <div 
       ref={containerRef}
-      className={`h-screen overflow-y-auto overflow-x-hidden ${pageBgClass} font-sans pb-24 transition-colors duration-500 ${isHandMode ? (isDragging ? 'cursor-grabbing select-none' : 'cursor-grab select-none') : 'cursor-auto'}`}
+      className={`min-h-screen w-full overflow-x-hidden overflow-y-auto ${pageBgClass} font-sans pb-24 transition-colors duration-500 ${isHandMode ? (isDragging ? 'cursor-grabbing select-none' : 'cursor-grab select-none') : 'cursor-auto'}`}
       onMouseDown={handleMouseDown}
       onMouseLeave={handleMouseLeave}
       onMouseUp={handleMouseUp}

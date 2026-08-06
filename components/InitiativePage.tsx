@@ -172,7 +172,7 @@ const InitiativePage: React.FC = () => {
   ];
 
   return (
-    <div className={`h-screen overflow-y-auto overflow-x-hidden ${bgClass} ${textClass} font-sans pb-24 transition-colors duration-500`}>
+    <div className={`min-h-screen w-full overflow-x-hidden overflow-y-auto ${bgClass} ${textClass} font-sans pb-24 transition-colors duration-500`}>
       {/* Navbar Minimal for Initiative Page */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 backdrop-blur-md ${isDark ? 'bg-black/50 border-b border-white/10' : 'bg-white/70 border-b border-gray-200 shadow-sm'}`}>
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
