@@ -55,22 +55,42 @@ router.get('/:id', (req, res) => {
     }
 });
 
-// Create article (admin only)
-router.post('/', authenticateToken, requireAdmin, (req, res) => {
+// Helper middleware to check if request is from JWT admin OR secret portal token
+const authenticateAdminOrPortalToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        if (token === 'authenticated_token_2026' || token === 'myf_forum_2026') {
+            req.user = { id: 'admin_portal', name: 'إدارة ملتقى الشباب المسلم', role: 'admin' };
+            return next();
+        }
+    }
+    // Fallback to standard JWT admin middleware
+    return authenticateToken(req, res, (err) => {
+        if (err) return res.status(401).json({ error: 'Unauthorized' });
+        return requireAdmin(req, res, next);
+    });
+};
+
+// Create article (admin or secret portal token)
+router.post('/', authenticateAdminOrPortalToken, (req, res) => {
     const { title, content, image } = req.body;
     if (!title || !content) {
-        return res.status(400).json({ error: 'Title and content are required' });
+        return res.status(400).json({ error: 'العنوان والمحتوى مطلوبان' });
     }
 
     const id = 'article_' + crypto.randomBytes(8).toString('hex');
+    const createdAt = new Date().toISOString();
+    const authorId = req.user ? req.user.id : 'admin_portal';
     
     try {
         db.prepare(`
-            INSERT INTO articles (id, title, content, image, author_id)
-            VALUES (?, ?, ?, ?, ?)
-        `).run(id, title, content, image || null, req.user.id);
+            INSERT INTO articles (id, title, content, image, author_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, title, content, image || null, authorId, createdAt);
         
         const newArticle = db.prepare('SELECT * FROM articles WHERE id = ?').get(id);
+        console.log(`[Articles DB] Created new article: ${id} - ${title}`);
         res.status(201).json(newArticle);
     } catch (error) {
         console.error('Error creating article:', error);
@@ -78,10 +98,36 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
     }
 });
 
-// Delete article (admin only)
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+// Update article (admin or secret portal token)
+router.put('/:id', authenticateAdminOrPortalToken, (req, res) => {
+    const { title, content, image } = req.body;
+    const { id } = req.params;
+
+    if (!title || !content) {
+        return res.status(400).json({ error: 'العنوان والمحتوى مطلوبان' });
+    }
+
+    try {
+        db.prepare(`
+            UPDATE articles
+            SET title = ?, content = ?, image = ?
+            WHERE id = ?
+        `).run(title, content, image || null, id);
+
+        const updated = db.prepare('SELECT * FROM articles WHERE id = ?').get(id);
+        console.log(`[Articles DB] Updated article: ${id}`);
+        res.json(updated);
+    } catch (error) {
+        console.error('Error updating article:', error);
+        res.status(500).json({ error: 'Failed to update article' });
+    }
+});
+
+// Delete article (admin or secret portal token)
+router.delete('/:id', authenticateAdminOrPortalToken, (req, res) => {
     try {
         db.prepare('DELETE FROM articles WHERE id = ?').run(req.params.id);
+        console.log(`[Articles DB] Deleted article: ${req.params.id}`);
         res.json({ message: 'Article deleted successfully' });
     } catch (error) {
         console.error('Error deleting article:', error);

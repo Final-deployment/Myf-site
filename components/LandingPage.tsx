@@ -407,9 +407,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
               <p className="text-gray-400 mb-8 max-w-md">نحن هنا للإجابة على استفساراتك ومقترحاتك. لا تتردد في التواصل معنا عبر قنواتنا الرسمية.</p>
               
               <div className="space-y-4">
-                <a href="mailto:info@myf.com" className="flex items-center gap-3 text-gray-300 hover:text-white transition">
+                <a href="mailto:info@muslimyouth.ps" className="flex items-center gap-3 text-gray-300 hover:text-white transition">
                   <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center"><Mail size={18} /></div>
-                  info@myf.com
+                  info@muslimyouth.ps
                 </a>
               </div>
             </div>

@@ -1,0 +1,849 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  FileText, 
+  Compass, 
+  Camera, 
+  PlusCircle, 
+  CheckCircle2, 
+  Trash2, 
+  LogOut, 
+  Edit3, 
+  Sparkles,
+  Layers,
+  Globe,
+  ImageIcon,
+  XCircle,
+  Save
+} from 'lucide-react';
+import { useTheme } from './ThemeContext';
+import RichTextEditor from './RichTextEditor';
+import { articlesApi, Article } from '../services/api/articles';
+
+interface InitiativeItem {
+  id: string;
+  title: string;
+  description: string;
+  logo: string;
+  vision: string;
+}
+
+interface ActivityItem {
+  id: string;
+  initId: string;
+  title: string;
+  summary: string;
+  images: string;
+}
+
+export const ForumAdminDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+
+  const [activeTab, setActiveTab] = useState<'article' | 'initiative' | 'activity' | 'manage'>('article');
+  
+  // Articles Form State
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
+  const [articleTitle, setArticleTitle] = useState('');
+  const [articleContent, setArticleContent] = useState('');
+  const [articleImage, setArticleImage] = useState('');
+
+  // Initiatives Form State
+  const [editingInitId, setEditingInitId] = useState<string | null>(null);
+  const [initTitle, setInitTitle] = useState('');
+  const [initDesc, setInitDesc] = useState('');
+  const [initLogo, setInitLogo] = useState('');
+  const [initVision, setInitVision] = useState('');
+
+  // Activities Form State
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+  const [selectedInitId, setSelectedInitId] = useState('init_futuwwa');
+  const [activityTitle, setActivityTitle] = useState('');
+  const [activitySummary, setActivitySummary] = useState('');
+  const [activityImages, setActivityImages] = useState('');
+
+  // Storage Lists
+  const [articlesList, setArticlesList] = useState<Article[]>([]);
+  const [initiativesList, setInitiativesList] = useState<InitiativeItem[]>([
+    { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'برنامج إعداد قيادي شبابي يهدف إلى بناء الشخصية الإسلامية المتكاملة.', logo: '/logos/فتوة.png', vision: 'بناء الوعي القيادي والتربية الإسلامية الشاملة' },
+    { id: 'init_ehdena', title: 'مبادرة اهدنا (على هدي الحبيب)', description: 'نشر تعاليم الدين الإسلامي وإحياء المناسبات الدينية ومجالس الصلاة على النبي.', logo: '/logos/على هدي الحبيب.png', vision: 'تعزيز الاقتداء بالسيرة النبوية الشريفة' },
+    { id: 'init_meraj', title: 'مقرأة معراج', description: 'مبادرة تعنى بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', logo: '/logos/معراج.png', vision: 'خدمة القرآن الكريم وحلقات الإقراء' },
+    { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب بمهارات الإسعافات الأولية والاستجابة الطارئة.', logo: '/logos/ نبض الحياة.png', vision: 'التدريب على الإسعافات والاستجابة الطارئة' },
+    { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة والتعامل مع حالات الطوارئ والإطفاء.', logo: '/logos/ نبض الأمان.png', vision: 'السلامة والوقاية المجتمعية' },
+    { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'دعم نفسي واجتماعي ودورات علمية وتثقيفية موجهة للشباب.', logo: '/logos/ بسمة أمل.png', vision: 'الدعم النفسي والتثقيف الشبابي' }
+  ]);
+  const [activitiesList, setActivitiesList] = useState<ActivityItem[]>([]);
+
+  const [successMsg, setSuccessMsg] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingActivityImg, setUploadingActivityImg] = useState(false);
+
+  useEffect(() => {
+    // Load existing articles from API
+    articlesApi.getAll().then(setArticlesList).catch(() => {});
+  }, []);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('myf_forum_admin_auth');
+    navigate('/');
+  };
+
+  // Helper for logo upload
+  const handleLogoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingLogo(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64 })
+        });
+        const data = await res.json();
+        if (data.url) {
+          setInitLogo(data.url);
+        } else {
+          setInitLogo(base64);
+        }
+      } catch {
+        setInitLogo(reader.result as string);
+      } finally {
+        setUploadingLogo(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Helper for activity photos upload
+  const handleActivityPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingActivityImg(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64 })
+        });
+        const data = await res.json();
+        const uploadedUrl = data.url || base64;
+        setActivityImages(activityImages ? `${activityImages}, ${uploadedUrl}` : uploadedUrl);
+      } catch {
+        const uploadedUrl = reader.result as string;
+        setActivityImages(activityImages ? `${activityImages}, ${uploadedUrl}` : uploadedUrl);
+      } finally {
+        setUploadingActivityImg(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Submit/Update Article
+  const handleSaveArticle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!articleTitle || !articleContent) return;
+
+    try {
+      if (editingArticleId) {
+        // Update existing article
+        await articlesApi.update(editingArticleId, {
+          title: articleTitle,
+          content: articleContent,
+          image: articleImage || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=600&h=400&fit=crop'
+        });
+        setEditingArticleId(null);
+        setSuccessMsg('تم تحديث وتعديل المقال بنجاح وتحديث بياناته على الموقع!');
+      } else {
+        // Create new article
+        await articlesApi.create({
+          title: articleTitle,
+          content: articleContent,
+          image: articleImage || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=600&h=400&fit=crop'
+        });
+        setSuccessMsg('تم نشر المقال بنجاح وإضافته فوراً لصفحة الهبوط وصفحة المقالات!');
+      }
+
+      // Refresh list
+      const updatedList = await articlesApi.getAll();
+      setArticlesList(updatedList);
+    } catch (err) {
+      console.error(err);
+      setSuccessMsg('تم نشر وتحديث المقال محلياً بنجاح!');
+    }
+
+    setArticleTitle('');
+    setArticleContent('');
+    setArticleImage('');
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  // Trigger editing an article
+  const startEditArticle = (article: Article) => {
+    setEditingArticleId(article.id);
+    setArticleTitle(article.title);
+    setArticleContent(article.content);
+    setArticleImage(article.image || '');
+    setActiveTab('article');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditArticle = () => {
+    setEditingArticleId(null);
+    setArticleTitle('');
+    setArticleContent('');
+    setArticleImage('');
+  };
+
+  // Submit/Update Initiative
+  const handleSaveInitiative = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!initTitle || !initDesc) return;
+
+    try {
+      if (editingInitId) {
+        await initiativesApi.update(editingInitId, {
+          title: initTitle,
+          description: initDesc,
+          image: initLogo || undefined,
+          link: `/initiative/${editingInitId}`
+        });
+        setInitiativesList(initiativesList.map(i => 
+          i.id === editingInitId 
+            ? { ...i, title: initTitle, description: initDesc, logo: initLogo || i.logo, vision: initVision }
+            : i
+        ));
+        setEditingInitId(null);
+        setSuccessMsg(`تم تحديث معلومات المبادرة (${initTitle}) ودفع التحديث بقاعدة البيانات بنجاح!`);
+      } else {
+        const created = await initiativesApi.create({
+          title: initTitle,
+          description: initDesc,
+          image: initLogo || '/logos/الملتقى.png',
+          link: `/initiative/custom_${Date.now()}`
+        });
+        const newInit: InitiativeItem = {
+          id: created.id,
+          title: created.title,
+          description: created.description,
+          logo: created.image || '/logos/الملتقى.png',
+          vision: initVision
+        };
+        setInitiativesList([...initiativesList, newInit]);
+        setSuccessMsg(`تم إضافة المبادرة الجديدة (${initTitle}) وقيدها بقاعدة بيانات السيرفر بنجاح!`);
+      }
+    } catch (err) {
+      console.error(err);
+      setSuccessMsg(`تم حفظ وتحديث المبادرة (${initTitle}) محلياً!`);
+    }
+
+    setInitTitle('');
+    setInitDesc('');
+    setInitLogo('');
+    setInitVision('');
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const startEditInitiative = (init: InitiativeItem) => {
+    setEditingInitId(init.id);
+    setInitTitle(init.title);
+    setInitDesc(init.description);
+    setInitLogo(init.logo);
+    setInitVision(init.vision);
+    setActiveTab('initiative');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditInitiative = () => {
+    setEditingInitId(null);
+    setInitTitle('');
+    setInitDesc('');
+    setInitLogo('');
+    setInitVision('');
+  };
+
+  // Submit/Update Activity
+  const handleSaveActivity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activityTitle || !activitySummary) return;
+
+    try {
+      if (editingActivityId) {
+        await initiativesApi.updateActivity(editingActivityId, {
+          title: activityTitle,
+          description: activitySummary,
+          images: activityImages ? activityImages.split(',').map(s => s.trim()) : []
+        });
+        setActivitiesList(activitiesList.map(act => 
+          act.id === editingActivityId
+            ? { ...act, initId: selectedInitId, title: activityTitle, summary: activitySummary, images: activityImages }
+            : act
+        ));
+        setEditingActivityId(null);
+        setSuccessMsg(`تم تعديل وتحديث بيانات النشاط (${activityTitle}) بقاعدة البيانات بنجاح!`);
+      } else {
+        const actCreated = await initiativesApi.addActivity(selectedInitId, {
+          title: activityTitle,
+          description: activitySummary,
+          images: activityImages ? activityImages.split(',').map(s => s.trim()) : []
+        });
+        const newAct: ActivityItem = {
+          id: actCreated.id,
+          initId: selectedInitId,
+          title: actCreated.title,
+          summary: actCreated.description,
+          images: activityImages
+        };
+        setActivitiesList([newAct, ...activitiesList]);
+        setSuccessMsg(`تم إدراج النشاط الجديد (${activityTitle}) بقاعدة بيانات السيرفر بنجاح!`);
+      }
+    } catch (err) {
+      console.error(err);
+      setSuccessMsg(`تم حفظ وتحديث النشاط (${activityTitle}) محلياً!`);
+    }
+
+    setActivityTitle('');
+    setActivitySummary('');
+    setActivityImages('');
+    setTimeout(() => setSuccessMsg(''), 4000);
+  };
+
+  const startEditActivity = (act: ActivityItem) => {
+    setEditingActivityId(act.id);
+    setSelectedInitId(act.initId);
+    setActivityTitle(act.title);
+    setActivitySummary(act.summary);
+    setActivityImages(act.images);
+    setActiveTab('activity');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditActivity = () => {
+    setEditingActivityId(null);
+    setActivityTitle('');
+    setActivitySummary('');
+    setActivityImages('');
+  };
+
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: 'article' | 'initiative' | 'activity';
+    id: string;
+    title: string;
+  } | null>(null);
+
+  const executeConfirmedDelete = async () => {
+    if (!deleteConfirmTarget) return;
+
+    const { type, id, title } = deleteConfirmTarget;
+
+    try {
+      if (type === 'article') {
+        await articlesApi.delete(id);
+        setArticlesList(prev => prev.filter(a => a.id !== id));
+        setSuccessMsg(`تم حذف المقال (${title}) نهائياً من قاعدة البيانات!`);
+      } else if (type === 'initiative') {
+        await initiativesApi.delete(id);
+        setInitiativesList(prev => prev.filter(i => i.id !== id));
+        setSuccessMsg(`تم حذف المبادرة (${title}) نهائياً من قاعدة البيانات!`);
+      } else if (type === 'activity') {
+        await initiativesApi.deleteActivity(id);
+        setActivitiesList(prev => prev.filter(a => a.id !== id));
+        setSuccessMsg(`تم حذف النشاط (${title}) نهائياً من قاعدة البيانات!`);
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      if (type === 'article') setArticlesList(prev => prev.filter(a => a.id !== id));
+      if (type === 'initiative') setInitiativesList(prev => prev.filter(i => i.id !== id));
+      if (type === 'activity') setActivitiesList(prev => prev.filter(a => a.id !== id));
+      setSuccessMsg(`تم إزالة المحتوى (${title}) محلياً.`);
+    } finally {
+      setDeleteConfirmTarget(null);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    }
+  };
+
+  return (
+    <div className={`min-h-screen ${theme === 'day' ? 'bg-slate-100 text-slate-900' : 'bg-[#061325] text-slate-100'} font-cairo transition-colors duration-300 pb-20 relative`}>
+      
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className={`max-w-md w-full p-6 rounded-3xl border ${theme === 'day' ? 'bg-white border-red-200 text-slate-900 shadow-2xl' : 'bg-slate-900 border-red-900/50 text-white shadow-2xl'} space-y-5 text-center`}>
+            <div className="w-16 h-16 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto border border-red-500/30">
+              <Trash2 size={32} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold font-cairo text-red-500 mb-2">⚠️ تأكيد الحذف النهائي</h3>
+              <p className="text-sm opacity-80 leading-relaxed">
+                هل أنت متأكد من رغبتك في حذف:
+              </p>
+              <p className="text-base font-extrabold text-amber-400 my-2 px-3 py-2 rounded-xl bg-amber-400/10 border border-amber-400/20">
+                "{deleteConfirmTarget.title}"
+              </p>
+              <p className="text-xs text-red-400 font-semibold">
+                هذا الإجراء سيقوم بإزالة المحتوى نهائياً من قاعدة البيانات وموقع الملتقى ولا يمكن التراجع عنه.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={executeConfirmedDelete}
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-lg transition"
+              >
+                🗑️ نعم، حذف نهائي
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmTarget(null)}
+                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm border transition ${theme === 'day' ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'}`}
+              >
+                ✖️ إلغاء وتراجع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Admin Header */}
+      <header className={`border-b ${theme === 'day' ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#0a192f] border-slate-800'} px-6 py-4 sticky top-0 z-40`}>
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#d4a045] flex items-center justify-center text-black font-extrabold shadow-md">
+              MYF
+            </div>
+            <div>
+              <h1 className="font-bold text-lg font-cairo">لوحة التحكم بالمحتوى والإصدارات</h1>
+              <p className="text-xs opacity-60">الموقع الرسمي: muslimyouth.ps</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.open('https://muslimyouth.ps', '_blank')}
+              className="hidden sm:flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl bg-gray-500/10 hover:bg-gray-500/20 transition"
+            >
+              <Globe size={16} />
+              <span>الموقع الرسمي</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition"
+            >
+              <LogOut size={16} />
+              <span>تسجيل الخروج</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-8">
+        
+        {/* Success Banner Notification */}
+        {successMsg && (
+          <div className="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-sm font-bold flex items-center gap-3 shadow-lg animate-fade-in">
+            <CheckCircle2 size={22} />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Control Tabs */}
+        <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-500/20 pb-4">
+          <button
+            onClick={() => setActiveTab('article')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'article'
+                ? 'bg-[#d4a045] text-black shadow-lg scale-105'
+                : theme === 'day' ? 'bg-white text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            <FileText size={18} />
+            <span>{editingArticleId ? '✏️ تعديل المقال المحدد' : '1. إضافة مقال جديد (محرر احترافي)'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('initiative')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'initiative'
+                ? 'bg-[#d4a045] text-black shadow-lg scale-105'
+                : theme === 'day' ? 'bg-white text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            <Compass size={18} />
+            <span>{editingInitId ? '✏️ تعديل المبادرة المحددة' : '2. إضافة مبادرة جديدة'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'activity'
+                ? 'bg-[#d4a045] text-black shadow-lg scale-105'
+                : theme === 'day' ? 'bg-white text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            <Camera size={18} />
+            <span>{editingActivityId ? '✏️ تعديل النشاط المحدد' : '3. إضافة نشاط لمبادرة'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('manage')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'manage'
+                ? 'bg-[#d4a045] text-black shadow-lg scale-105'
+                : theme === 'day' ? 'bg-white text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            <Layers size={18} />
+            <span>4. تصفح وتعديل المحتوى المنشور</span>
+          </button>
+        </div>
+
+        {/* Tab 1: New / Edit Article */}
+        {activeTab === 'article' && (
+          <form onSubmit={handleSaveArticle} className="space-y-6">
+            {editingArticleId && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                <span className="text-sm font-bold text-amber-500">أنت الآن تقوم بتعديل وتحرير مقال محدد منشور سابقاً</span>
+                <button 
+                  type="button" 
+                  onClick={cancelEditArticle}
+                  className="flex items-center gap-1 text-xs font-bold text-red-400 hover:underline"
+                >
+                  <XCircle size={16} />
+                  <span>إلغاء التعديل</span>
+                </button>
+              </div>
+            )}
+
+            <RichTextEditor
+              title={articleTitle}
+              setTitle={setArticleTitle}
+              content={articleContent}
+              setContent={setArticleContent}
+              image={articleImage}
+              setImage={setArticleImage}
+            />
+
+            <div className="flex justify-end gap-3 pt-4">
+              {editingArticleId && (
+                <button
+                  type="button"
+                  onClick={cancelEditArticle}
+                  className="bg-gray-500/20 hover:bg-gray-500/30 text-slate-300 font-bold py-4 px-6 rounded-2xl transition"
+                >
+                  إلغاء
+                </button>
+              )}
+              <button
+                type="submit"
+                className="bg-[#047857] hover:bg-[#035e44] text-white font-bold py-4 px-10 rounded-2xl shadow-xl flex items-center gap-3 text-lg transition-transform transform active:scale-98"
+              >
+                {editingArticleId ? <Save size={22} /> : <PlusCircle size={22} />}
+                <span>{editingArticleId ? 'حفظ وتحديث المقال فوراً' : 'نشر المقال فوراً على الموقع'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Tab 2: New / Edit Initiative */}
+        {activeTab === 'initiative' && (
+          <form onSubmit={handleSaveInitiative} className={`p-8 rounded-3xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-xl' : 'bg-slate-900 border-slate-800 shadow-2xl'} space-y-6 max-w-4xl mx-auto`}>
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-bold font-cairo text-gradient-gold mb-1">
+                  {editingInitId ? 'تعديل بيانات المبادرة الحالية' : 'إضافة مبادرة جديدة وتخصيص صفحة خاصة لها'}
+                </h3>
+                <p className={`text-xs ${theme === 'day' ? 'text-slate-600' : 'text-slate-400'}`}>
+                  سيتم تحديث معلومات المبادرة وصفحتها الخاصة فوراً.
+                </p>
+              </div>
+
+              {editingInitId && (
+                <button type="button" onClick={cancelEditInitiative} className="text-xs font-bold text-red-400 hover:underline">
+                  إلغاء التعديل
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold mb-2">اسم المبادرة *</label>
+                <input
+                  type="text"
+                  required
+                  value={initTitle}
+                  onChange={(e) => setInitTitle(e.target.value)}
+                  placeholder="مثال: مبادرة بناء الوعي القيادي"
+                  className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+                />
+              </div>
+
+              {/* Logo File Upload / URL */}
+              <div>
+                <label className="block text-xs font-bold mb-2">صورة لوجو المبادرة (رفع لسيرفر /public/uploads/forum/)</label>
+                <div className="flex gap-2">
+                  <label className="flex items-center justify-center gap-1 cursor-pointer px-4 py-3 rounded-xl bg-[#d4a045] text-black font-bold text-xs shrink-0 shadow-md">
+                    <ImageIcon size={16} />
+                    <span>{uploadingLogo ? 'رفع...' : '📁 اختيار لوجو'}</span>
+                    <input type="file" accept="image/*" onChange={handleLogoFileUpload} className="hidden" disabled={uploadingLogo} />
+                  </label>
+                  <input
+                    type="text"
+                    value={initLogo}
+                    onChange={(e) => setInitLogo(e.target.value)}
+                    placeholder="أو أدخل رابط اللوجو..."
+                    className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-2">الشرح المختصر والمقدمة *</label>
+              <textarea
+                rows={3}
+                required
+                value={initDesc}
+                onChange={(e) => setInitDesc(e.target.value)}
+                placeholder="نبذة عامة تظهر في بطاقة المبادرة بصفحة الهبوط..."
+                className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-2">رؤية وأهداف المبادرة تفصيلياً (تظهر في صفحة المبادرة)</label>
+              <textarea
+                rows={4}
+                value={initVision}
+                onChange={(e) => setInitVision(e.target.value)}
+                placeholder="أهداف المبادرة، المستهدفين، ومحاور البرامج..."
+                className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 text-base transition"
+            >
+              {editingInitId ? <Save size={20} /> : <Sparkles size={20} />}
+              <span>{editingInitId ? 'حفظ وتحديث بيانات المبادرة' : 'إنشاء ونشر المبادرة فوراً'}</span>
+            </button>
+          </form>
+        )}
+
+        {/* Tab 3: New / Edit Activity */}
+        {activeTab === 'activity' && (
+          <form onSubmit={handleSaveActivity} className={`p-8 rounded-3xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-xl' : 'bg-slate-900 border-slate-800 shadow-2xl'} space-y-6 max-w-4xl mx-auto`}>
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-bold font-cairo text-gradient-gold mb-1">
+                  {editingActivityId ? 'تعديل وتحديث بيانات النشاط الحالي' : 'إضافة نشاط جديد لمبادرة حالية'}
+                </h3>
+                <p className={`text-xs ${theme === 'day' ? 'text-slate-600' : 'text-slate-400'}`}>
+                  اختر المبادرة المستهدفة وأدرج صور وشرح النشاط المنفذ.
+                </p>
+              </div>
+
+              {editingActivityId && (
+                <button type="button" onClick={cancelEditActivity} className="text-xs font-bold text-red-400 hover:underline">
+                  إلغاء التعديل
+                </button>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-2">اختر المبادرة المستهدفة *</label>
+              <select
+                value={selectedInitId}
+                onChange={(e) => setSelectedInitId(e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl border text-sm font-bold outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+              >
+                {initiativesList.map(init => (
+                  <option key={init.id} value={init.id}>{init.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-2">عنوان النشاط / الفعالية *</label>
+              <input
+                type="text"
+                required
+                value={activityTitle}
+                onChange={(e) => setActivityTitle(e.target.value)}
+                placeholder="مثال: ورشة الإسعافات الأوّلية المتقدمة"
+                className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+              />
+            </div>
+
+            {/* Photo Gallery File Upload */}
+            <div>
+              <label className="block text-xs font-bold mb-2">صور النشاط (رفع صور لسيرفر /public/uploads/forum/ أو أدخل روابط)</label>
+              <div className="flex gap-2">
+                <label className="flex items-center justify-center gap-1 cursor-pointer px-4 py-3 rounded-xl bg-[#d4a045] text-black font-bold text-xs shrink-0 shadow-md">
+                  <ImageIcon size={16} />
+                  <span>{uploadingActivityImg ? 'رفع...' : '📁 إضافة صورة للنشاط'}</span>
+                  <input type="file" accept="image/*" onChange={handleActivityPhotoUpload} className="hidden" disabled={uploadingActivityImg} />
+                </label>
+                <input
+                  type="text"
+                  value={activityImages}
+                  onChange={(e) => setActivityImages(e.target.value)}
+                  placeholder="روابط الصور تفصل بينها بفصلة..."
+                  className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold mb-2">شرح مختصر عن النشاط والنتائج *</label>
+              <textarea
+                rows={4}
+                required
+                value={activitySummary}
+                onChange={(e) => setActivitySummary(e.target.value)}
+                placeholder="تفاصيل التغطية، عدد المشاركين، وأبرز المخرجات..."
+                className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-[#047857] hover:bg-[#035e44] text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 text-base transition"
+            >
+              {editingActivityId ? <Save size={20} /> : <PlusCircle size={20} />}
+              <span>{editingActivityId ? 'حفظ وتحديث بيانات النشاط' : 'إضافة النشاط لمعرض المبادرة'}</span>
+            </button>
+          </form>
+        )}
+
+        {/* Tab 4: Manage & Edit Content */}
+        {activeTab === 'manage' && (
+          <div className="space-y-12">
+            
+            {/* Section 1: Published Articles */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                <FileText className="text-[#d4a045]" size={22} />
+                <span>إدارة وتعديل المقالات المنشورة ({articlesList.length})</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {articlesList.map((art) => (
+                  <div 
+                    key={art.id}
+                    className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
+                  >
+                    <div>
+                      <div className="h-44 rounded-xl overflow-hidden mb-4 relative">
+                        <img src={art.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500'} alt={art.title} className="w-full h-full object-cover" />
+                      </div>
+                      <h4 className="font-bold text-base line-clamp-2 mb-2">{art.title}</h4>
+                      <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{art.content.replace(/<[^>]*>/g, '')}</p>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs">
+                      <button
+                        onClick={() => startEditArticle(art)}
+                        className="text-[#d4a045] hover:underline font-bold flex items-center gap-1"
+                      >
+                        <Edit3 size={15} />
+                        <span>تعديل المقال</span>
+                      </button>
+
+                      <button
+                        onClick={() => setDeleteConfirmTarget({ type: 'article', id: art.id, title: art.title })}
+                        className="text-red-500 hover:text-red-600 font-bold flex items-center gap-1"
+                      >
+                        <Trash2 size={14} />
+                        <span>حذف</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2: Initiatives List */}
+            <div className="space-y-6 pt-6 border-t border-gray-500/20">
+              <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                <Compass className="text-[#047857]" size={22} />
+                <span>إدارة وتعديل المبادرات ({initiativesList.length})</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {initiativesList.map((init) => (
+                  <div 
+                    key={init.id}
+                    className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
+                  >
+                    <div>
+                      <div className="h-28 rounded-xl bg-slate-800/40 p-4 flex items-center justify-center mb-4">
+                        <img src={init.logo} alt={init.title} className="max-h-full max-w-full object-contain" />
+                      </div>
+                      <h4 className="font-bold text-base mb-2">{init.title}</h4>
+                      <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{init.description}</p>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs">
+                      <button
+                        onClick={() => startEditInitiative(init)}
+                        className="text-[#d4a045] hover:underline font-bold flex items-center gap-1"
+                      >
+                        <Edit3 size={15} />
+                        <span>تعديل المبادرة</span>
+                      </button>
+
+                      <button
+                        onClick={() => setDeleteConfirmTarget({ type: 'initiative', id: init.id, title: init.title })}
+                        className="text-red-500 hover:text-red-600 font-bold flex items-center gap-1"
+                      >
+                        <Trash2 size={14} />
+                        <span>حذف</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 3: Activities List */}
+            {activitiesList.length > 0 && (
+              <div className="space-y-6 pt-6 border-t border-gray-500/20">
+                <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                  <Camera className="text-amber-400" size={22} />
+                  <span>إدارة الأنشطة المضافة ({activitiesList.length})</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {activitiesList.map((act) => (
+                    <div key={act.id} className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                      <h4 className="font-bold text-base mb-1">{act.title}</h4>
+                      <p className="text-xs opacity-70 mb-3">{act.summary}</p>
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs">
+                        <button onClick={() => startEditActivity(act)} className="text-[#d4a045] font-bold flex items-center gap-1">
+                          <Edit3 size={14} />
+                          <span>تعديل النشاط</span>
+                        </button>
+                        <button onClick={() => setActivitiesList(activitiesList.filter(a => a.id !== act.id))} className="text-red-500 font-bold flex items-center gap-1">
+                          <Trash2 size={14} />
+                          <span>حذف</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+
+      </main>
+    </div>
+  );
+};
+
+export default ForumAdminDashboard;

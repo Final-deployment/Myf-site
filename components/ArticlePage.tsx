@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, Calendar, User, Clock, Share2, ZoomIn, ZoomOut, Hand, Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeContext';
+import { articlesApi } from '../services/api/articles';
 import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -39,19 +40,17 @@ const ArticlePage: React.FC = () => {
     }
     const fetchArticle = async () => {
       try {
-        const response = await fetch(`/api/articles/${id}`);
-        if (!response.ok) throw new Error('Failed to fetch article');
-        const data = await response.json();
-        setArticle(data);
-      } catch (err) {
-        console.error(err);
-        const fallback = INITIAL_OFFICIAL_ARTICLES.find(a => a.id === id);
-        if (fallback) {
-          setArticle(fallback);
+        if (!id) return;
+        const data = await articlesApi.getById(id);
+        if (data) {
+          setArticle(data);
           setError('');
         } else {
           setError('تعذر تحميل المقالة. قد تكون محذوفة أو الرابط غير صحيح.');
         }
+      } catch (err) {
+        console.error(err);
+        setError('تعذر تحميل المقالة.');
       } finally {
         setLoading(false);
       }
@@ -59,33 +58,53 @@ const ArticlePage: React.FC = () => {
     fetchArticle();
   }, [id]);
 
-  // Drag to Scroll (Hand Tool) Logic using clientY
+  // Drag to Scroll (Hand Tool) Logic - 1:1 Instant, Ultra-Smooth Sync
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!isHandMode || !containerRef.current) return;
+    if (!isHandMode) return;
     setIsDragging(true);
     setStartY(e.clientY);
-    setScrollTop(containerRef.current.scrollTop);
+    const currentScroll = window.scrollY || document.documentElement.scrollTop || (containerRef.current ? containerRef.current.scrollTop : 0);
+    setScrollTop(currentScroll);
   };
 
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-  };
+  useEffect(() => {
+    if (!isHandMode || !isDragging) return;
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+    let animationFrameId: number;
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !containerRef.current) return;
-    e.preventDefault();
-    const deltaY = e.clientY - startY;
-    containerRef.current.scrollTop = scrollTop - deltaY * 1.5;
-  };
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - startY;
+      const targetPos = Math.max(0, scrollTop - deltaY);
+
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = requestAnimationFrame(() => {
+        window.scrollTo({ top: targetPos, behavior: 'instant' });
+        if (containerRef.current && containerRef.current.scrollHeight > containerRef.current.clientHeight) {
+          containerRef.current.scrollTop = targetPos;
+        }
+      });
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      cancelAnimationFrame(animationFrameId);
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('mouseleave', handleGlobalMouseUp);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('mouseleave', handleGlobalMouseUp);
+    };
+  }, [isHandMode, isDragging, startY, scrollTop]);
 
   if (loading) return <LoadingSpinner fullScreen message="جاري تحميل المقالة..." />;
 
   const isDark = theme === 'dark' || theme === 'night';
-  // Use clean white/light styling by default as requested
   const pageBgClass = isDark ? 'bg-[#0f172a]' : 'bg-[#f8fafc]';
   const paperBgClass = isDark ? 'bg-[#1e293b] border-slate-700 text-slate-100 shadow-2xl' : 'bg-white border-slate-100 text-slate-800 shadow-xl';
 
@@ -94,10 +113,10 @@ const ArticlePage: React.FC = () => {
       <div className={`h-screen ${pageBgClass} flex flex-col items-center justify-center p-6`}>
         <div className="text-2xl font-cairo mb-4 text-red-500">{error || 'المقالة غير موجودة'}</div>
         <button 
-          onClick={() => navigate('/')} 
+          onClick={() => navigate('/articles')} 
           className="bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold py-3 px-8 rounded-full transition-transform transform hover:scale-105 shadow-md"
         >
-          العودة للرئيسية
+          الرجوع إلى قائمة المقالات
         </button>
       </div>
     );
@@ -157,20 +176,17 @@ const ArticlePage: React.FC = () => {
       ref={containerRef}
       className={`min-h-screen w-full overflow-x-hidden overflow-y-auto ${pageBgClass} font-sans pb-24 transition-colors duration-500 ${isHandMode ? (isDragging ? 'cursor-grabbing select-none' : 'cursor-grab select-none') : 'cursor-auto'}`}
       onMouseDown={handleMouseDown}
-      onMouseLeave={handleMouseLeave}
-      onMouseUp={handleMouseUp}
-      onMouseMove={handleMouseMove}
     >
       {/* Top Navbar */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 backdrop-blur-md ${isDark ? 'bg-slate-900/80 border-b border-slate-800 text-white' : 'bg-white/85 border-b border-slate-200 text-slate-800 shadow-sm'}`}>
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/')} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`} title="رجوع">
+            <button onClick={() => navigate('/articles')} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`} title="رجوع للمقالات">
               <ArrowRight size={24} />
             </button>
-            <div className="font-cairo font-bold text-xl flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+            <div className="font-cairo font-bold text-xl flex items-center gap-3 cursor-pointer" onClick={() => navigate('/articles')}>
               <img src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg" alt="Logo" className="w-10 h-10 rounded-full border-2 border-[#d4a045]" />
-              <span className="hidden sm:inline font-extrabold text-[#047857]">ملتقى الشباب المسلم</span>
+              <span className="hidden sm:inline font-extrabold text-[#047857]">رجوع للمقالات</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -252,17 +268,30 @@ const ArticlePage: React.FC = () => {
 
           {/* Article Body */}
           <article className="max-w-none font-sans text-justify px-2 md:px-4">
-            {paragraphs.map((p, idx) => formatText(p, idx))}
+            {article.content.includes('<') && article.content.includes('>') ? (
+              <div
+                style={{ fontSize: `${fontSize}px` }}
+                className={`space-y-4 leading-loose ${isDark ? 'text-slate-200' : 'text-slate-700'}`}
+                dangerouslySetInnerHTML={{
+                  __html: article.content
+                    .replace(/className=/g, 'class=')
+                    .replace(/class="border-r-4 border-\[#d4a045\] bg-\[#d4a045\]\/10 p-4 rounded-xl my-4 text-base italic font-semibold"/g, 'style="border-right: 5px solid #d4a045; background-color: rgba(212, 160, 69, 0.15); padding: 1rem 1.25rem; border-radius: 0.75rem; margin: 1.25rem 0; font-style: italic; font-weight: 600; color: #d4a045;"')
+                    .replace(/class="border border-\[#047857\]\/40 bg-\[#047857\]\/10 p-4 rounded-xl my-4 text-sm font-medium"/g, 'style="border: 1px solid rgba(4, 120, 87, 0.5); background-color: rgba(4, 120, 87, 0.15); padding: 1rem 1.25rem; border-radius: 0.75rem; margin: 1.25rem 0; font-weight: 500; color: #047857;"')
+                }}
+              />
+            ) : (
+              paragraphs.map((p, idx) => formatText(p, idx))
+            )}
           </article>
 
           {/* Footer Back Button */}
           <div className="mt-16 pt-8 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
             <button 
-              onClick={() => navigate('/')} 
+              onClick={() => navigate('/articles')} 
               className="flex items-center gap-2 text-[#047857] hover:text-[#065f46] font-bold text-lg transition-colors"
             >
               <ArrowRight size={22} />
-              العودة للصفحة الرئيسية
+              رجوع للمقالات
             </button>
           </div>
         </div>

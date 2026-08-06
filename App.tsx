@@ -31,6 +31,8 @@ import SupportChatBubble from './components/SupportChatBubble';
 import AskSupervisorBubble from './components/AskSupervisorBubble';
 import { StudentJourneyMap } from './components/StudentJourneyMap';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { AdminPortalAuth } from './components/AdminPortalAuth';
+import { ForumAdminDashboard } from './components/ForumAdminDashboard';
 
 // ============================================================================
 // Lazy-loaded Components (Code Splitting)
@@ -303,6 +305,21 @@ const AppContent: React.FC = () => {
     return <LoadingSpinner fullScreen message="جاري التحميل..." />;
   }
 
+// ============================================================================
+// Secret Admin Route Wrapper
+// ============================================================================
+const AdminControlRouteWrapper: React.FC = () => {
+  const [authed, setAuthed] = React.useState(
+    !!sessionStorage.getItem('myf_forum_admin_auth')
+  );
+
+  if (!authed) {
+    return <AdminPortalAuth onSuccess={() => setAuthed(true)} />;
+  }
+
+  return <ForumAdminDashboard />;
+};
+
   // ========================================================================
   // Root Router Return
   // ========================================================================
@@ -348,6 +365,12 @@ const AppContent: React.FC = () => {
         <Route path="/about" element={
           <PublicRoute>
             <AboutUs />
+          </PublicRoute>
+        } />
+
+        <Route path="/forum-admin-control" element={
+          <PublicRoute>
+            <AdminControlRouteWrapper />
           </PublicRoute>
         } />
 

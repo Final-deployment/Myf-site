@@ -147,13 +147,41 @@ const { authenticateToken, requireAdmin, requireAdminOrSupervisor } = require('.
 
 // ============================================================================
 // Health check endpoint (Public)
-// ============================================================================
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'UP',
-        timestamp: new Date().toISOString(),
-        db: db ? 'Initialised' : 'Not Initialised'
-    });
+// Static uploads folder route
+const forumUploadsDir = path.join(__dirname, 'public/uploads/forum');
+if (!fs.existsSync(forumUploadsDir)) {
+    fs.mkdirSync(forumUploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
+// Image Upload API for Forum Admin Dashboard
+app.post('/api/upload/image', (req, res) => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) {
+            return res.status(400).json({ error: 'لم يتم توفير بيانات الصورة' });
+        }
+
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+
+        let ext = 'png';
+        if (imageBase64.includes('data:image/jpeg') || imageBase64.includes('data:image/jpg')) ext = 'jpg';
+        else if (imageBase64.includes('data:image/webp')) ext = 'webp';
+        else if (imageBase64.includes('data:image/gif')) ext = 'gif';
+
+        const safeName = `forum_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+        const filePath = path.join(forumUploadsDir, safeName);
+
+        fs.writeFileSync(filePath, buffer);
+
+        const imageUrl = `/uploads/forum/${safeName}`;
+        console.log(`[Upload Success] Saved image to ${filePath}`);
+        res.json({ success: true, url: imageUrl });
+    } catch (err) {
+        console.error('[Image Upload Error]', err);
+        res.status(500).json({ error: 'فشل حفظ ملتقى الصورة بالسيرفر' });
+    }
 });
 
 // ============================================================================
