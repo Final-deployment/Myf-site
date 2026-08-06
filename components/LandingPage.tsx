@@ -25,9 +25,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   const articlesScrollRef = useRef<HTMLDivElement>(null);
 
   const featuredArticles = articles.slice(0, 6);
-  const infiniteArticles = featuredArticles.length > 0
-    ? [...featuredArticles, ...featuredArticles, ...featuredArticles]
-    : [];
 
   useEffect(() => {
     // Fetch dynamic content
@@ -48,7 +45,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
     fetchContent();
   }, []);
 
-  // Infinite Circular Auto-Scroll Effect for 6 Articles
+  // Smooth Auto-Slide Effect for 6 Articles (Looping 1 to 6 without duplicates)
   useEffect(() => {
     if (isArticlesPaused || featuredArticles.length === 0) return;
     const container = articlesScrollRef.current;
@@ -56,13 +53,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
 
     const interval = setInterval(() => {
       if (!container) return;
-      const singleSetWidth = container.scrollWidth / 3;
-      if (Math.abs(container.scrollLeft) >= singleSetWidth * 2) {
-        container.scrollLeft = container.scrollLeft > 0 ? singleSetWidth : -singleSetWidth;
+      const maxScroll = Math.abs(container.scrollWidth - container.clientWidth);
+      const currentScroll = Math.abs(container.scrollLeft);
+
+      if (currentScroll >= maxScroll - 15) {
+        // Reached article 6 -> Loop back smoothly to article 1
+        container.scrollTo({ left: 0, behavior: 'smooth' });
       } else {
-        container.scrollBy({ left: 1.2, behavior: 'auto' });
+        // Slide to next article card
+        const cardWidth = container.clientWidth > 768 ? 360 : 300;
+        container.scrollBy({ left: cardWidth, behavior: 'smooth' });
       }
-    }, 25);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [isArticlesPaused, featuredArticles.length]);
@@ -78,9 +80,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
 
   const scrollArticles = (direction: 'left' | 'right') => {
     if (articlesScrollRef.current) {
-      const scrollAmount = window.innerWidth > 768 ? window.innerWidth / 2 : window.innerWidth * 0.8;
+      const cardWidth = articlesScrollRef.current.clientWidth > 768 ? 360 : 300;
       articlesScrollRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        left: direction === 'left' ? -cardWidth : cardWidth,
         behavior: 'smooth'
       });
     }
@@ -322,11 +324,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
             onMouseLeave={() => setIsArticlesPaused(false)}
             onTouchStart={() => setIsArticlesPaused(true)}
             onTouchEnd={() => setIsArticlesPaused(false)}
-            className="flex overflow-x-auto hide-scrollbar gap-6 pb-8 -mx-6 px-6 md:mx-0 md:px-0 select-none cursor-pointer"
+            className="flex overflow-x-auto hide-scrollbar gap-6 pb-8 -mx-6 px-6 md:mx-0 md:px-0 select-none cursor-pointer scroll-smooth"
           >
-            {infiniteArticles.length > 0 ? infiniteArticles.map((article, idx) => (
+            {featuredArticles.length > 0 ? featuredArticles.map((article) => (
               <div 
-                key={`${article.id}_${idx}`} 
+                key={article.id} 
                 onClick={() => navigate(`/article/${article.id}`)}
                 className={`shrink-0 w-[82vw] sm:w-[320px] md:w-[350px] lg:w-[380px] rounded-2xl overflow-hidden ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'} group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-amber-500/40`}
               >
