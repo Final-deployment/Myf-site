@@ -21,8 +21,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   const [articles, setArticles] = useState<Article[]>(INITIAL_OFFICIAL_ARTICLES);
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isArticlesPaused, setIsArticlesPaused] = useState(false);
   const articlesScrollRef = useRef<HTMLDivElement>(null);
-  
+
+  const featuredArticles = articles.slice(0, 6);
+  const infiniteArticles = featuredArticles.length > 0
+    ? [...featuredArticles, ...featuredArticles, ...featuredArticles]
+    : [];
+
   useEffect(() => {
     // Fetch dynamic content
     const fetchContent = async () => {
@@ -41,6 +47,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
     };
     fetchContent();
   }, []);
+
+  // Infinite Circular Auto-Scroll Effect for 6 Articles
+  useEffect(() => {
+    if (isArticlesPaused || featuredArticles.length === 0) return;
+    const container = articlesScrollRef.current;
+    if (!container) return;
+
+    const interval = setInterval(() => {
+      if (!container) return;
+      const singleSetWidth = container.scrollWidth / 3;
+      if (Math.abs(container.scrollLeft) >= singleSetWidth * 2) {
+        container.scrollLeft = container.scrollLeft > 0 ? singleSetWidth : -singleSetWidth;
+      } else {
+        container.scrollBy({ left: 1.2, behavior: 'auto' });
+      }
+    }, 25);
+
+    return () => clearInterval(interval);
+  }, [isArticlesPaused, featuredArticles.length]);
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -291,22 +316,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
             </div>
           </div>
 
-          <div ref={articlesScrollRef} className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-6 pb-8 -mx-6 px-6 md:mx-0 md:px-0 scroll-smooth">
-            {articles.length > 0 ? articles.slice(0, 6).map((article, idx) => (
+          <div 
+            ref={articlesScrollRef} 
+            onMouseEnter={() => setIsArticlesPaused(true)}
+            onMouseLeave={() => setIsArticlesPaused(false)}
+            onTouchStart={() => setIsArticlesPaused(true)}
+            onTouchEnd={() => setIsArticlesPaused(false)}
+            className="flex overflow-x-auto hide-scrollbar gap-6 pb-8 -mx-6 px-6 md:mx-0 md:px-0 select-none cursor-pointer"
+          >
+            {infiniteArticles.length > 0 ? infiniteArticles.map((article, idx) => (
               <div 
-                key={article.id} 
+                key={`${article.id}_${idx}`} 
                 onClick={() => navigate(`/article/${article.id}`)}
-                className={`snap-center shrink-0 w-[85vw] md:w-[calc(50%-1.5rem)] lg:w-[calc(25%-1.5rem)] rounded-2xl overflow-hidden ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'} group cursor-pointer transition-transform duration-300 hover:-translate-y-2`}
+                className={`shrink-0 w-[82vw] sm:w-[320px] md:w-[350px] lg:w-[380px] rounded-2xl overflow-hidden ${theme === 'day' ? 'bg-white shadow-md' : 'bg-white/5 border border-white/10'} group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:border-amber-500/40`}
               >
-                <div className="h-48 overflow-hidden">
+                <div className="h-48 overflow-hidden relative">
                   <img src={article.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500&h=300&fit=crop'} alt={article.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                    <span className="text-xs font-bold text-amber-400">انقر بقراءة المقالة ←</span>
+                  </div>
                 </div>
                 <div className="p-6">
-                  <h3 className="text-xl font-bold mb-3 line-clamp-2">{article.title}</h3>
-                  <p className="opacity-70 text-sm line-clamp-3 mb-4">{article.content}</p>
-                  <div className="flex justify-between items-center text-xs opacity-60">
+                  <h3 className="text-lg md:text-xl font-bold mb-3 line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">{article.title}</h3>
+                  <p className="opacity-70 text-sm line-clamp-3 mb-4 leading-relaxed">{article.content}</p>
+                  <div className="flex justify-between items-center text-xs opacity-60 pt-2 border-t border-white/10">
                     <span>{new Date(article.created_at).toLocaleDateString('ar-EG')}</span>
-                    <span className="text-[#d4a045] font-bold">اقرأ المزيد ←</span>
+                    <span className="text-[#d4a045] font-bold group-hover:underline">اقرأ المزيد</span>
                   </div>
                 </div>
               </div>
