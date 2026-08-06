@@ -85,10 +85,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
             if (saved) return saved;
-
-            // Check system preference
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            return prefersDark ? 'night' : 'day';
         }
 
         return 'night';

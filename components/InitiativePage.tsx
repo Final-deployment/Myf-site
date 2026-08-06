@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, Star, CheckCircle, Share2, Users, Calendar, Image as ImageIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, Star, CheckCircle, Share2, Users, Calendar, Image as ImageIcon, X, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import { OFFICIAL_ACTIVITIES } from '../services/api/officialActivities';
 import LoadingSpinner from './LoadingSpinner';
@@ -25,7 +25,7 @@ interface Initiative {
 const InitiativePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   
   const [initiative, setInitiative] = useState<Initiative | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -185,13 +185,22 @@ const InitiativePage: React.FC = () => {
               <span className="hidden sm:inline">ملتقى الشباب المسلم</span>
             </div>
           </div>
-          <button onClick={() => {
-            if (navigator.share) {
-              navigator.share({ title: initiative.title, url: window.location.href });
-            }
-          }} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-200'}`} title="مشاركة">
-            <Share2 size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={toggleTheme} 
+              className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-200 text-gray-700'}`} 
+              title={isDark ? 'الوضع النهاري' : 'الوضع الليلي'}
+            >
+              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            <button onClick={() => {
+              if (navigator.share) {
+                navigator.share({ title: initiative.title, url: window.location.href });
+              }
+            }} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-200'}`} title="مشاركة">
+              <Share2 size={20} />
+            </button>
+          </div>
         </div>
       </nav>
 

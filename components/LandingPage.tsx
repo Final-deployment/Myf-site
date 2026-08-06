@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
 import { useTheme } from './ThemeContext';
-import { Sun, Moon, ArrowLeft, ArrowRight, BookOpen, Users, Globe, Mail, ChevronDown, PlayCircle, ChevronRight, ChevronLeft, Home, Compass, GraduationCap, UserCheck, Menu, X } from 'lucide-react';
+import { Sun, Moon, ArrowLeft, ArrowRight, BookOpen, Users, Globe, Mail, ChevronDown, PlayCircle, ChevronRight, ChevronLeft, Home, Compass, GraduationCap, UserCheck, Menu, X, MessageCircle } from 'lucide-react';
 import { articlesApi, Article } from '../services/api/articles';
 import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
 import { initiativesApi, Initiative } from '../services/api/initiatives';
@@ -23,10 +23,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const articlesScrollRef = useRef<HTMLDivElement>(null);
   
-  // Theme classes for general layout
-  const bgClass = theme === 'day' ? 'bg-[#f4f7f6]' : 'bg-[#0a192f]';
-  const textClass = theme === 'day' ? 'text-gray-800' : 'text-gray-100';
-
   useEffect(() => {
     // Fetch dynamic content
     const fetchContent = async () => {
@@ -62,20 +58,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
   };
 
   return (
-    <div className={`font-sans w-full h-screen overflow-y-auto overflow-x-hidden relative ${bgClass} ${textClass} transition-colors duration-500`}>
-
-      {/* --- HEADER NAVIGATION --- */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center px-4 md:px-12 py-4 w-full bg-black/20 backdrop-blur-md border-b border-white/10 shadow-sm transition-all duration-300">
-        <div className="flex items-center gap-3 text-white cursor-pointer" onClick={() => scrollToSection('hero')}>
-          <img
-            src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg"
-            alt="Muslim Youth Forum Logo"
-            className="w-10 h-10 rounded-full border-2 border-[#d4a045] shadow-md object-cover"
-          />
-          <span className="text-xl font-bold tracking-wide">ملتقى الشباب المسلم</span>
+    <div className={`min-h-screen ${theme === 'day' ? 'bg-slate-50 text-slate-800' : 'bg-[#0a192f] text-slate-100'} font-cairo transition-colors duration-300 overflow-x-hidden`}>
+      
+      {/* --- TOP NAVBAR --- */}
+      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 backdrop-blur-xl ${theme === 'day' ? 'bg-white/80 border-b border-slate-200' : 'bg-[#0a192f]/80 border-b border-white/10'} px-6 md:px-12 py-4 flex items-center justify-between shadow-lg`}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#d4a045] shadow-md">
+            <img src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg" alt="Logo" className="w-full h-full object-cover" />
+          </div>
+          <span className="font-bold text-xl md:text-2xl text-gradient-gold font-cairo">ملتقى الشباب المسلم</span>
         </div>
 
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/90">
+        {/* Desktop Links */}
+        <nav className="hidden md:flex items-center gap-8 text-base font-semibold">
           <button onClick={() => navigate('/about')} className="hover:text-[#d4a045] transition">من نحن</button>
           <button onClick={() => scrollToSection('initiatives')} className="hover:text-[#d4a045] transition">المبادرات</button>
           <button onClick={() => navigate('/articles')} className="hover:text-[#d4a045] transition">المقالات</button>
@@ -87,6 +82,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           <button
             onClick={toggleTheme}
             className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 text-white"
+            title={theme === 'day' ? 'الوضع الليلي' : 'الوضع النهاري'}
           >
             {theme === 'day' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
@@ -94,23 +90,35 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white">
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
-          
-          <button onClick={onLoginClick} className="hidden md:flex items-center gap-2 bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold px-5 py-2 rounded-full transition-transform hover:scale-105">
-            تسجيل الدخول
-          </button>
         </div>
       </header>
 
       {/* --- MOBILE DROPDOWN MENU --- */}
       {mobileMenuOpen && (
-        <div className="fixed inset-x-0 top-20 z-40 bg-[#0a192f]/95 backdrop-blur-2xl border-b border-white/10 p-6 flex flex-col gap-4 text-white md:hidden animate-fade-in-down shadow-2xl">
-          <button onClick={() => { navigate('/about'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">من نحن</button>
-          <button onClick={() => { scrollToSection('initiatives'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المبادرات</button>
-          <button onClick={() => { navigate('/articles'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المقالات</button>
-          <button onClick={() => { scrollToSection('mastaba'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المصطبة العلمية</button>
-          <button onClick={() => { scrollToSection('contact'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">تواصل معنا</button>
-          <button onClick={() => { onLoginClick(); setMobileMenuOpen(false); }} className="bg-[#d4a045] text-black font-bold py-3 rounded-xl mt-2 text-center text-lg shadow-lg">تسجيل الدخول / المصطبة</button>
-        </div>
+        <>
+          {/* Backdrop overlay: Click outside closes menu */}
+          <div 
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="fixed inset-x-0 top-20 z-40 bg-[#0a192f]/98 backdrop-blur-2xl border-b border-white/10 p-6 flex flex-col gap-4 text-white md:hidden animate-fade-in-down shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <span className="text-sm font-bold text-amber-400">المظهر: {theme === 'day' ? 'نهار' : 'ليل'}</span>
+              <button 
+                onClick={toggleTheme}
+                className="flex items-center gap-2 text-xs font-semibold bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-white"
+              >
+                {theme === 'day' ? <><Moon size={16} /> المظهر الليلي</> : <><Sun size={16} /> المظهر النهاري</>}
+              </button>
+            </div>
+            <button onClick={() => { navigate('/about'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">من نحن</button>
+            <button onClick={() => { scrollToSection('initiatives'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المبادرات</button>
+            <button onClick={() => { navigate('/articles'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المقالات</button>
+            <button onClick={() => { scrollToSection('mastaba'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">المصطبة العلمية</button>
+            <button onClick={() => { scrollToSection('contact'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">تواصل معنا</button>
+            <button onClick={() => { onLoginClick(); setMobileMenuOpen(false); }} className="bg-[#d4a045] text-black font-bold py-3 rounded-xl mt-2 text-center text-lg shadow-lg">تسجيل الدخول / المصطبة</button>
+          </div>
+        </>
       )}
 
       {/* --- 1. HERO SECTION (VIDEO BACKGROUND) --- */}
@@ -137,8 +145,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
             مساحة رائدة تجمع الشباب على أسس راسخة من العلم والتربية، لبناء جيل واعٍ، مثقف، ومؤثر.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <button onClick={() => scrollToSection('about')} className="bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold py-3 px-8 rounded-full shadow-lg flex items-center justify-center gap-2 transition-transform transform hover:scale-105">
-              اكتشف الملتقى <ChevronDown size={20} />
+            <button onClick={() => navigate('/about')} className="bg-[#d4a045] hover:bg-[#b8860b] text-black font-bold py-3 px-8 rounded-full shadow-lg flex items-center justify-center gap-2 transition-transform transform hover:scale-105">
+              اكتشف الملتقى <ArrowLeft size={20} />
             </button>
             <button onClick={() => scrollToSection('mastaba')} className="bg-white/10 backdrop-blur-md hover:bg-white/20 border border-white/30 text-white font-medium py-3 px-8 rounded-full flex items-center justify-center gap-2 transition-transform transform hover:scale-105">
               المصطبة العلمية <BookOpen size={20} />
@@ -371,9 +379,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           <GraduationCap size={20} />
           <span>المصطبة</span>
         </button>
-        <button onClick={onLoginClick} className="flex flex-col items-center gap-1 text-xs font-bold text-[#d4a045] transition active:scale-95 bg-[#d4a045]/10 px-3 py-1 rounded-xl border border-[#d4a045]/30">
-          <UserCheck size={20} />
-          <span>دخول</span>
+        <button onClick={() => scrollToSection('contact')} className="flex flex-col items-center gap-1 text-xs font-bold text-[#d4a045] transition active:scale-95 bg-[#d4a045]/10 px-3 py-1 rounded-xl border border-[#d4a045]/30">
+          <MessageCircle size={20} />
+          <span>تواصل معنا</span>
         </button>
       </div>
 

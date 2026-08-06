@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, Calendar, User, Clock, Share2, ZoomIn, ZoomOut, Hand } from 'lucide-react';
+import { ArrowRight, Calendar, User, Clock, Share2, ZoomIn, ZoomOut, Hand, Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
 import LoadingSpinner from './LoadingSpinner';
@@ -17,7 +17,7 @@ interface Article {
 const ArticlePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,9 +173,18 @@ const ArticlePage: React.FC = () => {
               <span className="hidden sm:inline font-extrabold text-[#047857]">ملتقى الشباب المسلم</span>
             </div>
           </div>
-          <button onClick={handleShare} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-700'}`} title="مشاركة على فيسبوك">
-            <Share2 size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={toggleTheme} 
+              className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-700'}`} 
+              title={isDark ? 'الوضع النهاري' : 'الوضع الليلي'}
+            >
+              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            <button onClick={handleShare} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-700'}`} title="مشاركة على فيسبوك">
+              <Share2 size={20} />
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -195,10 +204,10 @@ const ArticlePage: React.FC = () => {
         >
           <ZoomOut size={20} />
         </button>
-        <div className="w-full h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
+        <div className="hidden md:block w-full h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
         <button 
           onClick={() => setIsHandMode(!isHandMode)} 
-          className={`p-2.5 rounded-xl transition-all ${isHandMode ? 'bg-[#047857] text-white shadow-lg scale-105' : 'hover:bg-[#047857] hover:text-white'}`} 
+          className={`hidden md:flex p-2.5 rounded-xl transition-all ${isHandMode ? 'bg-[#047857] text-white shadow-lg scale-105' : 'hover:bg-[#047857] hover:text-white'}`} 
           title={isHandMode ? "إيقاف أداة اليد" : "تفعيل أداة اليد (للسحب)"}
         >
           <Hand size={20} />

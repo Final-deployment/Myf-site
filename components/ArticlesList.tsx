@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Search, Calendar } from 'lucide-react';
+import { ArrowRight, Search, Calendar, Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import { articlesApi, Article } from '../services/api/articles';
 import { INITIAL_OFFICIAL_ARTICLES } from '../services/api/officialArticles';
@@ -8,7 +8,7 @@ import LoadingSpinner from './LoadingSpinner';
 
 const ArticlesList: React.FC = () => {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   
   const [articles, setArticles] = useState<Article[]>(INITIAL_OFFICIAL_ARTICLES);
   const [loading, setLoading] = useState(false);
@@ -51,14 +51,23 @@ const ArticlesList: React.FC = () => {
     <div className={`h-screen overflow-y-auto overflow-x-hidden ${bgClass} ${textClass} font-sans pb-32 transition-colors duration-500`}>
       {/* Navbar Minimal */}
       <nav className={`sticky top-0 w-full z-50 transition-all duration-300 backdrop-blur-md ${isDark ? 'bg-black/50 border-b border-white/10' : 'bg-white/70 border-b border-gray-200 shadow-sm'}`}>
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center gap-4">
-          <button onClick={() => navigate('/')} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-200'}`}>
-            <ArrowRight size={24} />
-          </button>
-          <div className="font-cairo font-bold text-xl flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-            <img src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg" alt="Logo" className="w-10 h-10 rounded-full border-2 border-[#d4a045]" />
-            <span className="hidden sm:inline">العودة للرئيسية</span>
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate('/')} className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-200'}`}>
+              <ArrowRight size={24} />
+            </button>
+            <div className="font-cairo font-bold text-xl flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+              <img src="https://raw.githubusercontent.com/NinjaWorld1234/Files/main/myf%20LOGO.jpg" alt="Logo" className="w-10 h-10 rounded-full border-2 border-[#d4a045]" />
+              <span className="hidden sm:inline">العودة للرئيسية</span>
+            </div>
           </div>
+          <button 
+            onClick={toggleTheme} 
+            className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-200 text-gray-700'}`} 
+            title={isDark ? 'الوضع النهاري' : 'الوضع الليلي'}
+          >
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
         </div>
       </nav>
 

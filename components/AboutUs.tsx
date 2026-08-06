@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, BookOpen, Compass, Award, Users, HeartHandshake, Lightbulb, ShieldCheck, Landmark, GraduationCap } from 'lucide-react';
+import { ArrowRight, BookOpen, Compass, Award, Users, HeartHandshake, Lightbulb, ShieldCheck, Landmark, GraduationCap, Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 
 export const AboutUs: React.FC = () => {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -30,12 +30,21 @@ export const AboutUs: React.FC = () => {
           <span className="font-bold text-lg md:text-xl text-white font-cairo">من نحن</span>
         </div>
 
-        <button
-          onClick={() => navigate('/articles')}
-          className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-medium px-4 py-2 rounded-xl text-xs md:text-sm transition-colors"
-        >
-          المقالات
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 text-white transition-colors border border-white/10"
+            title={theme === 'day' ? 'الوضع الليلي' : 'الوضع النهاري'}
+          >
+            {theme === 'day' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+          <button
+            onClick={() => navigate('/articles')}
+            className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-medium px-3 py-1.5 rounded-xl text-xs md:text-sm transition-colors"
+          >
+            المقالات
+          </button>
+        </div>
       </header>
 
       {/* --- HERO BANNER --- */}
