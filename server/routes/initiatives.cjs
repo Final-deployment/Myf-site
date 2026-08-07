@@ -9,7 +9,7 @@ router.get('/', (req, res) => {
     try {
         const initiatives = db.prepare(`
             SELECT * FROM initiatives
-            ORDER BY created_at DESC
+            ORDER BY display_order ASC, created_at DESC
         `).all();
         res.json(initiatives);
     } catch (error) {
@@ -144,6 +144,32 @@ router.delete('/:id', authenticateAdminOrPortalToken, (req, res) => {
     } catch (error) {
         console.error('Error deleting initiative:', error);
         res.status(500).json({ error: 'Failed to delete initiative' });
+    }
+});
+
+// Reorder initiatives (drag and drop)
+router.post('/reorder', authenticateAdminOrPortalToken, (req, res) => {
+    const { items } = req.body;
+    if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'items array is required' });
+    }
+
+    try {
+        const updateStmt = db.prepare('UPDATE initiatives SET display_order = ? WHERE id = ?');
+        const reorderTx = db.transaction((orderedList) => {
+            for (let i = 0; i < orderedList.length; i++) {
+                const item = orderedList[i];
+                const order = typeof item.display_order === 'number' ? item.display_order : i;
+                updateStmt.run(order, item.id);
+            }
+        });
+
+        reorderTx(items);
+        console.log(`[Initiatives DB] Reordered ${items.length} initiatives`);
+        res.json({ success: true, message: 'Initiatives reordered successfully' });
+    } catch (error) {
+        console.error('Error reordering initiatives:', error);
+        res.status(500).json({ error: 'Failed to reorder initiatives' });
     }
 });
 

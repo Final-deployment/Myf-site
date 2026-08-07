@@ -403,9 +403,11 @@ function initDatabase() {
             image TEXT,
             link TEXT,
             status TEXT DEFAULT 'active',
+            display_order INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `);
+  try { db.prepare('ALTER TABLE initiatives ADD COLUMN display_order INTEGER DEFAULT 0').run(); } catch (e) { }
 
   // --- Initiative Activities Table ---
   db.exec(`

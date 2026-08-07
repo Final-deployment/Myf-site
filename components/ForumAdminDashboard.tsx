@@ -20,7 +20,8 @@ import {
   Clock,
   Users,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  GripVertical
 } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import RichTextEditor from './RichTextEditor';
@@ -82,6 +83,35 @@ export const ForumAdminDashboard: React.FC = () => {
       console.error('Fetch analytics stats error:', err);
     } finally {
       setLoadingAnalytics(false);
+    }
+  };
+
+  // Initiatives Drag & Drop State
+  const [draggedInitIndex, setDraggedInitIndex] = useState<number | null>(null);
+  const [dragOverInitIndex, setDragOverInitIndex] = useState<number | null>(null);
+
+  const handleInitDrop = async (targetIndex: number) => {
+    if (draggedInitIndex === null || draggedInitIndex === targetIndex) return;
+
+    const newList = [...initiativesList];
+    const [movedItem] = newList.splice(draggedInitIndex, 1);
+    newList.splice(targetIndex, 0, movedItem);
+
+    const updatedWithOrder = newList.map((item, idx) => ({
+      ...item,
+      display_order: idx
+    }));
+
+    setInitiativesList(updatedWithOrder);
+    setDraggedInitIndex(null);
+    setDragOverInitIndex(null);
+
+    try {
+      await initiativesApi.reorder(updatedWithOrder.map((item, idx) => ({ id: item.id, display_order: idx })));
+      setSuccessMsg('✨ تم حفظ الترتيب الجديد لبطاقات المبادرات بنجاح!');
+      setTimeout(() => setSuccessMsg(null), 3500);
+    } catch (err) {
+      console.error('Failed to save initiatives reorder:', err);
     }
   };
 
@@ -1018,11 +1048,18 @@ export const ForumAdminDashboard: React.FC = () => {
             {/* Sub-Page 2: Published Initiatives */}
             {manageSubTab === 'initiatives' && (
               <div className="space-y-6 animate-fade-in">
-                <div className="flex justify-between items-center border-b border-gray-500/20 pb-3">
-                  <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
-                    <Compass className="text-[#047857]" size={22} />
-                    <span>فهرس وتعديل المبادرات المنشورة ({initiativesList.length})</span>
-                  </h3>
+                <div className="flex flex-wrap justify-between items-center border-b border-gray-500/20 pb-3 gap-3">
+                  <div>
+                    <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                      <Compass className="text-[#047857]" size={22} />
+                      <span>فهرس وتعديل المبادرات المنشورة ({initiativesList.length})</span>
+                    </h3>
+                    <p className="text-xs text-amber-500 font-bold mt-1 flex items-center gap-1.5">
+                      <GripVertical size={16} />
+                      <span>💡 ميزة السحب والإفلات مفعّلة: اسحب أي بطاقة مبادرة لتغيير موقعها وترتيب عرضها في الموقع فوراً.</span>
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => { setActiveTab('initiative'); cancelEditInitiative(); }}
                     className="text-xs font-bold text-[#047857] hover:underline"
@@ -1032,37 +1069,76 @@ export const ForumAdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {initiativesList.map((init) => (
-                    <div 
-                      key={init.id}
-                      className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
-                    >
-                      <div>
-                        <div className="h-28 rounded-xl bg-slate-800/40 p-4 flex items-center justify-center mb-4">
-                          <img src={init.logo} alt={init.title} className="max-h-full max-w-full object-contain" />
-                        </div>
-                        <h4 className="font-bold text-base mb-2">{init.title}</h4>
-                        <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{init.description}</p>
-                      </div>
-                      <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs font-bold">
-                        <button
-                          onClick={() => startEditInitiative(init)}
-                          className="text-[#d4a045] hover:underline flex items-center gap-1"
-                        >
-                          <Edit3 size={15} />
-                          <span>تعديل المبادرة</span>
-                        </button>
+                  {initiativesList.map((init, index) => {
+                    const isDragging = draggedInitIndex === index;
+                    const isDragOver = dragOverInitIndex === index;
 
-                        <button
-                          onClick={() => setDeleteConfirmTarget({ type: 'initiative', id: init.id, title: init.title })}
-                          className="text-red-500 hover:text-red-600 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
-                        >
-                          <Trash2 size={14} />
-                          <span>حذف المبادرة</span>
-                        </button>
+                    return (
+                      <div 
+                        key={init.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedInitIndex(index);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverInitIndex(index);
+                        }}
+                        onDragLeave={() => setDragOverInitIndex(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleInitDrop(index);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedInitIndex(null);
+                          setDragOverInitIndex(null);
+                        }}
+                        className={`p-5 rounded-2xl border transition-all cursor-grab active:cursor-grabbing relative group ${
+                          isDragging ? 'opacity-40 scale-95 border-amber-500 border-dashed' : ''
+                        } ${
+                          isDragOver ? 'ring-4 ring-amber-400 scale-105 border-amber-400 z-10' : ''
+                        } ${
+                          theme === 'day' ? 'bg-white border-slate-200 shadow-md hover:border-amber-400' : 'bg-slate-900 border-slate-800 shadow-lg hover:border-amber-400'
+                        } flex flex-col justify-between`}
+                      >
+                        {/* Drag Handle Top Bar */}
+                        <div className="flex items-center justify-between pb-2 mb-3 border-b border-gray-500/10">
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                            <GripVertical size={14} className="text-amber-500 group-hover:scale-125 transition" />
+                            <span>ترتيب #{index + 1}</span>
+                          </div>
+                          <span className="text-[10px] opacity-50 font-bold">اسحب للترتيب ↕️</span>
+                        </div>
+
+                        <div>
+                          <div className="h-28 rounded-xl bg-slate-800/40 p-4 flex items-center justify-center mb-4">
+                            <img src={init.logo} alt={init.title} className="max-h-full max-w-full object-contain pointer-events-none" />
+                          </div>
+                          <h4 className="font-bold text-base mb-2">{init.title}</h4>
+                          <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{init.description}</p>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs font-bold">
+                          <button
+                            onClick={() => startEditInitiative(init)}
+                            className="text-[#d4a045] hover:underline flex items-center gap-1"
+                          >
+                            <Edit3 size={15} />
+                            <span>تعديل المبادرة</span>
+                          </button>
+
+                          <button
+                            onClick={() => setDeleteConfirmTarget({ type: 'initiative', id: init.id, title: init.title })}
+                            className="text-red-500 hover:text-red-600 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                          >
+                            <Trash2 size={14} />
+                            <span>حذف المبادرة</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

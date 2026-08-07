@@ -17,6 +17,7 @@ export interface Initiative {
     image?: string;
     link?: string;
     status?: string;
+    display_order?: number;
     created_at?: string;
     activities?: InitiativeActivity[];
 }
@@ -85,6 +86,19 @@ export const initiativesApi = {
             }
         });
         if (!response.ok) throw new Error('Failed to delete initiative');
+    },
+
+    reorder: async (items: { id: string; display_order: number }[]): Promise<void> => {
+        const token = getEffectiveToken();
+        const response = await fetch('/api/initiatives/reorder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ items })
+        });
+        if (!response.ok) throw new Error('Failed to reorder initiatives');
     },
 
     // --- Activities API ---
