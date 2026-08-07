@@ -271,7 +271,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
                   <img src={init.image || '/logos/الملتقى.png'} alt={init.title} className="max-h-full max-w-full object-contain transition-transform duration-500 group-hover:scale-110" />
                 </div>
                 <div className={`p-6 ${theme === 'day' ? 'bg-white' : 'bg-slate-900/90'}`}>
-                  <h3 className={`text-xl font-bold mb-2 ${theme === 'day' ? 'text-slate-900 group-hover:text-[#047857]' : 'text-white group-hover:text-amber-400'} transition-colors`}>{init.title}</h3>
+                  <h3 className={`text-xl font-bold mb-2 text-center ${theme === 'day' ? 'text-slate-900 group-hover:text-[#047857]' : 'text-white group-hover:text-amber-400'} transition-colors`}>{init.title}</h3>
                   <p className={`text-sm leading-relaxed ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>{init.description}</p>
                 </div>
               </div>

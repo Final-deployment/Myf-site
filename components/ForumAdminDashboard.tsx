@@ -1115,7 +1115,7 @@ export const ForumAdminDashboard: React.FC = () => {
                           <div className="h-28 rounded-xl bg-slate-800/40 p-4 flex items-center justify-center mb-4">
                             <img src={init.logo} alt={init.title} className="max-h-full max-w-full object-contain pointer-events-none" />
                           </div>
-                          <h4 className="font-bold text-base mb-2">{init.title}</h4>
+                          <h4 className="font-bold text-base mb-2 text-center">{init.title}</h4>
                           <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{init.description}</p>
                         </div>
 
