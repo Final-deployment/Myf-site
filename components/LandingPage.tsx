@@ -117,12 +117,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
         </nav>
 
         <div className="flex items-center gap-2 md:gap-4">
+          {/* Theme Toggle Button */}
           <button
             onClick={toggleTheme}
-            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-all border border-white/10 text-white"
-            title={theme === 'day' ? 'الوضع الليلي' : 'الوضع النهاري'}
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg border transform hover:scale-105 active:scale-95 ${
+              theme === 'day'
+                ? 'bg-slate-900 text-amber-400 border-amber-400/40 hover:bg-slate-800 shadow-slate-900/30 ring-2 ring-amber-400/20'
+                : 'bg-amber-400 text-slate-950 border-amber-300 hover:bg-amber-300 shadow-amber-400/30 ring-2 ring-amber-400/40 font-bold'
+            }`}
+            title={theme === 'day' ? 'التحويل للوضع الليلي' : 'التحويل للوضع النهاري'}
           >
-            {theme === 'day' ? <Moon size={18} /> : <Sun size={18} />}
+            {theme === 'day' ? (
+              <Moon size={20} className="fill-amber-400 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+            ) : (
+              <Sun size={20} className="fill-slate-950 text-slate-950 stroke-[2.5]" />
+            )}
           </button>
 
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white">
@@ -141,12 +150,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           />
           <div className="fixed inset-x-0 top-20 z-40 bg-[#0a192f]/98 backdrop-blur-2xl border-b border-white/10 p-6 flex flex-col gap-4 text-white md:hidden animate-fade-in-down shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="text-sm font-bold text-amber-400">المظهر: {theme === 'day' ? 'نهار' : 'ليل'}</span>
+              <span className="text-sm font-bold text-amber-400">المظهر الحالي: {theme === 'day' ? 'نهار' : 'ليل'}</span>
               <button 
                 onClick={toggleTheme}
-                className="flex items-center gap-2 text-xs font-semibold bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-white"
+                className={`flex items-center gap-2 text-xs font-extrabold px-4 py-2 rounded-xl border transition-all shadow-md ${
+                  theme === 'day' 
+                    ? 'bg-slate-900 text-amber-400 border-amber-400/40' 
+                    : 'bg-amber-400 text-slate-950 border-amber-300'
+                }`}
               >
-                {theme === 'day' ? <><Moon size={16} /> المظهر الليلي</> : <><Sun size={16} /> المظهر النهاري</>}
+                {theme === 'day' ? <><Moon size={16} className="fill-amber-400 text-amber-400" /> الوضع الليلي</> : <><Sun size={16} className="fill-slate-950 text-slate-950" /> الوضع النهاري</>}
               </button>
             </div>
             <button onClick={() => { navigate('/about'); setMobileMenuOpen(false); }} className="text-right py-2 text-lg border-b border-white/5 font-semibold">من نحن</button>
@@ -241,17 +254,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Fallback Static Initiatives if DB is empty */}
-            {[
+            {(initiatives.length > 0 ? initiatives : [
               { id: 'init_futuwwa', title: 'أكاديمية فتوة/فلسطين', description: 'برنامج إعداد قيادي شبابي يهدف إلى بناء الشخصية الإسلامية المتكاملة من خلال التربية الإيمانية، والوعي الفكري، والمهارات الحياتية.', image: '/logos/فتوة.png' },
               { id: 'init_ehdena', title: 'مبادرة اهدنا (على هدي الحبيب)', description: 'نشر تعاليم الدين الإسلامي من خلال الدورات، المحاضرات، وإحياء المناسبات الدينية ومجالس الصلاة على النبي.', image: '/logos/على هدي الحبيب.png' },
               { id: 'init_meraj', title: 'مقرأة معراج', description: 'مبادرة تعنى بالقرآن الكريم وحفظه وتكريمه وحلقات العلوم الشريفة.', image: '/logos/معراج.png' },
               { id: 'init_nabd_hayat', title: 'مبادرة نبض الحياة', description: 'تزويد الشباب والمتطوعين بمهارات الإسعافات الأولية والاستجابة الطارئة.', image: '/logos/ نبض الحياة.png' },
               { id: 'init_nabd_aman', title: 'مبادرة نبض الأمان', description: 'تعزيز السلامة العامة من خلال تدريب الشباب على التعامل مع حالات الطوارئ والإطفاء.', image: '/logos/ نبض الأمان.png' },
               { id: 'init_basmat_amal', title: 'مبادرة بسمة أمل', description: 'مبادرة دعم نفسي واجتماعي ودورات علمية وتثقيفية موجهة لتطوير قدرات الشباب.', image: '/logos/ بسمة أمل.png' }
-            ].map((init, i) => (
+            ]).map((init, i) => (
               <div 
-                key={i} 
+                key={init.id || i} 
                 onClick={() => navigate(`/initiative/${init.id}`)}
                 className={`group rounded-3xl overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-xl cursor-pointer ${theme === 'day' ? 'bg-white border border-slate-200 shadow-md' : 'bg-white/5 border border-white/10'}`}
               >
@@ -362,10 +374,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLoginClick, onSignupClick }
                     </div>
                     <div className="p-6">
                       <h3 className={`text-lg md:text-xl font-bold mb-3 line-clamp-2 leading-snug transition-colors ${theme === 'day' ? 'text-slate-900 group-hover:text-amber-600' : 'text-white group-hover:text-amber-400'}`}>{article.title}</h3>
-                      <p className={`text-sm line-clamp-3 mb-4 leading-relaxed ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>{article.content}</p>
+                      <p className={`text-sm line-clamp-3 mb-4 leading-relaxed ${theme === 'day' ? 'text-slate-600 font-medium' : 'text-slate-300 font-light'}`}>
+                        {article.content.replace(/<[^>]*>/g, ' ').replace(/style="[^"]*"/gi, ' ').replace(/class="[^"]*"/gi, ' ').replace(/\s+/g, ' ').trim()}
+                      </p>
                       <div className={`flex justify-between items-center text-xs pt-2 border-t ${theme === 'day' ? 'text-slate-500 border-slate-200' : 'text-slate-400 border-white/10'}`}>
                         <span>{new Date(article.created_at).toLocaleDateString('ar-EG')}</span>
-                        <span className="text-[#d4a045] font-bold group-hover:underline">اقرأ المزيد</span>
+                        <span className="font-bold opacity-80">إدارة الملتقى</span>
+                        <span className="text-[#d4a045] font-bold group-hover:underline">اقرأ المزيد ←</span>
                       </div>
                     </div>
                   </div>

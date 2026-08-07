@@ -47,6 +47,16 @@ const ArticlesList: React.FC = () => {
              article.content.toLowerCase().includes(query);
   });
 
+  const stripHtml = (html: string): string => {
+    if (!html) return '';
+    let text = html.replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    text = text.replace(/<[^>]*>/g, ' ');
+    text = text.replace(/style="[^"]*"/gi, ' ')
+               .replace(/class="[^"]*"/gi, ' ')
+               .replace(/\b(blockquote|style|color|background-color|padding|border-radius|margin|font-style|font-weight)\b/gi, ' ');
+    return text.replace(/\s+/g, ' ').trim();
+  };
+
   return (
     <div className={`min-h-screen w-full overflow-x-hidden overflow-y-auto ${bgClass} ${textClass} font-sans pb-32 transition-colors duration-500`}>
       {/* Navbar Minimal */}
@@ -63,10 +73,14 @@ const ArticlesList: React.FC = () => {
           </div>
           <button 
             onClick={toggleTheme} 
-            className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-200 text-gray-700'}`} 
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-md border transform hover:scale-105 active:scale-95 ${
+              isDark
+                ? 'bg-amber-400 text-slate-950 border-amber-300 hover:bg-amber-300'
+                : 'bg-slate-900 text-amber-400 border-amber-400/40 hover:bg-slate-800'
+            }`} 
             title={isDark ? 'الوضع النهاري' : 'الوضع الليلي'}
           >
-            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            {isDark ? <Sun size={20} className="fill-slate-950 text-slate-950" /> : <Moon size={20} className="fill-amber-400 text-amber-400" />}
           </button>
         </div>
       </nav>
@@ -128,10 +142,10 @@ const ArticlesList: React.FC = () => {
                     <span>{new Date(article.created_at).toLocaleDateString('ar-EG')}</span>
                   </div>
                   <h3 className="text-2xl font-bold mb-3 line-clamp-2 font-cairo leading-tight">{article.title}</h3>
-                  <p className="opacity-70 text-sm line-clamp-3 mb-6 flex-grow">{article.content}</p>
+                  <p className="opacity-70 text-sm line-clamp-3 mb-6 flex-grow">{stripHtml(article.content)}</p>
                   
                   <div className="flex justify-between items-center pt-4 border-t border-gray-500/20">
-                    <span className="text-sm font-semibold opacity-80">{article.author_name || 'إدارة الملتقى'}</span>
+                    <span className="text-sm font-semibold opacity-80">إدارة الملتقى</span>
                     <span className="text-[#047857] hover:text-[#d4a045] transition-colors font-bold text-sm">اقرأ المزيد ←</span>
                   </div>
                 </div>

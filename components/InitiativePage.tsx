@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, Star, CheckCircle, Share2, Users, Calendar, Image as ImageIcon, X, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
+import { ArrowRight, Star, CheckCircle, Share2, Users, Calendar, Image as ImageIcon, X, ChevronLeft, ChevronRight, Sun, Moon, Edit3, Trash2, Settings } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import { OFFICIAL_ACTIVITIES } from '../services/api/officialActivities';
+import { initiativesApi } from '../services/api/initiatives';
 import LoadingSpinner from './LoadingSpinner';
 
 interface Activity {
@@ -31,6 +32,8 @@ const InitiativePage: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deleteActId, setDeleteActId] = useState<string | null>(null);
 
   // Lightbox Modal State
   const [activeModalImages, setActiveModalImages] = useState<string[]>([]);
@@ -73,6 +76,24 @@ const InitiativePage: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeModalImages]);
+
+  useEffect(() => {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('myf_forum_admin_auth')) {
+      setIsAdmin(true);
+    }
+  }, []);
+
+  const handleDeleteActivity = async (actId: string) => {
+    try {
+      await initiativesApi.deleteActivity(actId);
+      setActivities(prev => prev.filter(a => a.id !== actId));
+    } catch (e) {
+      console.error(e);
+      setActivities(prev => prev.filter(a => a.id !== actId));
+    } finally {
+      setDeleteActId(null);
+    }
+  };
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -172,7 +193,39 @@ const InitiativePage: React.FC = () => {
   ];
 
   return (
-    <div className={`min-h-screen w-full overflow-x-hidden overflow-y-auto ${bgClass} ${textClass} font-sans pb-24 transition-colors duration-500`}>
+    <div className={`min-h-screen w-full overflow-x-hidden overflow-y-auto ${bgClass} ${textClass} font-sans pb-24 transition-colors duration-500 relative`}>
+      
+      {/* Activity Delete Confirmation Overlay */}
+      {deleteActId && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className={`max-w-md w-full p-6 rounded-3xl border ${isDark ? 'bg-slate-900 border-red-900/50 text-white' : 'bg-white border-red-200 text-slate-900'} space-y-4 text-center shadow-2xl`}>
+            <div className="w-14 h-14 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto border border-red-500/30">
+              <Trash2 size={28} />
+            </div>
+            <h3 className="text-xl font-bold font-cairo text-red-500">⚠️ تأكيد حذف هذا النشاط نهائياً</h3>
+            <p className="text-sm opacity-80 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف هذا النشاط من المبادرة؟ سيتم مسحه نهائياً من قاعدة البيانات.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleDeleteActivity(deleteActId)}
+                className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-lg transition"
+              >
+                🗑️ نعم، حذف النشاط
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteActId(null)}
+                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm border transition ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-800'}`}
+              >
+                ✖️ إلغاء وتراجع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navbar Minimal for Initiative Page */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 backdrop-blur-md ${isDark ? 'bg-black/50 border-b border-white/10' : 'bg-white/70 border-b border-gray-200 shadow-sm'}`}>
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -186,6 +239,15 @@ const InitiativePage: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/forum-admin-control')}
+                className="px-3.5 py-2 rounded-xl bg-[#d4a045] hover:bg-[#b8860b] text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md transition-all"
+              >
+                <Edit3 size={15} />
+                <span>تحرير المبادرة والأنشطة باللوحة</span>
+              </button>
+            )}
             <button 
               onClick={toggleTheme} 
               className={`p-2 rounded-full transition-colors ${isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-200 text-gray-700'}`} 
@@ -365,6 +427,26 @@ const InitiativePage: React.FC = () => {
                             <img src={imgUrl} alt={`صورة ${imgIdx + 1}`} className="w-full h-full object-cover" />
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Admin Actions Bar */}
+                    {isAdmin && (
+                      <div className="mt-4 pt-3 border-t border-gray-500/20 flex justify-between items-center text-xs font-bold">
+                        <button
+                          onClick={() => navigate('/forum-admin-control')}
+                          className="text-amber-400 hover:underline flex items-center gap-1"
+                        >
+                          <Edit3 size={14} />
+                          <span>تعديل باللوحة</span>
+                        </button>
+                        <button
+                          onClick={() => setDeleteActId(act.id)}
+                          className="text-red-400 hover:text-red-500 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10"
+                        >
+                          <Trash2 size={14} />
+                          <span>حذف النشاط</span>
+                        </button>
                       </div>
                     )}
                   </div>

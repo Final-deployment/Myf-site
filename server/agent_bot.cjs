@@ -15,6 +15,12 @@ if (!BOT_TOKEN || ADMIN_CHAT_IDS.length === 0) {
 // تهيئة البوت
 const bot = BOT_TOKEN ? new TelegramBot(BOT_TOKEN, { polling: true }) : null;
 
+if (bot) {
+    bot.on('polling_error', (error) => {
+        console.warn('[Telegram Bot Polling Warning]:', error?.message || error);
+    });
+}
+
 // ==========================================
 // التفاعل مع تليجرام (ChatOps)
 // ==========================================

@@ -16,6 +16,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { useTheme } from './ThemeContext';
+import { formatArticleWithCerebras } from '../services/cerebrasAI';
 
 interface RichTextEditorProps {
   title: string;
@@ -38,6 +39,28 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const [textColor, setTextColor] = useState<string>('#d4a045');
   const [uploading, setUploading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const getPreviewHTML = (raw: string) => {
+    if (!raw) return '<p class="opacity-40 italic">محتوى المقال سيظهر هنا أثناء الكتابة...</p>';
+    return String(raw).split('className=').join('class=');
+  };
+
+  const handleAIFormatArticle = async () => {
+    if (!content) return;
+    setAiLoading(true);
+    try {
+      const formatted = await formatArticleWithCerebras(title, content);
+      if (formatted) {
+        setContent(formatted);
+        setActiveTab('preview');
+      }
+    } catch (err) {
+      console.error('Cerebras AI Format Error:', err);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -197,6 +220,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               </div>
             )}
           </div>
+
+          {/* AI Assistance Button */}
+          <button
+            type="button"
+            onClick={handleAIFormatArticle}
+            disabled={aiLoading || !content}
+            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white font-extrabold text-sm shadow-xl flex items-center justify-center gap-2 transition-all transform hover:scale-[1.01] active:scale-[0.99] border border-amber-300/30 disabled:opacity-50"
+          >
+            <Sparkles size={18} className={aiLoading ? 'animate-spin' : 'animate-pulse'} />
+            <span>{aiLoading ? 'جاري إعادة تنسيق وتجميل المقال بالذكاء الاصطناعي (gpt-oss-120b على Cerebras)...' : '✨ تنسيق وتجميل المقال تلقائياً بالذكاء الاصطناعي (Cerebras gpt-oss-120b)'}</span>
+          </button>
 
           {/* Formatting Toolbar */}
           <div className={`p-3 rounded-xl border flex flex-wrap items-center gap-2 ${theme === 'day' ? 'bg-slate-100 border-slate-200' : 'bg-slate-800/60 border-slate-700'}`}>

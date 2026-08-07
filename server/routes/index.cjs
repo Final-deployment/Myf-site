@@ -19,8 +19,7 @@ const notificationsRoutes = require('./notifications.cjs');
 const notificationsInternalRoutes = require('./notifications_internal.cjs');
 const articlesRoutes = require('./articles.cjs');
 const initiativesRoutes = require('./initiatives.cjs');
-// Middleware for authentication will be handled in server.cjs or specifically in modules
-// But we can define the mount structure here
+const aiRoutes = require('./ai.cjs');
 
 // Mount Routes
 router.use('/', authRoutes); // Login, Register, etc
@@ -40,6 +39,7 @@ router.use('/notifications', notificationsRoutes);
 router.use('/in-app-notifications', notificationsInternalRoutes);
 router.use('/articles', articlesRoutes);
 router.use('/initiatives', initiativesRoutes);
+router.use('/ai', aiRoutes);
 
 // Export the centralized router
 module.exports = router;

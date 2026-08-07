@@ -14,11 +14,14 @@ import {
   Globe,
   ImageIcon,
   XCircle,
-  Save
+  Save,
+  Eye
 } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import RichTextEditor from './RichTextEditor';
 import { articlesApi, Article } from '../services/api/articles';
+import { initiativesApi } from '../services/api/initiatives';
+import { formatInitiativeWithCerebras } from '../services/cerebrasAI';
 
 interface InitiativeItem {
   id: string;
@@ -78,9 +81,48 @@ export const ForumAdminDashboard: React.FC = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingActivityImg, setUploadingActivityImg] = useState(false);
 
+  const [manageSubTab, setManageSubTab] = useState<'articles' | 'initiatives' | 'activities'>('articles');
+
   useEffect(() => {
     // Load existing articles from API
     articlesApi.getAll().then(setArticlesList).catch(() => {});
+    
+    // Load existing initiatives and their activities from API
+    initiativesApi.getAll().then(async (data) => {
+      if (data && data.length > 0) {
+        setInitiativesList(data.map(i => ({
+          id: i.id,
+          title: i.title,
+          description: i.description,
+          logo: i.image || '/logos/الملتقى.png',
+          vision: i.description
+        })));
+
+        // Fetch all activities across all initiatives
+        const allActs: ActivityItem[] = [];
+        for (const init of data) {
+          try {
+            const fullInit = await initiativesApi.getById(init.id);
+            if (fullInit && fullInit.activities && fullInit.activities.length > 0) {
+              for (const act of fullInit.activities) {
+                allActs.push({
+                  id: act.id,
+                  initId: act.initiative_id || init.id,
+                  title: act.title,
+                  summary: act.description,
+                  images: Array.isArray(act.images) ? act.images.join(', ') : (act.images || '')
+                });
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching activities for initiative:', init.id, err);
+          }
+        }
+        if (allActs.length > 0) {
+          setActivitiesList(allActs);
+        }
+      }
+    }).catch(() => {});
   }, []);
 
   const handleLogout = () => {
@@ -332,6 +374,22 @@ export const ForumAdminDashboard: React.FC = () => {
     setActivityImages('');
   };
 
+  const [aiInitLoading, setAiInitLoading] = useState(false);
+
+  const handleAIFormatInitiative = async () => {
+    if (!initTitle) return;
+    setAiInitLoading(true);
+    try {
+      const data = await formatInitiativeWithCerebras(initTitle, initDesc);
+      if (data.description) setInitDesc(data.description);
+      if (data.vision) setInitVision(data.vision);
+    } catch (err) {
+      console.error('Cerebras AI Initiative Format Error:', err);
+    } finally {
+      setAiInitLoading(false);
+    }
+  };
+
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
     type: 'article' | 'initiative' | 'activity';
     id: string;
@@ -572,6 +630,17 @@ export const ForumAdminDashboard: React.FC = () => {
               )}
             </div>
 
+            {/* AI Generator Button for Initiative */}
+            <button
+              type="button"
+              onClick={handleAIFormatInitiative}
+              disabled={aiInitLoading || !initTitle}
+              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-emerald-600 to-amber-600 hover:from-amber-600 hover:to-emerald-700 text-white font-extrabold text-sm shadow-xl flex items-center justify-center gap-2 transition-all transform hover:scale-[1.01] active:scale-[0.99] border border-amber-300/30 disabled:opacity-50"
+            >
+              <Sparkles size={18} className={aiInitLoading ? 'animate-spin' : 'animate-pulse'} />
+              <span>{aiInitLoading ? 'جاري توليد وصياغة أهداف ورؤية المبادرة (gpt-oss-120b على Cerebras)...' : '✨ توليد وصياغة أهداف ورؤية المبادرة بالذكاء الاصطناعي (Cerebras gpt-oss-120b)'}</span>
+            </button>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-xs font-bold mb-2">اسم المبادرة *</label>
@@ -626,6 +695,69 @@ export const ForumAdminDashboard: React.FC = () => {
                 placeholder="أهداف المبادرة، المستهدفين، ومحاور البرامج..."
                 className={`w-full px-4 py-3 rounded-xl border text-sm outline-none ${theme === 'day' ? 'bg-slate-50 border-slate-300' : 'bg-slate-800 border-slate-700'}`}
               />
+            </div>
+
+            {/* Live Interactive Preview */}
+            <div className={`p-6 rounded-2xl border ${theme === 'day' ? 'bg-slate-50 border-amber-300/50' : 'bg-slate-800/60 border-amber-500/30'} space-y-4`}>
+              <div className="flex items-center gap-2 text-amber-500 font-bold text-sm border-b border-amber-500/20 pb-2">
+                <Eye size={18} />
+                <span>🔍 معاينة حية للمبادرة قبل الإضافة والإنشاء (Live Interactive Preview)</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+                {/* 1. Card Preview */}
+                <div className={`p-4 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-700'} flex flex-col justify-between`}>
+                  <div>
+                    <div className="text-[11px] font-bold text-[#d4a045] mb-2 flex items-center gap-1">
+                      <span>1️⃣ مظهر بطاقة المبادرة (في الرئيسية)</span>
+                    </div>
+                    <div className={`h-32 rounded-xl overflow-hidden mb-3 relative flex items-center justify-center p-3 ${theme === 'day' ? 'bg-slate-100' : 'bg-[#01140e]'}`}>
+                      <img 
+                        src={initLogo || '/logos/الملتقى.png'} 
+                        alt={initTitle || 'اسم المبادرة'} 
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => { (e.target as HTMLElement).setAttribute('src', '/logos/الملتقى.png'); }}
+                      />
+                    </div>
+                    <h4 className="font-bold text-base text-amber-400 mb-1 line-clamp-1">{initTitle || 'عنوان المبادرة الجاري كتابته...'}</h4>
+                    <p className="text-xs opacity-75 line-clamp-3 leading-relaxed">
+                      {initDesc || 'الشرح المختصر والمقدمة سيعرضان هنا بشكل حقيقي وتفاعلي...'}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-gray-500/10">
+                    <span className="text-[11px] font-bold text-emerald-400">استعراض تفاصيل المبادرة ⬅️</span>
+                  </div>
+                </div>
+
+                {/* 2. Initiative Page Header Preview */}
+                <div className={`p-4 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-700'} flex flex-col justify-between`}>
+                  <div>
+                    <div className="text-[11px] font-bold text-[#d4a045] mb-2 flex items-center gap-1">
+                      <span>2️⃣ مظهر ترويسة الصفحة الخاصة للمبادرة</span>
+                    </div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 rounded-xl bg-[#047857]/20 border border-[#047857]/40 flex items-center justify-center overflow-hidden p-1 shrink-0">
+                        <img 
+                          src={initLogo || '/logos/الملتقى.png'} 
+                          alt="Logo" 
+                          className="w-full h-full object-contain" 
+                          onError={(e) => { (e.target as HTMLElement).setAttribute('src', '/logos/الملتقى.png'); }}
+                        />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-white line-clamp-1">{initTitle || 'عنوان المبادرة'}</h4>
+                        <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full inline-block mt-0.5">مبادرة رسمية - ملتقى الشباب المسلم</span>
+                      </div>
+                    </div>
+                    <div className="text-xs opacity-80 space-y-1">
+                      <div className="font-semibold text-slate-300">الرؤية والأهداف:</div>
+                      <p className="text-[11px] opacity-75 line-clamp-3 leading-relaxed">
+                        {initVision || initDesc || 'أهداف المبادرة ومحاور العمل ستظهر هنا داخل صفحتها التفصيلية...'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <button
@@ -726,115 +858,207 @@ export const ForumAdminDashboard: React.FC = () => {
 
         {/* Tab 4: Manage & Edit Content */}
         {activeTab === 'manage' && (
-          <div className="space-y-12">
+          <div className="space-y-8">
             
-            {/* Section 1: Published Articles */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
-                <FileText className="text-[#d4a045]" size={22} />
-                <span>إدارة وتعديل المقالات المنشورة ({articlesList.length})</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {articlesList.map((art) => (
-                  <div 
-                    key={art.id}
-                    className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
-                  >
-                    <div>
-                      <div className="h-44 rounded-xl overflow-hidden mb-4 relative">
-                        <img src={art.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500'} alt={art.title} className="w-full h-full object-cover" />
-                      </div>
-                      <h4 className="font-bold text-base line-clamp-2 mb-2">{art.title}</h4>
-                      <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{art.content.replace(/<[^>]*>/g, '')}</p>
-                    </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs">
-                      <button
-                        onClick={() => startEditArticle(art)}
-                        className="text-[#d4a045] hover:underline font-bold flex items-center gap-1"
-                      >
-                        <Edit3 size={15} />
-                        <span>تعديل المقال</span>
-                      </button>
+            {/* Dedicated Sub-Tabs Navigation for Tab 4 */}
+            <div className={`p-4 rounded-3xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900 border-slate-800 shadow-md'} flex flex-wrap gap-3 justify-center md:justify-start`}>
+              <button
+                onClick={() => setManageSubTab('articles')}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 ${
+                  manageSubTab === 'articles'
+                    ? 'bg-[#d4a045] text-black shadow-md scale-105'
+                    : (theme === 'day' ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
+                }`}
+              >
+                <FileText size={16} />
+                <span>📝 1. صفحة المقالات المنشورة ({articlesList.length})</span>
+              </button>
 
-                      <button
-                        onClick={() => setDeleteConfirmTarget({ type: 'article', id: art.id, title: art.title })}
-                        className="text-red-500 hover:text-red-600 font-bold flex items-center gap-1"
-                      >
-                        <Trash2 size={14} />
-                        <span>حذف</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <button
+                onClick={() => setManageSubTab('initiatives')}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 ${
+                  manageSubTab === 'initiatives'
+                    ? 'bg-[#047857] text-white shadow-md scale-105'
+                    : (theme === 'day' ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
+                }`}
+              >
+                <Compass size={16} />
+                <span>🚀 2. صفحة المبادرات المنشورة ({initiativesList.length})</span>
+              </button>
+
+              <button
+                onClick={() => setManageSubTab('activities')}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 ${
+                  manageSubTab === 'activities'
+                    ? 'bg-amber-500 text-black shadow-md scale-105'
+                    : (theme === 'day' ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
+                }`}
+              >
+                <Camera size={16} />
+                <span>📸 3. صفحة أنشطة المبادرات ({activitiesList.length})</span>
+              </button>
             </div>
 
-            {/* Section 2: Initiatives List */}
-            <div className="space-y-6 pt-6 border-t border-gray-500/20">
-              <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
-                <Compass className="text-[#047857]" size={22} />
-                <span>إدارة وتعديل المبادرات ({initiativesList.length})</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {initiativesList.map((init) => (
-                  <div 
-                    key={init.id}
-                    className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
+            {/* Sub-Page 1: Published Articles */}
+            {manageSubTab === 'articles' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center border-b border-gray-500/20 pb-3">
+                  <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                    <FileText className="text-[#d4a045]" size={22} />
+                    <span>فهرس وتعديل المقالات المنشورة ({articlesList.length})</span>
+                  </h3>
+                  <button
+                    onClick={() => { setActiveTab('article'); cancelEditArticle(); }}
+                    className="text-xs font-bold text-[#d4a045] hover:underline"
                   >
-                    <div>
-                      <div className="h-28 rounded-xl bg-slate-800/40 p-4 flex items-center justify-center mb-4">
-                        <img src={init.logo} alt={init.title} className="max-h-full max-w-full object-contain" />
+                    + إضافة مقال جديد
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {articlesList.map((art) => (
+                    <div 
+                      key={art.id}
+                      className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
+                    >
+                      <div>
+                        <div className="h-44 rounded-xl overflow-hidden mb-4 relative">
+                          <img src={art.image || 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500'} alt={art.title} className="w-full h-full object-cover" />
+                        </div>
+                        <h4 className="font-bold text-base line-clamp-2 mb-2">{art.title}</h4>
+                        <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">
+                          {art.content.replace(/<[^>]*>/g, ' ').replace(/style="[^"]*"/gi, ' ').replace(/class="[^"]*"/gi, ' ').replace(/\s+/g, ' ').trim()}
+                        </p>
                       </div>
-                      <h4 className="font-bold text-base mb-2">{init.title}</h4>
-                      <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{init.description}</p>
-                    </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs">
-                      <button
-                        onClick={() => startEditInitiative(init)}
-                        className="text-[#d4a045] hover:underline font-bold flex items-center gap-1"
-                      >
-                        <Edit3 size={15} />
-                        <span>تعديل المبادرة</span>
-                      </button>
-
-                      <button
-                        onClick={() => setDeleteConfirmTarget({ type: 'initiative', id: init.id, title: init.title })}
-                        className="text-red-500 hover:text-red-600 font-bold flex items-center gap-1"
-                      >
-                        <Trash2 size={14} />
-                        <span>حذف</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Section 3: Activities List */}
-            {activitiesList.length > 0 && (
-              <div className="space-y-6 pt-6 border-t border-gray-500/20">
-                <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
-                  <Camera className="text-amber-400" size={22} />
-                  <span>إدارة الأنشطة المضافة ({activitiesList.length})</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {activitiesList.map((act) => (
-                    <div key={act.id} className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-                      <h4 className="font-bold text-base mb-1">{act.title}</h4>
-                      <p className="text-xs opacity-70 mb-3">{act.summary}</p>
-                      <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs">
-                        <button onClick={() => startEditActivity(act)} className="text-[#d4a045] font-bold flex items-center gap-1">
-                          <Edit3 size={14} />
-                          <span>تعديل النشاط</span>
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs font-bold">
+                        <button
+                          onClick={() => startEditArticle(art)}
+                          className="text-[#d4a045] hover:underline flex items-center gap-1"
+                        >
+                          <Edit3 size={15} />
+                          <span>تعديل المقال</span>
                         </button>
-                        <button onClick={() => setActivitiesList(activitiesList.filter(a => a.id !== act.id))} className="text-red-500 font-bold flex items-center gap-1">
+
+                        <button
+                          onClick={() => setDeleteConfirmTarget({ type: 'article', id: art.id, title: art.title })}
+                          className="text-red-500 hover:text-red-600 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                        >
                           <Trash2 size={14} />
-                          <span>حذف</span>
+                          <span>حذف المقال</span>
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Sub-Page 2: Published Initiatives */}
+            {manageSubTab === 'initiatives' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center border-b border-gray-500/20 pb-3">
+                  <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                    <Compass className="text-[#047857]" size={22} />
+                    <span>فهرس وتعديل المبادرات المنشورة ({initiativesList.length})</span>
+                  </h3>
+                  <button
+                    onClick={() => { setActiveTab('initiative'); cancelEditInitiative(); }}
+                    className="text-xs font-bold text-[#047857] hover:underline"
+                  >
+                    + إضافة مبادرة جديدة
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {initiativesList.map((init) => (
+                    <div 
+                      key={init.id}
+                      className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}
+                    >
+                      <div>
+                        <div className="h-28 rounded-xl bg-slate-800/40 p-4 flex items-center justify-center mb-4">
+                          <img src={init.logo} alt={init.title} className="max-h-full max-w-full object-contain" />
+                        </div>
+                        <h4 className="font-bold text-base mb-2">{init.title}</h4>
+                        <p className="text-xs opacity-70 line-clamp-3 leading-relaxed mb-4">{init.description}</p>
+                      </div>
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs font-bold">
+                        <button
+                          onClick={() => startEditInitiative(init)}
+                          className="text-[#d4a045] hover:underline flex items-center gap-1"
+                        >
+                          <Edit3 size={15} />
+                          <span>تعديل المبادرة</span>
+                        </button>
+
+                        <button
+                          onClick={() => setDeleteConfirmTarget({ type: 'initiative', id: init.id, title: init.title })}
+                          className="text-red-500 hover:text-red-600 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                        >
+                          <Trash2 size={14} />
+                          <span>حذف المبادرة</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Page 3: Initiative Activities Management */}
+            {manageSubTab === 'activities' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center border-b border-gray-500/20 pb-3">
+                  <h3 className="text-xl font-bold font-cairo flex items-center gap-2">
+                    <Camera className="text-amber-400" size={22} />
+                    <span>فهرس وتعديل وحذف أنشطة المبادرات ({activitiesList.length})</span>
+                  </h3>
+                  <button
+                    onClick={() => { setActiveTab('activity'); cancelEditActivity(); }}
+                    className="text-xs font-bold text-amber-400 hover:underline"
+                  >
+                    + إضافة نشاط جديد لمبادرة
+                  </button>
+                </div>
+
+                {activitiesList.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {activitiesList.map((act) => {
+                      const parentInit = initiativesList.find(i => i.id === act.initId);
+                      return (
+                        <div key={act.id} className={`p-5 rounded-2xl border ${theme === 'day' ? 'bg-white border-slate-200 shadow-md' : 'bg-slate-900 border-slate-800 shadow-lg'} flex flex-col justify-between`}>
+                          <div>
+                            <div className="text-[10px] font-bold text-[#047857] bg-[#047857]/10 border border-[#047857]/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                              📌 {parentInit ? parentInit.title : 'مبادرة مسجلة'}
+                            </div>
+                            <h4 className="font-bold text-base mb-2">{act.title}</h4>
+                            <p className="text-xs opacity-75 line-clamp-3 leading-relaxed mb-4">{act.summary}</p>
+                          </div>
+                          <div className="flex justify-between items-center pt-3 border-t border-gray-500/20 text-xs font-bold">
+                            <button 
+                              onClick={() => startEditActivity(act)} 
+                              className="text-[#d4a045] hover:underline flex items-center gap-1"
+                            >
+                              <Edit3 size={15} />
+                              <span>تعديل النشاط</span>
+                            </button>
+                            <button 
+                              onClick={() => setDeleteConfirmTarget({ type: 'activity', id: act.id, title: act.title })} 
+                              className="text-red-500 hover:text-red-600 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition"
+                            >
+                              <Trash2 size={14} />
+                              <span>حذف النشاط</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-16 opacity-60 bg-white/5 rounded-3xl border border-dashed border-gray-500/30">
+                    لا توجد أنشطة مسجلة حالياً. استخدم زر "إضافة نشاط جديد لمبادرة" لإضافة أنشطة وفعاليات.
+                  </div>
+                )}
               </div>
             )}
 
