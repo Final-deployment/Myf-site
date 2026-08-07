@@ -117,8 +117,9 @@ app.use(globalRateLimiter);
 // ============================================================================
 // Body Parsing Middleware
 // ============================================================================
-app.use(express.json({ limit: '5mb' }));
-app.use(express.raw({ type: ['application/octet-stream', 'audio/webm', 'audio/ogg', 'video/webm', 'video/mp4', 'image/*'], limit: '30mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.raw({ type: ['application/octet-stream', 'audio/webm', 'audio/ogg', 'video/webm', 'video/mp4', 'image/*'], limit: '50mb' }));
 
 // ============================================================================
 // SECURITY: Enhanced Request Logger

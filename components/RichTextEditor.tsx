@@ -62,33 +62,59 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   };
 
+  const compressImageFile = (file: File, maxWidth = 1200, quality = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64 = reader.result as string;
-        const res = await fetch('/api/upload/image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64 })
-        });
-        const data = await res.json();
-        if (data.url) {
-          setImage(data.url);
-        } else {
-          setImage(base64);
-        }
-      } catch {
-        setImage(reader.result as string);
-      } finally {
-        setUploading(false);
+    try {
+      const base64 = await compressImageFile(file);
+      const res = await fetch('/api/upload/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64 })
+      });
+      const data = await res.json();
+      if (data.url) {
+        setImage(data.url);
+      } else {
+        setImage(base64);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      // Fallback
+    } finally {
+      setUploading(false);
+    }
   };
 
   // Insert HTML tag into content at cursor or append
