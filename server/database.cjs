@@ -124,8 +124,26 @@ function initDatabase() {
         page_path TEXT PRIMARY KEY,
         page_title TEXT NOT NULL,
         views_count INTEGER DEFAULT 0,
+        unique_visitors_count INTEGER DEFAULT 0,
         total_duration_seconds INTEGER DEFAULT 0,
         last_visited_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  try { db.prepare('ALTER TABLE page_analytics ADD COLUMN unique_visitors_count INTEGER DEFAULT 0').run(); } catch(e){}
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS page_unique_visitors (
+        page_path TEXT,
+        visitor_id TEXT,
+        PRIMARY KEY (page_path, visitor_id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS site_unique_visitors (
+        visitor_id TEXT PRIMARY KEY,
+        first_visited_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 

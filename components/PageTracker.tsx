@@ -1,6 +1,19 @@
 import React, { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
+function getVisitorId(): string {
+  try {
+    let vid = localStorage.getItem('myf_visitor_id');
+    if (!vid) {
+      vid = 'v_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+      localStorage.setItem('myf_visitor_id', vid);
+    }
+    return vid;
+  } catch {
+    return 'v_temp_' + Date.now();
+  }
+}
+
 export const PageTracker: React.FC = () => {
   const location = useLocation();
   const startTimeRef = useRef<number>(Date.now());
@@ -36,6 +49,7 @@ export const PageTracker: React.FC = () => {
       title = document.title;
     }
 
+    const visitor_id = getVisitorId();
     currentPathRef.current = path;
     startTimeRef.current = Date.now();
 
@@ -45,7 +59,7 @@ export const PageTracker: React.FC = () => {
         fetch('/api/analytics/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path, title })
+          body: JSON.stringify({ path, title, visitor_id })
         }).catch(() => {});
       } catch {}
     };
@@ -61,7 +75,7 @@ export const PageTracker: React.FC = () => {
           fetch('/api/analytics/track', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: currentPathRef.current, title, duration_seconds: durationSeconds })
+            body: JSON.stringify({ path: currentPathRef.current, title, duration_seconds: durationSeconds, visitor_id })
           }).catch(() => {});
         } catch {}
       }
@@ -75,7 +89,8 @@ export const PageTracker: React.FC = () => {
         const payload = JSON.stringify({
           path: currentPathRef.current,
           title,
-          duration_seconds: durationSeconds
+          duration_seconds: durationSeconds,
+          visitor_id
         });
 
         if (navigator.sendBeacon) {

@@ -87,7 +87,7 @@ function getFriendlyTitle(path, providedTitle) {
 // Track page view or stay duration
 router.post('/track', (req, res) => {
   try {
-    const { path, title, duration_seconds } = req.body;
+    const { path, title, duration_seconds, visitor_id } = req.body;
     if (!path) return res.status(400).json({ error: 'path is required' });
 
     // STRICT CHECK: Reject Mastaba LMS pages completely
@@ -97,15 +97,30 @@ router.post('/track', (req, res) => {
 
     const friendlyTitle = getFriendlyTitle(path, title);
     const duration = parseInt(duration_seconds) || 0;
+    const visitorId = visitor_id || 'anonymous';
+
+    // Track unique site visitor
+    try {
+      db.prepare('INSERT OR IGNORE INTO site_unique_visitors (visitor_id) VALUES (?)').run(visitorId);
+    } catch (e) {}
+
+    // Track unique page visitor
+    let isNewPageVisitor = false;
+    try {
+      const resPageUniq = db.prepare('INSERT OR IGNORE INTO page_unique_visitors (page_path, visitor_id) VALUES (?, ?)').run(path, visitorId);
+      if (resPageUniq.changes > 0) {
+        isNewPageVisitor = true;
+      }
+    } catch (e) {}
 
     // Check if record exists
-    const existing = db.prepare('SELECT page_path, views_count, total_duration_seconds FROM page_analytics WHERE page_path = ?').get(path);
+    const existing = db.prepare('SELECT page_path, views_count, unique_visitors_count, total_duration_seconds FROM page_analytics WHERE page_path = ?').get(path);
 
     if (!existing) {
       db.prepare(`
-        INSERT INTO page_analytics (page_path, page_title, views_count, total_duration_seconds, last_visited_at)
-        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `).run(path, friendlyTitle, duration > 0 ? 0 : 1, duration);
+        INSERT INTO page_analytics (page_path, page_title, views_count, unique_visitors_count, total_duration_seconds, last_visited_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).run(path, friendlyTitle, duration > 0 ? 0 : 1, isNewPageVisitor ? 1 : 0, duration);
     } else {
       if (duration > 0) {
         // Record stay duration
@@ -121,10 +136,11 @@ router.post('/track', (req, res) => {
         db.prepare(`
           UPDATE page_analytics 
           SET views_count = views_count + 1, 
+              unique_visitors_count = unique_visitors_count + ?,
               last_visited_at = CURRENT_TIMESTAMP,
               page_title = ?
           WHERE page_path = ?
-        `).run(friendlyTitle, path);
+        `).run(isNewPageVisitor ? 1 : 0, friendlyTitle, path);
       }
     }
 
@@ -147,7 +163,7 @@ router.get('/stats', (req, res) => {
     `).run();
 
     const rows = db.prepare(`
-      SELECT page_path, page_title, views_count, total_duration_seconds, last_visited_at 
+      SELECT page_path, page_title, views_count, unique_visitors_count, total_duration_seconds, last_visited_at 
       FROM page_analytics 
       ORDER BY views_count DESC
     `).all();
@@ -155,21 +171,26 @@ router.get('/stats', (req, res) => {
     let totalSiteViews = 0;
     let totalSiteDuration = 0;
 
+    const totalSiteUniqueVisitors = db.prepare('SELECT COUNT(*) as count FROM site_unique_visitors').get()?.count || 0;
+
     const pages = rows.map(r => {
       totalSiteViews += (r.views_count || 0);
       totalSiteDuration += (r.total_duration_seconds || 0);
       const avgSecs = r.views_count > 0 ? Math.round(r.total_duration_seconds / r.views_count) : 0;
       
       const realTitle = getFriendlyTitle(r.page_path, r.page_title);
-      // Keep DB updated with real titles
       try {
         db.prepare('UPDATE page_analytics SET page_title = ? WHERE page_path = ?').run(realTitle, r.page_path);
       } catch(e) {}
+
+      // Count actual unique visitors for this page
+      const pageUniqueCount = db.prepare('SELECT COUNT(*) as count FROM page_unique_visitors WHERE page_path = ?').get(r.page_path)?.count || (r.unique_visitors_count || 0);
 
       return {
         path: r.page_path,
         title: realTitle,
         views: r.views_count || 0,
+        uniqueVisitors: pageUniqueCount,
         totalDurationSeconds: r.total_duration_seconds || 0,
         avgDurationSeconds: avgSecs,
         formattedAvgDuration: formatArabicDuration(avgSecs),
@@ -181,6 +202,7 @@ router.get('/stats', (req, res) => {
 
     res.json({
       totalSiteViews,
+      totalSiteUniqueVisitors: Math.max(totalSiteUniqueVisitors, Math.min(totalSiteViews, 1)),
       totalSiteDurationSeconds: totalSiteDuration,
       overallAvgDurationSeconds: overallAvgSecs,
       formattedOverallAvgDuration: formatArabicDuration(overallAvgSecs),
@@ -196,6 +218,8 @@ router.get('/stats', (req, res) => {
 router.post('/reset', (req, res) => {
   try {
     db.prepare('DELETE FROM page_analytics').run();
+    db.prepare('DELETE FROM page_unique_visitors').run();
+    db.prepare('DELETE FROM site_unique_visitors').run();
     res.json({ success: true, message: 'تم إعادة ضبط جميع الإحصائيات للصفر بنجاح' });
   } catch (err) {
     console.error('[Analytics Reset Error]:', err);

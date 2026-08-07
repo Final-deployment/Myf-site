@@ -53,6 +53,7 @@ export const ForumAdminDashboard: React.FC = () => {
   // Analytics State
   const [analyticsData, setAnalyticsData] = useState<{
     totalSiteViews: number;
+    totalSiteUniqueVisitors?: number;
     totalSiteDurationSeconds: number;
     overallAvgDurationSeconds: number;
     formattedOverallAvgDuration: string;
@@ -60,6 +61,7 @@ export const ForumAdminDashboard: React.FC = () => {
       path: string;
       title: string;
       views: number;
+      uniqueVisitors?: number;
       totalDurationSeconds: number;
       avgDurationSeconds: number;
       formattedAvgDuration: string;
@@ -1175,26 +1177,41 @@ export const ForumAdminDashboard: React.FC = () => {
             </div>
 
             {/* Overview KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Total Visits */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Unique Visitors */}
               <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold opacity-60">إجمالي زيارات صفحات الموقع</span>
+                  <span className="text-xs font-bold opacity-60">إجمالي الزوار الفريدين (الأفراد)</span>
                   <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-500">
                     <Users size={24} />
                   </div>
                 </div>
                 <div className="text-3xl md:text-4xl font-extrabold font-cairo text-emerald-500">
-                  {analyticsData?.totalSiteViews?.toLocaleString('en-US') || 0}
-                  <span className="text-sm font-semibold text-slate-500 mr-2">زيارة</span>
+                  {analyticsData?.totalSiteUniqueVisitors?.toLocaleString('en-US') || 0}
+                  <span className="text-sm font-semibold text-slate-500 mr-2">زائر فريد</span>
                 </div>
-                <p className="text-xs opacity-60 mt-2">إجمالي مشاهدات جميع الصفحات المباشرة</p>
+                <p className="text-xs opacity-60 mt-2">عدد الأشخاص الفعليين دون تكرار</p>
+              </div>
+
+              {/* Total Page Views */}
+              <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold opacity-60">إجمالي مشاهدات الصفحات</span>
+                  <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+                    <Eye size={24} />
+                  </div>
+                </div>
+                <div className="text-3xl md:text-4xl font-extrabold font-cairo text-blue-500">
+                  {analyticsData?.totalSiteViews?.toLocaleString('en-US') || 0}
+                  <span className="text-sm font-semibold text-slate-500 mr-2">مشاهدة</span>
+                </div>
+                <p className="text-xs opacity-60 mt-2">مجموع استعراض وفتح الصفحات</p>
               </div>
 
               {/* Overall Average Stay */}
               <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold opacity-60">معدل بقاء الزائر الإجمالي للموقع</span>
+                  <span className="text-xs font-bold opacity-60">معدل بقاء الزائر للموقع</span>
                   <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-500">
                     <Clock size={24} />
                   </div>
@@ -1208,15 +1225,15 @@ export const ForumAdminDashboard: React.FC = () => {
               {/* Total Time Spent */}
               <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold opacity-60">إجمالي زمن التصفح والقراءة</span>
-                  <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+                  <span className="text-xs font-bold opacity-60">إجمالي زمن التصفح</span>
+                  <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-500">
                     <TrendingUp size={24} />
                   </div>
                 </div>
-                <div className="text-2xl md:text-3xl font-extrabold font-cairo text-blue-500">
+                <div className="text-2xl md:text-3xl font-extrabold font-cairo text-indigo-500">
                   {Math.round((analyticsData?.totalSiteDurationSeconds || 0) / 60)} دقيقة
                 </div>
-                <p className="text-xs opacity-60 mt-2">مجموع دقائق القراءة والتصفح لجميع الزوار</p>
+                <p className="text-xs opacity-60 mt-2">مجموع دقائق القراءة لجميع الزوار</p>
               </div>
             </div>
 
@@ -1252,11 +1269,19 @@ export const ForumAdminDashboard: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-4">
-                            {/* Visitor Count Badge */}
+                            {/* Unique Visitors Badge */}
                             <div className="text-right">
-                              <span className="text-xs opacity-60 block">عدد الزيارات</span>
-                              <span className="text-lg font-black text-emerald-500 font-cairo">
-                                👁️ {p.views.toLocaleString('en-US')} زيارة
+                              <span className="text-xs opacity-60 block">زوار فريدون</span>
+                              <span className="text-base font-black text-emerald-500 font-cairo">
+                                👤 {(p.uniqueVisitors || p.views).toLocaleString('en-US')} زائر
+                              </span>
+                            </div>
+
+                            {/* Visitor Count Badge */}
+                            <div className="text-right border-r border-gray-500/20 pr-4">
+                              <span className="text-xs opacity-60 block">مشاهدات الصفحة</span>
+                              <span className="text-base font-black text-blue-400 font-cairo">
+                                👁️ {p.views.toLocaleString('en-US')} مشاهدة
                               </span>
                             </div>
 
