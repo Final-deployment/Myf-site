@@ -15,7 +15,12 @@ import {
   ImageIcon,
   XCircle,
   Save,
-  Eye
+  Eye,
+  BarChart3,
+  Clock,
+  Users,
+  TrendingUp,
+  RefreshCw
 } from 'lucide-react';
 import { useTheme } from './ThemeContext';
 import RichTextEditor from './RichTextEditor';
@@ -43,7 +48,50 @@ export const ForumAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<'article' | 'initiative' | 'activity' | 'manage'>('article');
+  const [activeTab, setActiveTab] = useState<'article' | 'initiative' | 'activity' | 'manage' | 'analytics'>('article');
+  
+  // Analytics State
+  const [analyticsData, setAnalyticsData] = useState<{
+    totalSiteViews: number;
+    totalSiteDurationSeconds: number;
+    overallAvgDurationSeconds: number;
+    formattedOverallAvgDuration: string;
+    pages: Array<{
+      path: string;
+      title: string;
+      views: number;
+      totalDurationSeconds: number;
+      avgDurationSeconds: number;
+      formattedAvgDuration: string;
+      lastVisitedAt: string;
+    }>;
+  } | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  const fetchAnalyticsStats = async () => {
+    setLoadingAnalytics(true);
+    try {
+      const res = await fetch('/api/analytics/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setAnalyticsData(data);
+      }
+    } catch (err) {
+      console.error('Fetch analytics stats error:', err);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchAnalyticsStats();
+      const timer = setInterval(() => {
+        fetchAnalyticsStats();
+      }, 3000); // Live real-time polling every 3 seconds
+      return () => clearInterval(timer);
+    }
+  }, [activeTab]);
   
   // Articles Form State
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
@@ -561,6 +609,18 @@ export const ForumAdminDashboard: React.FC = () => {
             <Layers size={18} />
             <span>4. تصفح وتعديل المحتوى المنشور</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+              activeTab === 'analytics'
+                ? 'bg-amber-500 text-black shadow-lg scale-105'
+                : theme === 'day' ? 'bg-white text-slate-700 hover:bg-slate-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            <BarChart3 size={18} />
+            <span>📊 5. عداد زوار الموقع ومعدل البقاء</span>
+          </button>
         </div>
 
         {/* Tab 1: New / Edit Article */}
@@ -1062,6 +1122,171 @@ export const ForumAdminDashboard: React.FC = () => {
               </div>
             )}
 
+          </div>
+        )}
+
+        {/* Tab 5: Website Page Analytics & Stay Duration */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-8 animate-fade-in pb-12">
+            {/* Header & Refresh */}
+            <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-900 to-slate-900 text-white shadow-xl border border-emerald-500/30">
+              <div>
+                <div className="inline-block px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-xs font-extrabold mb-2 border border-amber-400/30">
+                  تحليلات زوار الموقع الرسمي (muslimyouth.ps)
+                </div>
+                <h2 className="text-2xl md:text-3xl font-extrabold font-cairo">
+                  📊 عداد زوار صفحات الموقع ومعدل بقاء الزائر
+                </h2>
+                <p className="text-xs md:text-sm opacity-80 mt-1">
+                  إحصائيات تفصيلية ودقيقة لحركة الزيارات، عدد المشاهدات، ومعدل بقاء القراء في كل صفحة من صفحات موقع ملتقى الشباب المسلم.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchAnalyticsStats}
+                  disabled={loadingAnalytics}
+                  className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs shadow-lg flex items-center gap-2 transition transform active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw size={16} className={loadingAnalytics ? 'animate-spin' : ''} />
+                  <span>تحديث البيانات المباشرة</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (!window.confirm('هل أنت محقق من تصفير وإعادة ضبط جميع إحصائيات زوار الموقع للصفر للبدء من جديد؟')) return;
+                    try {
+                      const res = await fetch('/api/analytics/reset', { method: 'POST' });
+                      if (res.ok) {
+                        fetchAnalyticsStats();
+                        setSuccessMsg('تم تصفير جميع إحصائيات العداد بنجاح للبدء من الصفر!');
+                        setTimeout(() => setSuccessMsg(null), 4000);
+                      }
+                    } catch (err) {
+                      console.error('Reset analytics error:', err);
+                    }
+                  }}
+                  className="px-4 py-2.5 rounded-2xl bg-red-500/20 hover:bg-red-500/30 text-red-300 font-extrabold text-xs border border-red-500/30 flex items-center gap-2 transition"
+                >
+                  <Trash2 size={16} />
+                  <span>تصفير العداد للصفر</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Overview KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Total Visits */}
+              <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold opacity-60">إجمالي زيارات صفحات الموقع</span>
+                  <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-500">
+                    <Users size={24} />
+                  </div>
+                </div>
+                <div className="text-3xl md:text-4xl font-extrabold font-cairo text-emerald-500">
+                  {analyticsData?.totalSiteViews?.toLocaleString('en-US') || 0}
+                  <span className="text-sm font-semibold text-slate-500 mr-2">زيارة</span>
+                </div>
+                <p className="text-xs opacity-60 mt-2">إجمالي مشاهدات جميع الصفحات المباشرة</p>
+              </div>
+
+              {/* Overall Average Stay */}
+              <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold opacity-60">معدل بقاء الزائر الإجمالي للموقع</span>
+                  <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-500">
+                    <Clock size={24} />
+                  </div>
+                </div>
+                <div className="text-2xl md:text-3xl font-extrabold font-cairo text-amber-500">
+                  {analyticsData?.formattedOverallAvgDuration || '0 ثانية'}
+                </div>
+                <p className="text-xs opacity-60 mt-2">متوسط الوقت المقضي في الزيارة الواحدة</p>
+              </div>
+
+              {/* Total Time Spent */}
+              <div className={`p-6 rounded-3xl border shadow-lg ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold opacity-60">إجمالي زمن التصفح والقراءة</span>
+                  <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+                    <TrendingUp size={24} />
+                  </div>
+                </div>
+                <div className="text-2xl md:text-3xl font-extrabold font-cairo text-blue-500">
+                  {Math.round((analyticsData?.totalSiteDurationSeconds || 0) / 60)} دقيقة
+                </div>
+                <p className="text-xs opacity-60 mt-2">مجموع دقائق القراءة والتصفح لجميع الزوار</p>
+              </div>
+            </div>
+
+            {/* Per-Page Analytics Table / Cards */}
+            <div className={`p-6 rounded-3xl border shadow-xl ${theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+              <h3 className="text-xl font-bold font-cairo mb-6 flex items-center gap-2">
+                <BarChart3 size={20} className="text-[#d4a045]" />
+                <span>إحصائيات كل صفحة تفصيلياً (عدد الزوار + معدل البقاء):</span>
+              </h3>
+
+              {analyticsData?.pages && analyticsData.pages.length > 0 ? (
+                <div className="space-y-4">
+                  {analyticsData.pages.map((p, idx) => {
+                    const maxViews = Math.max(...analyticsData.pages.map(item => item.views), 1);
+                    const percentage = Math.round((p.views / maxViews) * 100);
+
+                    return (
+                      <div 
+                        key={idx}
+                        className={`p-5 rounded-2xl border transition-all ${theme === 'day' ? 'bg-slate-50 border-slate-200 hover:bg-slate-100' : 'bg-slate-800/60 border-slate-700/60 hover:bg-slate-800'}`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-[#047857]/20 text-[#047857] font-extrabold text-xs flex items-center justify-center border border-[#047857]/30">
+                              #{idx + 1}
+                            </div>
+                            <div>
+                              <h4 className="font-extrabold text-base font-cairo">{p.title}</h4>
+                              <span className="text-xs opacity-60 dir-ltr inline-block font-mono bg-black/10 px-2 py-0.5 rounded text-amber-500">
+                                {p.path}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            {/* Visitor Count Badge */}
+                            <div className="text-right">
+                              <span className="text-xs opacity-60 block">عدد الزيارات</span>
+                              <span className="text-lg font-black text-emerald-500 font-cairo">
+                                👁️ {p.views.toLocaleString('en-US')} زيارة
+                              </span>
+                            </div>
+
+                            {/* Average Stay Duration Badge */}
+                            <div className="text-right border-r border-gray-500/20 pr-4">
+                              <span className="text-xs opacity-60 block">معدل بقاء الزائر</span>
+                              <span className="text-sm font-extrabold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-xl border border-amber-400/20 inline-block mt-0.5">
+                                ⏱️ {p.formattedAvgDuration}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar of Visits */}
+                        <div className="w-full bg-gray-500/10 rounded-full h-2.5 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-emerald-500 to-amber-400 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${Math.max(percentage, 5)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 opacity-50 font-cairo text-lg">
+                  جاري تجميع إحصائيات الزيارات...
+                </div>
+              )}
+            </div>
           </div>
         )}
 

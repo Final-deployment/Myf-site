@@ -118,6 +118,17 @@ function initDatabase() {
   // Indexes for Users
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)'); } catch(e){}
 
+  // --- Page Analytics Table (موقع الملتقى) ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS page_analytics (
+        page_path TEXT PRIMARY KEY,
+        page_title TEXT NOT NULL,
+        views_count INTEGER DEFAULT 0,
+        total_duration_seconds INTEGER DEFAULT 0,
+        last_visited_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // --- Courses Table ---
   db.exec(`
         CREATE TABLE IF NOT EXISTS courses (
@@ -447,6 +458,17 @@ function initDatabase() {
   `);
 
   db.exec(`CREATE TABLE IF NOT EXISTS system_activity_logs (id TEXT PRIMARY KEY, action TEXT, userId TEXT, details TEXT, timestamp TEXT)`);
+
+  // --- Page Analytics Table ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS page_analytics (
+      page_path TEXT PRIMARY KEY,
+      page_title TEXT,
+      views_count INTEGER DEFAULT 0,
+      total_duration_seconds INTEGER DEFAULT 0,
+      last_visited_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
   // --- Seed Default Users ---
   const checkUser = db.prepare('SELECT id, password FROM users WHERE email = ?');

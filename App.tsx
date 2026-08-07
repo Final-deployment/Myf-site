@@ -33,6 +33,7 @@ import { StudentJourneyMap } from './components/StudentJourneyMap';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { AdminPortalAuth } from './components/AdminPortalAuth';
 import { ForumAdminDashboard } from './components/ForumAdminDashboard';
+import { PageTracker } from './components/PageTracker';
 
 // ============================================================================
 // Lazy-loaded Components (Code Splitting)
@@ -725,6 +726,7 @@ const App: React.FC = () => {
         <ThemeProvider>
           <AuthProvider>
             <ToastProvider>
+              <PageTracker />
               <InstallPrompt />
               <AppUpdater />
               <AppContent />

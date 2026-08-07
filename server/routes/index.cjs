@@ -20,6 +20,7 @@ const notificationsInternalRoutes = require('./notifications_internal.cjs');
 const articlesRoutes = require('./articles.cjs');
 const initiativesRoutes = require('./initiatives.cjs');
 const aiRoutes = require('./ai.cjs');
+const analyticsRoutes = require('./analytics.cjs');
 
 // Mount Routes
 router.use('/', authRoutes); // Login, Register, etc
@@ -40,6 +41,7 @@ router.use('/in-app-notifications', notificationsInternalRoutes);
 router.use('/articles', articlesRoutes);
 router.use('/initiatives', initiativesRoutes);
 router.use('/ai', aiRoutes);
+router.use('/analytics', analyticsRoutes);
 
 // Export the centralized router
 module.exports = router;
